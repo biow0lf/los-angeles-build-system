@@ -44,22 +44,36 @@ contents:
     # Track B: built by us, not borrowed
     - los-angeles-linux-release@local
     - los-angeles-linux-base@local
-    # busybox is the first self-hosted package (see the plan's self-hosting
-    # roadmap): built from actual busybox source via packages/busybox.yaml,
-    # not pulled from Wolfi. @local pins the origin explicitly rather than
-    # relying on version-based resolution, since Wolfi's repo also has a
-    # package named "busybox" -- without this, which one wins would be
-    # ambiguous.
+    # busybox and glibc-2.44 are the first two self-hosted packages (see
+    # the plan's self-hosting roadmap): built from actual source via
+    # packages/busybox.yaml and packages/glibc-2.44.yaml, not pulled from
+    # Wolfi -- which also has same-named packages.
+    #
+    # busybox@local: verified (in isolation, via `apko lock`) to correctly
+    # force our own build. Nothing else in this want-list needs busybox
+    # satisfied through a separate, transitive constraint, so the pin is
+    # unambiguous here.
+    #
+    # glibc-2.44 is deliberately NOT pinned, and as a result may currently
+    # still resolve to Wolfi's copy rather than ours -- a known, open
+    # limitation, not an oversight. Every fix tried so far (@local pin,
+    # bumping our epoch past Wolfi's, listing our repo first, bumping
+    # provider-priority) either had no effect or actively broke the
+    # build: apk-tools (and everything else) needs so:libc.so.6 satisfied
+    # as a *separate*, transitive constraint from the direct "glibc-2.44"
+    # want, and once glibc-2.44 is pinned to our repo for the direct want,
+    # the solver exhausts every Wolfi glibc revision as "disqualified"
+    # against our pinned copy on that other path and then fails outright,
+    # instead of falling back to the one package left standing. Wolfi's
+    # own live index also isn't a stable target to race by version --
+    # observed its glibc-2.44 revision at both r0 and r6 within the same
+    # debugging session. glibc *builds* successfully from our own source
+    # (proven in CI), it just isn't reliably the one actually installed
+    # into this rootfs yet. Fixing this for real likely means generating
+    # an apko lockfile and hand-pinning its glibc-family entries to our
+    # local paths, rather than relying on live resolution -- not yet done.
     - busybox@local
-    # glibc-2.44 is the second self-hosted package -- forked byte-for-byte
-    # from Wolfi's glibc-2.44.yaml (same source, patches, version, epoch),
-    # so without @local it would be exactly as ambiguous against Wolfi's
-    # copy as busybox was. Only the main package is pinned here; its many
-    # subpackages (glibc-2.44-dev, ld-linux-2.44, glibc-2.44-locale-*, ...)
-    # are pulled in transitively by other packages' dependencies and may
-    # still resolve from either repo -- harmless since they're built from
-    # identical source, but revisit if true full-stack purity matters later.
-    - glibc-2.44@local
+    - glibc-2.44
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`
   # work on a booted system (the mutable runtime model) -- not consulted at

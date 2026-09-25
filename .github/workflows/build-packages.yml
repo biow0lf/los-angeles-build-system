@@ -4,9 +4,14 @@ name: Build packages
 # diffing for just the changed ones: melange has no build-time dependency
 # graph across packages (see the plan's Risks section), so a diff-based
 # trigger would miss stale build-time consumers of a changed package (e.g.
-# a glibc bump). With only a couple of packages today, "rebuild everything"
-# is simpler and strictly more correct; revisit with a real matrix once the
-# package count/build time justifies the complexity.
+# a glibc bump). Rebuilding everything is simpler and strictly more
+# correct.
+#
+# Each package gets its own matrix job (rather than one job looping over
+# all of them) so a slow, heavy package -- glibc's full upstream testsuite
+# in particular -- doesn't make every unrelated package push wait on it;
+# total wall-clock is the slowest single package, not the sum of all of
+# them.
 on:
   push:
     branches: [main]
@@ -20,7 +25,47 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.list.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        run: |
+          pkgs=$(for f in packages/*.yaml; do basename "$f" .yaml; done | jq -R -s -c 'split("\n")[:-1]')
+          echo "packages=$pkgs" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.discover.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write signing key
+        run: |
+          mkdir -p keys
+          echo "${{ secrets.MELANGE_SIGNING_KEY_B64 }}" | base64 -d > keys/melange.rsa
+
+      - name: Build ${{ matrix.package }}
+        run: make build-package PKG=${{ matrix.package }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apks-${{ matrix.package }}
+          path: packages-out/x86_64/*.apk
+          retention-days: 14
+
+  # Merges every matrix leg's .apk files and regenerates one signed
+  # APKINDEX over all of them (each leg's own mini-index, produced as a
+  # side effect of `make build-package`, is discarded -- irrelevant once
+  # merged).
+  index:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,12 +75,12 @@ jobs:
           mkdir -p keys
           echo "${{ secrets.MELANGE_SIGNING_KEY_B64 }}" | base64 -d > keys/melange.rsa
 
-      - name: Build all packages
-        run: |
-          set -eu
-          for f in packages/*.yaml; do
-            make build-package PKG="$(basename "$f" .yaml)"
-          done
+      - name: Download all built packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apks-*
+          path: packages-out/x86_64
+          merge-multiple: true
 
       - name: Rebuild signed index
         run: make build-index
@@ -49,11 +94,8 @@ jobs:
   # Publishes the repo to GitHub Pages so `apk add`/`apk upgrade` on a
   # booted Los Angeles Linux system (the mutable runtime model) has
   # something real to point at -- only from main, never from a PR.
-  #
-  # One-time setup this workflow can't do for you: in the repo's Settings ->
-  # Pages, set Source to "GitHub Actions".
   publish:
-    needs: build
+    needs: index
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:

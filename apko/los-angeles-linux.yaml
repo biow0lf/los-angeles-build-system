@@ -51,6 +51,15 @@ contents:
     # package named "busybox" -- without this, which one wins would be
     # ambiguous.
     - busybox@local
+    # glibc-2.44 is the second self-hosted package -- forked byte-for-byte
+    # from Wolfi's glibc-2.44.yaml (same source, patches, version, epoch),
+    # so without @local it would be exactly as ambiguous against Wolfi's
+    # copy as busybox was. Only the main package is pinned here; its many
+    # subpackages (glibc-2.44-dev, ld-linux-2.44, glibc-2.44-locale-*, ...)
+    # are pulled in transitively by other packages' dependencies and may
+    # still resolve from either repo -- harmless since they're built from
+    # identical source, but revisit if true full-stack purity matters later.
+    - glibc-2.44@local
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`
   # work on a booted system (the mutable runtime model) -- not consulted at

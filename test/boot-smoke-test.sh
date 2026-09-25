@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 
 IMG="${1:-work/la-linux.img}"
 LOG=work/boot.log
-TIMEOUT=200
+TIMEOUT=120
 
 ACCEL=tcg
 CPU=max

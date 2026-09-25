@@ -31,6 +31,11 @@ contents:
     - e2fsprogs
     - dosfstools
     - systemd
+    # Wolfi splits systemd-udevd out of the `systemd` package into `udev`
+    # (distinct from `eudev`, the non-systemd fork) -- without it there's no
+    # udevd running, so systemd never gets a "device found" event for
+    # anything, including /dev/ttyS0, and every device unit times out.
+    - udev
     - dbus
     - apk-tools
     - ca-certificates

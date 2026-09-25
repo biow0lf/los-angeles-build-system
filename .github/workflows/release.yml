@@ -1,0 +1,54 @@
+name: Release
+
+# Same build-and-boot-test pipeline as nightly-image.yml, but triggered by
+# a version tag and producing a permanent, versioned GitHub Release instead
+# of a rolling artifact -- includes SHA256SUMS and the public signing key
+# so downstream users can verify what they downloaded.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write signing key
+        run: |
+          mkdir -p keys
+          echo "${{ secrets.MELANGE_SIGNING_KEY_B64 }}" | base64 -d > keys/melange.rsa
+
+      - name: Build packages
+        run: |
+          set -eu
+          for f in packages/*.yaml; do
+            make build-package PKG="$(basename "$f" .yaml)"
+          done
+          make build-index
+
+      - name: Build disk image
+        run: make build-image
+
+      - name: Boot smoke test (QEMU)
+        run: make test-boot
+
+      - name: Package release artifacts
+        run: |
+          cd work
+          zstd -T0 -19 la-linux.img -o "la-linux-${{ github.ref_name }}-x86_64.img.zst"
+          cp ../keys/melange.rsa.pub .
+          sha256sum "la-linux-${{ github.ref_name }}-x86_64.img.zst" melange.rsa.pub > SHA256SUMS
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            "work/la-linux-${{ github.ref_name }}-x86_64.img.zst" \
+            work/SHA256SUMS \
+            work/melange.rsa.pub \
+            --title "Los Angeles Linux ${{ github.ref_name }}" \
+            --generate-notes

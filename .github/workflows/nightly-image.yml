@@ -1,0 +1,49 @@
+name: Nightly image
+
+# Full pipeline: build every package fresh, assemble the disk image, and
+# boot-test it in QEMU as a required gate -- if the image doesn't boot to
+# multi-user.target, this job fails and no artifact is published.
+#
+# GitHub-hosted ubuntu-latest runners have /dev/kvm, so the Makefile's
+# opportunistic KVM detection (make test-boot) picks it up automatically;
+# no special runner configuration needed.
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  build-and-boot-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write signing key
+        run: |
+          mkdir -p keys
+          echo "${{ secrets.MELANGE_SIGNING_KEY_B64 }}" | base64 -d > keys/melange.rsa
+
+      - name: Build packages
+        run: |
+          set -eu
+          for f in packages/*.yaml; do
+            make build-package PKG="$(basename "$f" .yaml)"
+          done
+          make build-index
+
+      - name: Build disk image
+        run: make build-image
+
+      - name: Boot smoke test (QEMU)
+        run: make test-boot
+
+      - name: Compress image
+        run: zstd -T0 -19 work/la-linux.img -o work/la-linux.img.zst
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: la-linux-nightly-x86_64
+          path: |
+            work/la-linux.img.zst
+            work/boot.log
+          retention-days: 14

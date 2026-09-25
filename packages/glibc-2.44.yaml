@@ -2,7 +2,19 @@
 package:
   name: glibc-2.44
   version: "2.44"
-  epoch: 6
+  # Bumped from Wolfi's upstream epoch (6): our build has the exact same
+  # name+version+epoch as Wolfi's own live glibc-2.44-2.44-r6, and apk's
+  # solver hits a literal self-conflict resolving the transitive
+  # so:libc.so.6 need (from apk-tools and, transitively, everything) --
+  # "glibc-2.44-2.44-r6.apk disqualified because glibc-2.44-2.44-r6.apk
+  # already provides cmd:ldconfig" -- because @local only pins the direct
+  # name-based dependency edge (from apko's contents.packages), not that
+  # separate soname-based resolution path. A strictly higher epoch makes
+  # our build NEVRA-distinct so normal highest-version-wins resolution
+  # applies consistently everywhere, matching how Wolfi itself bumps this
+  # same field to supersede an older revision (see their own comment on
+  # this field: "glibc: 2.43->2.44").
+  epoch: 7
   description: "the GNU C library"
   copyright:
     - license: LGPL-2.1-or-later

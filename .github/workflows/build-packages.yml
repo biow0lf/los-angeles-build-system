@@ -15,9 +15,9 @@ name: Build packages
 on:
   push:
     branches: [main]
-    paths: ["packages/**"]
+    paths: ["packages/**", "pipelines/**"]
   pull_request:
-    paths: ["packages/**"]
+    paths: ["packages/**", "pipelines/**"]
   workflow_dispatch: {}
 
 concurrency:

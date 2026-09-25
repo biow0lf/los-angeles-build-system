@@ -1,0 +1,51 @@
+package:
+  name: los-angeles-linux-release
+  version: 0.1.0
+  epoch: 0
+  description: "Los Angeles Linux release identity (os-release, motd, hostname)"
+  copyright:
+    - license: MIT
+  dependencies:
+    # wolfi-baselayout also ships /etc/os-release (ID=wolfi) -- this package
+    # is meant to be the actual OS identity, so it wins that file conflict.
+    replaces:
+      - wolfi-baselayout
+    replaces-priority: "100"
+
+environment:
+  contents:
+    packages:
+      - busybox
+
+pipeline:
+  - name: Generate /etc/os-release
+    runs: |
+      mkdir -p "${{targets.destdir}}"/etc
+      cat > "${{targets.destdir}}"/etc/os-release <<EOF
+      ID=la-linux
+      NAME="Los Angeles Linux"
+      PRETTY_NAME="Los Angeles Linux ${{package.version}}"
+      VERSION_ID="${{package.version}}"
+      HOME_URL="https://github.com/biow0lf/los-angeles-build-system"
+      EOF
+
+  - name: Generate /etc/motd
+    runs: |
+      mkdir -p "${{targets.destdir}}"/etc
+      cat > "${{targets.destdir}}"/etc/motd <<EOF
+      Welcome to Los Angeles Linux ${{package.version}}.
+      EOF
+
+  - name: Set default hostname
+    runs: |
+      mkdir -p "${{targets.destdir}}"/etc
+      echo "la-linux" > "${{targets.destdir}}"/etc/hostname
+
+test:
+  pipeline:
+    - name: "Files exist"
+      runs: |
+        test -f /etc/os-release
+        grep -q '^ID=la-linux$' /etc/os-release
+        test -f /etc/motd
+        test -f /etc/hostname

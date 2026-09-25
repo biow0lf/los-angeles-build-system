@@ -1,0 +1,9 @@
+/keys/*.rsa
+/packages-out/
+/work/
+*.img
+*.qcow2
+*.iso
+*.log
+/core
+*.spdx.json

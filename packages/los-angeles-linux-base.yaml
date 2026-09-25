@@ -1,0 +1,57 @@
+package:
+  name: los-angeles-linux-base
+  version: 0.1.0
+  epoch: 0
+  description: "Los Angeles Linux base system configuration (fstab, sysctl defaults, boot-marker service)"
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - busybox
+
+pipeline:
+  - name: Install fstab template
+    runs: |
+      mkdir -p "${{targets.destdir}}"/etc
+      cat > "${{targets.destdir}}"/etc/fstab <<EOF
+      # <file system>          <mount point>  <type>  <options>  <dump>  <pass>
+      LABEL=la-linux-root      /              ext4    defaults   0       1
+      EOF
+
+  - name: Install sysctl defaults
+    runs: |
+      mkdir -p "${{targets.destdir}}"/etc/sysctl.d
+      cat > "${{targets.destdir}}"/etc/sysctl.d/99-la-linux.conf <<EOF
+      kernel.printk = 4 4 1 7
+      EOF
+
+  - name: Install boot-marker service
+    runs: |
+      mkdir -p "${{targets.destdir}}"/usr/lib/systemd/system/multi-user.target.wants
+      cat > "${{targets.destdir}}"/usr/lib/systemd/system/la-linux-boot-marker.service <<EOF
+      [Unit]
+      Description=Los Angeles Linux boot smoke-test marker
+      DefaultDependencies=no
+      After=multi-user.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/sh -c 'echo LA-LINUX-BOOT-OK > /dev/console'
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+      ln -sf ../la-linux-boot-marker.service \
+        "${{targets.destdir}}"/usr/lib/systemd/system/multi-user.target.wants/la-linux-boot-marker.service
+
+test:
+  pipeline:
+    - name: "Files exist"
+      runs: |
+        test -f /etc/fstab
+        test -f /etc/sysctl.d/99-la-linux.conf
+        test -f /usr/lib/systemd/system/la-linux-boot-marker.service
+        test -L /usr/lib/systemd/system/multi-user.target.wants/la-linux-boot-marker.service

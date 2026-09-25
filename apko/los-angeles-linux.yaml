@@ -1,0 +1,61 @@
+# Los Angeles Linux -- root filesystem specification.
+#
+# apko assembles this list of apk packages into a single OCI image tarball
+# (no `RUN` steps -- fully declarative/reproducible). scripts/extract-rootfs.sh
+# turns that tarball into a plain directory tree (work/rootfs/), which is the
+# target rootfs for the image assembly pipeline in image/.
+#
+# The kernel and initramfs are NOT listed here -- Wolfi ships neither (it is
+# a container-only "undistro" with no bootable-kernel packages at all), so
+# they're taken from Alpine (linux-lts + mkinitfs) directly in the builder
+# image instead; see image/build-disk-image.sh.
+#
+# Track A (borrowed as-is from Wolfi, glibc-based, itself melange-built) vs.
+# Track B (los-angeles-linux-*, built by us) are marked below. See the
+# self-hosting roadmap in the top-level plan for moving packages from A to B.
+
+contents:
+  repositories:
+    - https://packages.wolfi.dev/os
+    - "@local packages-out"
+  keyring:
+    - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+    - keys/melange.rsa.pub
+  packages:
+    # Track A
+    - wolfi-baselayout
+    - busybox
+    - bash
+    - coreutils
+    - util-linux
+    - e2fsprogs
+    - dosfstools
+    - systemd
+    - dbus
+    - apk-tools
+    - ca-certificates
+    - openssh
+    - iproute2
+    - iputils
+    # Track B
+    - los-angeles-linux-release@local
+    - los-angeles-linux-base@local
+
+  # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`
+  # work on a booted system (the mutable runtime model) -- not consulted at
+  # apko build time. http://localhost:8080 is only correct for local dev
+  # (`make serve-repo`); replace it with the real published repo URL once
+  # one exists (see Phase 4 / repo hosting in the plan).
+  # No runtime_keyring needed: apko installs contents.keyring above into
+  # /etc/apk/keys of the built image automatically (that's how build-time
+  # package verification is possible in the first place), so both keys are
+  # already trusted at runtime -- a duplicate runtime_keyring entry with the
+  # same filename collides with apko's own install of it.
+  runtime_repositories:
+    - https://packages.wolfi.dev/os
+    - http://localhost:8080
+
+archs:
+  - x86_64
+
+cmd: /bin/sh -l

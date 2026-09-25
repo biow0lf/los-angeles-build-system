@@ -24,7 +24,6 @@ contents:
   packages:
     # Track A
     - wolfi-baselayout
-    - busybox
     - bash
     - coreutils
     - util-linux
@@ -42,9 +41,16 @@ contents:
     - openssh
     - iproute2
     - iputils
-    # Track B
+    # Track B: built by us, not borrowed
     - los-angeles-linux-release@local
     - los-angeles-linux-base@local
+    # busybox is the first self-hosted package (see the plan's self-hosting
+    # roadmap): built from actual busybox source via packages/busybox.yaml,
+    # not pulled from Wolfi. @local pins the origin explicitly rather than
+    # relying on version-based resolution, since Wolfi's repo also has a
+    # package named "busybox" -- without this, which one wins would be
+    # ambiguous.
+    - busybox@local
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`
   # work on a booted system (the mutable runtime model) -- not consulted at

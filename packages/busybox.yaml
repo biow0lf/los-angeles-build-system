@@ -1,0 +1,543 @@
+#nolint:git-checkout-must-use-github-updates
+package:
+  name: busybox
+  version: "1.38.0"
+  epoch: 2 # glibc: 2.43->2.44
+  description: "swiss-army knife for embedded systems"
+  copyright:
+    - license: GPL-2.0-only
+  dependencies:
+    provider-priority: 10
+    runtime:
+      - merged-bin
+      - merged-sbin
+      - merged-usrsbin
+      - wolfi-baselayout
+  scriptlets:
+    trigger:
+      paths:
+        - /bin
+        - /sbin
+        - /usr/bin
+        - /usr/sbin
+      script: |
+        #!/usr/bin/busybox sh
+        /usr/bin/busybox --install -s
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+var-transforms:
+  - from: ${{package.version}}
+    match: \.
+    replace: _
+    to: mangled-package-version
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - perl # provides pod2html/pod2text
+
+pipeline:
+  - uses: git-checkout
+    working-directory: build
+    with:
+      expected-commit: fc71374dfccd46448c62947269a35f1420d7ee28
+      # Temporary mirror: git.busybox.net TLS certificate has expired
+      repository: https://github.com/vda-linux/busybox_mirror
+      tag: ${{vars.mangled-package-version}}
+
+  - uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2022-28391-1.patch ../CVE-2022-28391-2.patch
+
+  # from aports.git busybox/0001-tar-fix-TOCTOU-symlink-race-condition.patch
+  - uses: patch
+    working-directory: build
+    with:
+      patches: ../0001-tar-fix-TOCTOU-symlink-race-condition.patch
+
+  # from aports.git busybox/0037-awk.c-fix-CVE-2023-42366-bug-15874.patch
+  # http://lists.busybox.net/pipermail/busybox/2024-March/090654.html
+  - uses: patch
+    working-directory: build
+    with:
+      patches: ../0037-awk.c-fix-CVE-2023-42366-bug-15874.patch
+
+  # created patch for CVE-2024-58251
+  - uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2024-58251-2.patch
+
+  - uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2025-46394.patch
+
+  # Patch from SUSE, also see https://github.com/wolfi-dev/os/pull/77355
+  - uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2025-60876.patch
+
+  # Patch from Debian (https://bugs.debian.org/1055307), prerequisite for the
+  # CVE-2026-26157/CVE-2026-26158 patches
+  - uses: patch
+    working-directory: build
+    with:
+      patches: ../archival-disallow-path-traversals-CVE-2023-39810.patch
+
+  # Patches for CVE-2026-26157 and CVE-2026-26158 from
+  # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1127782, cross-referenced
+  # against the busybox ML
+  # (https://lists.busybox.net/pipermail/busybox-cvs/2026-January/042330.html,
+  # https://lists.busybox.net/pipermail/busybox-cvs/2026-February/042394.html)
+  - uses: patch
+    working-directory: build
+    with:
+      patches: |
+        ../0001-tar-strip-unsafe-hardlink-components-GNU-tar-does-th.patch
+        ../0002-tar-only-strip-unsafe-components-from-hardlinks-not-.patch
+
+  # Patch from the busybox ML
+  # (https://lists.busybox.net/pipermail/busybox/2026-June/092352.html),
+  # not yet merged upstream
+  - uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2026-38753.patch
+
+  # Patch from the busybox ML
+  # (https://lists.busybox.net/pipermail/busybox/2026-June/092351.html),
+  # not yet merged upstream
+  - uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2026-38752.patch
+
+  # Upstream commit a448b6d5b21e5b21249391389b6f0551d9bea136
+  - uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2026-38754.patch
+
+  # Patch from the busybox ML
+  # (https://lists.busybox.net/pipermail/busybox/2026-June/092354.html),
+  # not yet merged upstream
+  - uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2026-38755.patch
+
+  - name: Configure
+    working-directory: build
+    runs: |
+      cp ../busyboxconfig .config
+
+  - working-directory: build
+    runs: |
+      make CC="${{host.triplet.gnu}}-gcc" V=1 -j$(nproc)
+
+  - name: Install
+    working-directory: build
+    runs: |
+      mkdir -p "${{targets.destdir}}"/usr/bin
+      mkdir -p "${{targets.destdir}}"/etc/busybox-paths.d
+      install -m755 busybox "${{targets.destdir}}"/usr/bin/busybox
+      install -m644 ../securetty "${{targets.destdir}}"/etc/securetty
+      ./busybox --list-path > "${{targets.destdir}}"/etc/busybox-paths.d/busybox
+
+      # sbin merge
+      sed 's|^sbin|usr/bin|' -i "${{targets.destdir}}"/etc/busybox-paths.d/busybox
+      # bin merge
+      sed 's|^bin|usr/bin|' -i "${{targets.destdir}}"/etc/busybox-paths.d/busybox
+      # usrsbin merge
+      sed 's|^usr/sbin|usr/bin|' -i "${{targets.destdir}}"/etc/busybox-paths.d/busybox
+
+  - uses: strip
+
+subpackages:
+  - name: busybox-full
+    dependencies:
+      provides:
+        - busybox=${{package.full-version}}
+      provider-priority: 5
+      runtime:
+        - merged-bin
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+    options:
+      no-commands: true
+    pipeline:
+      - name: Configure
+        working-directory: build
+        runs: |
+          cp ../busyboxconfig-full .config
+      - working-directory: build
+        runs: |
+          make CC="${{host.triplet.gnu}}-gcc" V=1 -j$(nproc)
+      - name: Install
+        working-directory: build
+        runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mkdir -p "${{targets.subpkgdir}}"/etc/busybox-paths.d
+          install -m755 busybox "${{targets.subpkgdir}}"/usr/bin/busybox
+          install -m644 ../securetty "${{targets.subpkgdir}}"/etc/securetty
+          ./busybox --list-path > "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-full
+
+          # sbin merge
+          sed 's|^sbin|usr/bin|' -i "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-full
+          # bin merge
+          sed 's|^bin|usr/bin|' -i "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-full
+          # usrsbin merge
+          sed 's|^usr/sbin|usr/bin|' -i "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-full
+    scriptlets:
+      trigger:
+        paths:
+          - /bin
+          - /sbin
+          - /usr/bin
+          - /usr/sbin
+        script: |
+          #!/usr/bin/busybox sh
+          /usr/bin/busybox --install -s
+    test:
+      environment:
+        contents:
+          packages:
+            - binutils
+            - python3
+            - wolfi-base
+            - ver-check
+      pipeline:
+        - name: test that the busybox binary is dynamically linked
+          runs: |
+            if ! readelf -Wl /usr/bin/busybox | grep -E '^ *DYNAMIC +' ; then
+              echo "FAIL: check to ensure busybox is dynamically linked failed"
+              echo "The DYNAMIC field should exist in the ELF program header, output follows"
+              readelf -Wl /usr/bin/busybox
+              exit 1
+            fi
+            echo "PASS: busybox is dynamically linked"
+        - name: Verify network utilities are present
+          runs: |
+            busybox --help
+            busybox --list-full >full.txt
+            # These programs are expected to be present
+            for p in nc netcat wget nslookup; do
+                if ! grep "usr/bin/$p" full.txt; then
+                    echo "$p is not present in busybox --list-full output"
+                    exit 1
+                fi
+                "$p" --help ||
+                  { echo "$p --help exited $?. expected pass"; exit 1; }
+            done
+        - name: Test wget can download a file
+          runs: |
+            # Create test content for HTTP server
+            mkdir -p /tmp/www
+            echo "wget test content" > /tmp/www/test.txt
+
+            # Start Python HTTP server
+            cd /tmp/www
+            python3 -m http.server 8888 > /tmp/httpd.log 2>&1 &
+            SERVER_PID=$!
+
+            # Wait for server to be ready
+            sleep 2
+
+            # Test wget download
+            wget -O /tmp/downloaded.txt http://127.0.0.1:8888/test.txt
+
+            # Verify downloaded content
+            if ! grep -F "wget test content" /tmp/downloaded.txt; then
+              echo "FAIL: wget did not download expected content"
+              cat /tmp/downloaded.txt
+              kill "$SERVER_PID"
+              exit 1
+            fi
+
+            echo "PASS: wget successfully downloaded file"
+
+            # Cleanup
+            kill "$SERVER_PID"
+        - name: Test nc can make network connections
+          runs: |
+            # Start nc listening in background, will send test data to first connection
+            echo "nc test data" | nc -l -p 9999 &
+            LISTEN_PID=$!
+
+            # Wait for listener to be ready
+            sleep 1
+
+            # Connect to the listening nc and capture data
+            result=$(nc 127.0.0.1 9999)
+
+            # Wait for listener to finish
+            wait "$LISTEN_PID"
+
+            # Verify data was transferred
+            if [ "$result" = "nc test data" ]; then
+              echo "PASS: nc network connection works"
+            else
+              echo "FAIL: nc did not receive expected data"
+              echo "Expected: nc test data"
+              echo "Got: $result"
+              exit 1
+            fi
+
+  - name: busybox-static
+    dependencies:
+      provides:
+        - busybox=${{package.full-version}}
+      provider-priority: 5
+      runtime:
+        - merged-bin
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+    options:
+      no-commands: true
+    pipeline:
+      - name: Configure
+        working-directory: build
+        runs: |
+          sed -e 's/^# CONFIG_STATIC is not set$/CONFIG_STATIC=y/' \
+              -e 's/^# CONFIG_STATIC_LIBGCC is not set/CONFIG_STATIC_LIBGCC=y/' \
+              -e 's/^# CONFIG_USE_BB_PWD_GRP is not set/CONFIG_USE_BB_PWD_GRP=y/' \
+              -e 's/^# CONFIG_USE_BB_SHADOW is not set/CONFIG_USE_BB_SHADOW=y/' \
+              -e 's/^# CONFIG_USE_BB_CRYPT is not set/CONFIG_USE_BB_CRYPT=y/' \
+              -e 's/^# CONFIG_USE_BB_CRYPT_SHA is not set/CONFIG_USE_BB_CRYPT_SHA=y/' \
+              ../busyboxconfig > .config
+          # yescrypt (USE_BB_CRYPT_YES, new in 1.38.0) is a sub-option of
+          # USE_BB_CRYPT, which is disabled in the base config, so there is no
+          # line to substitute above; append it
+          echo "CONFIG_USE_BB_CRYPT_YES=y" >> .config
+          # emit diff for verification, diff returns 1 on differences,
+          # ensure there actually is a difference
+          rc=0
+          diff -u ../busyboxconfig .config || rc="$?"
+          if [ "$rc" -ne 1 ]; then
+             echo "ERROR: expected the generated static config to differ from the default config" >&2
+             exit 1
+          fi
+      - working-directory: build
+        runs: |
+          make CC="${{host.triplet.gnu}}-gcc" V=1 -j$(nproc)
+      - name: Install
+        working-directory: build
+        runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mkdir -p "${{targets.subpkgdir}}"/etc/busybox-paths.d
+          install -m755 busybox "${{targets.subpkgdir}}"/usr/bin/busybox
+          install -m644 ../securetty "${{targets.subpkgdir}}"/etc/securetty
+          ./busybox --list-path > "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-static
+
+          # sbin merge
+          sed 's|^sbin|usr/bin|' -i "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-static
+          # bin merge
+          sed 's|^bin|usr/bin|' -i "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-static
+          # usrsbin merge
+          sed 's|^usr/sbin|usr/bin|' -i "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-static
+    scriptlets:
+      trigger:
+        paths:
+          - /bin
+          - /sbin
+          - /usr/bin
+          - /usr/sbin
+        script: |
+          #!/usr/bin/busybox sh
+          /usr/bin/busybox --install -s
+    test:
+      environment:
+        contents:
+          packages:
+            - binutils
+            - ver-check
+      pipeline:
+        - name: test that the busybox binary is statically linked
+          runs: |
+            if readelf -Wl /usr/bin/busybox | grep -E '^ *DYNAMIC +' ; then
+              echo "FAIL: check to ensure busybox is statically linked failed"
+              echo "No DYNAMIC field should exist in the ELF program header, output follows"
+              readelf -Wl /usr/bin/busybox
+              exit 1
+            fi
+            echo "PASS: busybox is statically linked"
+        - uses: test/hardening-check
+          with:
+            # statically linked binary, so many hardening checks are not relevant
+            args: --nocfprotection --nopie --nobindnow
+        - name: Test echo and grep utilities via pipe
+          runs: |
+            if ! echo "hello world" | grep -F "hello"; then
+              echo "FAIL: echo | grep pipe test failed"
+              exit 1
+            fi
+            echo "PASS: echo | grep pipe works"
+        - name: Test file I/O with echo and cat
+          runs: |
+            echo "test content" > /tmp/testfile.txt
+            if ! cat /tmp/testfile.txt | grep -F "test content"; then
+              echo "FAIL: cat file test failed"
+              exit 1
+            fi
+            echo "PASS: file I/O with echo and cat works"
+        - name: Test ls and grep to find busybox
+          runs: |
+            if ! ls /usr/bin | grep -F "busybox"; then
+              echo "FAIL: busybox not found in /usr/bin"
+              exit 1
+            fi
+            echo "PASS: ls | grep finds busybox"
+        - name: Test shell script execution
+          runs: |
+            tee /tmp/test-script.sh <<'EOF'
+            #!/usr/bin/busybox sh
+            echo "script executed successfully"
+            EOF
+            chmod +x /tmp/test-script.sh
+            output=$(/tmp/test-script.sh)
+            if [ "$output" != "script executed successfully" ]; then
+              echo "FAIL: Shell script execution failed"
+              echo "Expected: script executed successfully"
+              echo "Got: $output"
+              exit 1
+            fi
+            echo "PASS: Shell script execution works"
+        - name: Verify network utilities are not present
+          runs: |
+            busybox --help
+            busybox --list-full >full.txt
+
+            # These programs have been intentionally removed from default busybox
+            for p in nc netcat wget; do
+                if grep "usr/bin/$p" full.txt; then
+                    echo "Found '$p' in list-full output"
+                    exit 1
+                fi
+                command -v "$p" &&
+                  { echo "command '$p' is present. It should not be."; exit 1; }
+            done
+        - name: "awk = and ?: precedence"
+          runs: |
+            found=$(awk 'BEGIN { a=0?"bug":"ok"; print a}')
+            [ "$found" = "ok" ] &&
+              echo "PASS: ternary precedence" ||
+              { echo "FAIL: ternary precedence" ; exit 1; }
+        - name: test that busybox is built not to use nsswitch.conf functionality
+          runs: |
+            # if busybox is statically linked against glibc and is not
+            # built to use its own passwd/shadow reading functions,
+            # functions will fail if /etc/nsswitch.conf is present but
+            # the libnsswitch_* libraries are not; e.g.:
+            #   $ whoami
+            #   whoami: unknown uid 65532
+            # Confirm this by setting up a chroot with the necessary
+            # files and nsswitch.conf and that whoami still works as
+            # expected.
+            mkdir -p /tmp/whoami/bin
+            cp /usr/bin/busybox /tmp/whoami/bin/whoami
+            mkdir -p /tmp/whoami/etc
+            cp /etc/passwd /etc/shadow /etc/group /etc/nsswitch.conf /tmp/whoami/etc
+            chroot /tmp/whoami/ /bin/whoami | grep '^root$' &&
+              echo "PASS: whoami works in presence of nsswitch.conf" ||
+              { echo "FAIL: whoami failed to lookup username with nsswitch.conf" ;
+                echo "This likely means busybox is using glibc's libnss" ;
+                echo "Verify busybox is built with CONFIG_USE_BB_PWD_GRP" ;
+                exit 1;
+              }
+
+test:
+  environment:
+    contents:
+      packages:
+        - binutils
+        - ver-check
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: test that the busybox binary is dynamically linked
+      runs: |
+        if ! readelf -Wl /usr/bin/busybox | grep -E '^ *DYNAMIC +' ; then
+          echo "FAIL: check to ensure busybox is dynamically linked failed"
+          echo "The DYNAMIC field should exist in the ELF program header, output follows"
+          readelf -Wl /usr/bin/busybox
+          exit 1
+        fi
+        echo "PASS: busybox is dynamically linked"
+    - uses: test/hardening-check
+      with:
+        args: --nocfprotection
+    - name: Test echo and grep utilities via pipe
+      runs: |
+        if ! echo "hello world" | grep -F "hello"; then
+          echo "FAIL: echo | grep pipe test failed"
+          exit 1
+        fi
+        echo "PASS: echo | grep pipe works"
+    - name: Test file I/O with echo and cat
+      runs: |
+        echo "test content" > /tmp/testfile.txt
+        if ! cat /tmp/testfile.txt | grep -F "test content"; then
+          echo "FAIL: cat file test failed"
+          exit 1
+        fi
+        echo "PASS: file I/O with echo and cat works"
+    - name: Test ls and grep to find busybox
+      runs: |
+        if ! ls /usr/bin | grep -F "busybox"; then
+          echo "FAIL: busybox not found in /usr/bin"
+          exit 1
+        fi
+        echo "PASS: ls | grep finds busybox"
+    - name: Test shell script execution
+      runs: |
+        tee /tmp/test-script.sh <<'EOF'
+        #!/usr/bin/busybox sh
+        echo "script executed successfully"
+        EOF
+        chmod +x /tmp/test-script.sh
+        output=$(/tmp/test-script.sh)
+        if [ "$output" != "script executed successfully" ]; then
+          echo "FAIL: Shell script execution failed"
+          echo "Expected: script executed successfully"
+          echo "Got: $output"
+          exit 1
+        fi
+        echo "PASS: Shell script execution works"
+    - name: Verify network utilities are not present
+      runs: |
+        busybox --help
+        busybox --list-full >full.txt
+
+        # These programs have been intentionally removed from default busybox
+        for p in nc netcat wget; do
+            if grep "usr/bin/$p" full.txt; then
+                echo "Found '$p' in list-full output"
+                exit 1
+            fi
+            command -v "$p" &&
+              { echo "command '$p' is present. It should not be."; exit 1; }
+        done
+    - name: "awk = and ?: precedence"
+      runs: |
+        found=$(awk 'BEGIN { a=0?"bug":"ok"; print a}')
+        [ "$found" = "ok" ] &&
+          echo "PASS: ternary precedence" ||
+          { echo "FAIL: ternary precedence" ; exit 1; }
+
+update:
+  enabled: true
+  version-transform:
+    - match: _
+      replace: .
+  git:
+    tag-filter-prefix: 1_

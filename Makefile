@@ -34,6 +34,13 @@ keygen: build-builder-image
 	$(DOCKER_RUN) melange keygen keys/melange.rsa
 
 # make build-package PKG=los-angeles-linux-release
+# --source-dir=packages/$(PKG): melange populates the build workspace from
+# this directory (patches, embedded config files, etc. that pipeline steps
+# reference by relative path), *not* from the directory containing the
+# YAML -- only passed when packages/$(PKG)/ actually exists, since pointing
+# it at a nonexistent directory isn't something melange tolerates gracefully.
+SOURCE_DIR_FLAG = $(if $(wildcard packages/$(PKG)),--source-dir=packages/$(PKG),)
+
 build-package: build-builder-image
 	@if [ -z "$(PKG)" ]; then echo "usage: make build-package PKG=<name>"; exit 1; fi
 	mkdir -p packages-out
@@ -51,7 +58,9 @@ build-package: build-builder-image
 		--repository-append=$(BOOTSTRAP_REPO) \
 		--keyring-append=$(BOOTSTRAP_KEY) \
 		--signing-key=keys/melange.rsa \
-		--out-dir=./packages-out
+		--out-dir=./packages-out \
+		--pipeline-dir=pipelines \
+		$(SOURCE_DIR_FLAG)
 
 build-index: build-builder-image
 	$(DOCKER_RUN) melange index \

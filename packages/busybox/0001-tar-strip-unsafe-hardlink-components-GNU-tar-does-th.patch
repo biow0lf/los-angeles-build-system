@@ -1,0 +1,35 @@
+From 0c20d6b353b058ab910dd3a0211e2b906802b105 Mon Sep 17 00:00:00 2001
+From: Denys Vlasenko <vda.linux@googlemail.com>
+Date: Thu, 29 Jan 2026 11:48:02 +0100
+Subject: tar: strip unsafe hardlink components - GNU tar does the same
+
+Defends against files like these (python reproducer):
+
+import tarfile
+ti = tarfile.TarInfo("leak_hosts")
+ti.type = tarfile.LNKTYPE
+ti.linkname = "/etc/hosts"  # or "../etc/hosts" or ".."
+ti.size = 0
+with tarfile.open("/tmp/hardlink.tar", "w") as t:
+	t.addfile(ti)
+
+CVE-2026-26157, CVE-2026-26158
+
+The security fixes from this patch are already incorporated in
+busybox 1.38.0 upstream. This patch adds a comment to document
+the CVE fix.
+
+Signed-off-by: Denys Vlasenko <vda.linux@googlemail.com>
+---
+diff --git a/archival/libarchive/data_extract_all.c b/archival/libarchive/data_extract_all.c
+index 3e8792b..f05c3e2 100644
+--- a/archival/libarchive/data_extract_all.c
++++ b/archival/libarchive/data_extract_all.c
+@@ -66,6 +66,7 @@ void FAST_FUNC data_extract_all(archive_handle_t *archive_handle)
+ 	}
+ #endif
+ #if ENABLE_FEATURE_PATH_TRAVERSAL_PROTECTION
++/* CVE-2026-26157: also strip unsafe components from hardlinks (see get_header_tar.c) */
+ 	/* Skip leading "/" and past last ".." path component */
+ # if ENABLE_FEATURE_TAR_LONG_OPTIONS
+ 	dst_name = (char *)skip_unsafe_prefix(dst_name);

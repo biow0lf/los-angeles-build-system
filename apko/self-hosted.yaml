@@ -1,0 +1,29 @@
+# Minimal apko config listing ONLY the self-hosted packages that share a
+# name with a Wolfi package and need to be force-resolved to our own
+# @local build rather than Wolfi's. Not built or booted on its own --
+# consumed exclusively by generate-lockfile.sh, which locks this config
+# to get correct, checksum-verified entries for these names, then splices
+# them over the same-named entries in los-angeles-linux.yaml's own lock.
+#
+# Locking THIS config (rather than pinning @local directly in
+# los-angeles-linux.yaml) is what sidesteps the so:libc.so.6 resolution
+# conflict described there: nothing else in this tiny want-list creates a
+# competing so:-based edge for these packages, so @local resolves cleanly
+# here.
+#
+# Add a package's @local name here once it's self-hosted and its name
+# collides with an upstream Wolfi package -- then re-run
+# generate-lockfile.sh (invoked automatically by `make build-rootfs`).
+contents:
+  repositories:
+    - https://packages.wolfi.dev/os
+    - "@local packages-out"
+  keyring:
+    - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+    - keys/melange.rsa.pub
+  packages:
+    - glibc-2.44@local
+    - glibc-2.44-iconv@local
+
+archs:
+  - x86_64

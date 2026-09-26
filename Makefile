@@ -73,9 +73,12 @@ serve-repo:
 
 build-rootfs: build-builder-image
 	mkdir -p work
-	$(DOCKER_RUN) apko build apko/los-angeles-linux.yaml \
-		la-linux:dev work/la-linux-oci.tar --arch $(ARCH) \
-		--sbom-path=work
+	$(DOCKER_RUN) sh -c ' \
+		apko/generate-lockfile.sh $(ARCH) work/apko.lock.json && \
+		apko build apko/los-angeles-linux.yaml \
+			la-linux:dev work/la-linux-oci.tar --arch $(ARCH) \
+			--sbom-path=work --lockfile=work/apko.lock.json \
+	'
 
 # --privileged: needed for /dev/loop-control (partitioning) -- and also,
 # incidentally, is what lets extract-rootfs.sh's tar recreate the rootfs's

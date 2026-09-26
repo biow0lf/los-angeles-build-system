@@ -54,24 +54,29 @@ contents:
     # satisfied through a separate, transitive constraint, so the pin is
     # unambiguous here.
     #
-    # glibc-2.44 is deliberately NOT pinned, and as a result may currently
-    # still resolve to Wolfi's copy rather than ours -- a known, open
-    # limitation, not an oversight. Every fix tried so far (@local pin,
-    # bumping our epoch past Wolfi's, listing our repo first, bumping
-    # provider-priority) either had no effect or actively broke the
-    # build: apk-tools (and everything else) needs so:libc.so.6 satisfied
-    # as a *separate*, transitive constraint from the direct "glibc-2.44"
-    # want, and once glibc-2.44 is pinned to our repo for the direct want,
-    # the solver exhausts every Wolfi glibc revision as "disqualified"
-    # against our pinned copy on that other path and then fails outright,
-    # instead of falling back to the one package left standing. Wolfi's
-    # own live index also isn't a stable target to race by version --
-    # observed its glibc-2.44 revision at both r0 and r6 within the same
-    # debugging session. glibc *builds* successfully from our own source
-    # (proven in CI), it just isn't reliably the one actually installed
-    # into this rootfs yet. Fixing this for real likely means generating
-    # an apko lockfile and hand-pinning its glibc-family entries to our
-    # local paths, rather than relying on live resolution -- not yet done.
+    # glibc-2.44 is deliberately NOT pinned here with @local. Pinning it
+    # directly fixes the *direct* "glibc-2.44" want to our repo, but
+    # apk-tools (and everything else) also needs so:libc.so.6 satisfied as
+    # a *separate*, transitive constraint -- once the direct want is
+    # pinned, the solver disqualifies every other glibc revision for that
+    # edge (only one package may provide the shared "cmd:ldconfig") and
+    # then fails outright, instead of reusing the pinned package to also
+    # satisfy it. Bumping our epoch past Wolfi's, listing our repo first,
+    # and bumping provider-priority were all tried too and made no
+    # difference -- Wolfi's own live index isn't even a stable target to
+    # race by version (observed its glibc-2.44 at both r0 and r6 within
+    # one debugging session).
+    #
+    # Instead, `make build-rootfs` runs apko/generate-lockfile.sh first,
+    # which locks apko/self-hosted.yaml (a minimal want-list containing
+    # only glibc-2.44@local and glibc-2.44-iconv@local, where the @local
+    # pin resolves cleanly since nothing else there creates a competing
+    # so:-based edge) and splices those resolved entries over this
+    # config's own lock. `apko build --lockfile=...` is then left no
+    # other candidate for those names, so it installs ours -- verified:
+    # `apko build --lockfile=...` installs glibc-2.44-2.44-r7 (ours, not
+    # Wolfi's r6) end-to-end, and `make build-image && make test-boot`
+    # still boots to multi-user.target.
     - busybox@local
     - glibc-2.44
 

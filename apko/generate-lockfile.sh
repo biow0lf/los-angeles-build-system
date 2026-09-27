@@ -4,24 +4,20 @@ set -euo pipefail
 # Generates the lockfile that `apko build --lockfile=...` (in the
 # build-rootfs Makefile target) consumes.
 #
-# glibc-2.44 (and its family: glibc-2.44-iconv, glibc-2.44-locale-posix,
-# ld-linux-2.44) can't be reliably pinned to our own build via a plain
-# @local suffix directly in apko/los-angeles-linux.yaml's contents.packages.
-# @local fixes the *direct* "glibc-2.44" want to our repo, but apk-tools
-# (and everything dynamically linked) also needs so:libc.so.6 satisfied as
-# a *separate*, transitive edge -- once the direct want is pinned, the
-# solver disqualifies every other glibc revision for that edge (only one
-# package may provide the shared "cmd:ldconfig"), then fails outright
-# instead of reusing the pinned package to also satisfy it.
+# Some self-hosted packages' names can't be reliably pinned to our own
+# build via a plain @local suffix directly in
+# apko/los-angeles-linux.yaml's contents.packages -- see
+# apko/self-hosted.yaml's own comment for the two distinct ways that
+# shows up (glibc-2.44's solver conflict; util-linux subpackages'
+# transitive name collision).
 #
-# Locking a MINIMAL config that wants only the self-hosted @local packages
-# (apko/self-hosted.yaml) sidesteps that conflict: nothing else in that
-# tiny want-list creates a competing so:-based edge, so @local resolves
-# cleanly there, producing correct, checksum-verified lock entries for
-# those packages. This script splices those entries over the same-named
-# ones in the main config's own (unpinned) lock, so `apko build
-# --lockfile=...` is left no other candidate per package name and
-# installs ours.
+# Locking a MINIMAL config that wants only those @local packages
+# (apko/self-hosted.yaml) sidesteps it: nothing else in that tiny
+# want-list creates a competing edge, so @local resolves cleanly there,
+# producing correct, checksum-verified lock entries for those packages.
+# This script splices those entries over the same-named ones in the main
+# config's own (unpinned) lock, so `apko build --lockfile=...` is left no
+# other candidate per package name and installs ours.
 #
 # The splice is done with awk, not jq: the builder image is Alpine's
 # minimal busybox userland by design (see docker/builder/Dockerfile), and

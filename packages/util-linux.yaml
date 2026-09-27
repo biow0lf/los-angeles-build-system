@@ -1,0 +1,562 @@
+package:
+  name: util-linux
+  version: "2.42.4"
+  epoch: 0 # update: poll GitHub tags (use-tag)
+  description: Random collection of Linux utilities
+  copyright:
+    - license: |-
+        GPL-3.0-or-later AND GPL-2.0-or-later AND GPL-2.0-only AND GPL-1.0-only AND LGPL-2.1-or-later AND BSD-1-Clause AND BSD-2-Clause AND BSD-3-Clause AND BSD-4-Clause-UC AND MIT AND CC-PDDC
+  checks:
+    disabled:
+      - setuidgid
+  dependencies:
+    runtime:
+      # This package ships fstrim.service/fstrim.timer, but the binary they
+      # run lives in the fstrim subpackage. systemd's default preset enables
+      # the timer, so without this the unit fails 203/EXEC.
+      - fstrim
+      - merged-bin
+      - merged-sbin
+      - merged-usrsbin
+      - wolfi-baselayout
+  resources:
+    cpu: "2"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 3Gi
+
+environment:
+  contents:
+    packages:
+      - asciidoctor
+      - autoconf
+      - automake
+      - bash
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - flex
+      - gettext-dev
+      - glibc-2.44-dev
+      - libcap-ng-dev
+      - libeconf-dev
+      - libselinux-dev
+      - libtool
+      - linux-headers
+      - linux-pam-dev
+      - ncurses-dev
+      - sqlite-dev
+      - systemd-dev
+      - zlib-dev
+
+var-transforms:
+  - from: ${{package.version}}
+    match: ^(\d+)\.(\d+).(\d+)$
+    replace: $1.$2
+    to: major-minor
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/util-linux/util-linux
+      tag: v${{package.version}}
+      expected-commit: d76cbf8f13e65ff657344f7f6a90042cf755ba59
+
+  - runs: ./autogen.sh
+
+  # Wolfi's own recipe has a bare "cp ttydefaults.h include/" here, which
+  # can't resolve: sys/ttydefaults.h is a *system* header (see
+  # configure.ac's AC_CHECK_HEADERS list), not something util-linux's own
+  # source tree ships -- it isn't present anywhere in this tag's commit.
+  # Our glibc-2.44-dev does provide usr/include/sys/ttydefaults.h, so vendor
+  # the real path instead.
+  - runs: |
+      cp /usr/include/sys/ttydefaults.h include/
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-silent-rules \
+        --enable-newgrp \
+        --bindir=/usr/bin \
+        --sbindir=/usr/bin \
+        --disable-nls \
+        --disable-tls \
+        --disable-kill \
+        --disable-chfn-chsh \
+        --with-vendordir=/usr/lib \
+        --without-python \
+        --without-econf \
+        --disable-libmount-udev-support \
+        --with-selinux \
+        $([ -d /usr/lib/oldglibc ] && echo ac_cv_func_close_range='no' ac_cv_func_strnchr='no' ac_cv_func_open_tree='no' ac_cv_func_move_mount='no' ac_cv_func_mount_setattr='no' ac_cv_func_landlock_add_rule='no' ac_cv_func_landlock_create_ruleset='no' ac_cv_func_landlock_restrict_self='no' ac_cv_func_fsconfig='no' ac_cv_func_fsopen='no' ac_cv_func_fsmount='no' ac_cv_func_fspick='no' ac_cv_func_cachestat='no' ac_cv_func_sched_setattr='no' ac_cv_header_linux_btrfs_h='no')
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+  - name: Select filesystems to trim from the mount table, not /etc/fstab
+    runs: |
+      # --listed-in stops at the first file it reads successfully, so a
+      # non-empty /etc/fstab means /proc/self/mountinfo is never consulted.
+      # Cloud/VM images do list some filesystems in /etc/fstab but not all --
+      # /home on Chainguard workstations and /var on bootc images are mounted
+      # outside it -- and those are exactly the ones worth trimming.
+      unit="${{targets.destdir}}"/usr/lib/systemd/system/fstrim.service
+      grep -q -- '--listed-in /etc/fstab:/proc/self/mountinfo' "$unit"
+      sed -i 's|--listed-in /etc/fstab:/proc/self/mountinfo|--listed-in /proc/self/mountinfo|' "$unit"
+
+data:
+  - name: libs
+    items:
+      libblkid: Block device identification library from util-linux
+      libfdisk: Partitioning library for fdisk-like programs
+      libmount: Block device identification library from util-linux
+      libsmartcols: Formatting library for ls-like programs
+      libuuid: DCE compatible Universally Unique Identifier library
+
+  - name: bins
+    items:
+      agetty: agetty program from util-linux
+      blkid: Block device identification tool from util-linux
+      blockdev: Call block device ioctls from the command line
+      cfdisk: Curses based partition table manipulator from util-linux
+      findmnt: Find mount from util-linux
+      flock: File locker from util-linux
+      fstrim: File system trim from util-linux
+      hexdump: Hexdump from util-linux
+      logger: Logger from util-linux
+      losetup: Loop disk setup from util-linux
+      lsblk: Block device list tool from util-linux
+      runuser: Run a program with substitute user and group ID
+      mcookie: Generate random numbers for xauth from util-linux
+      mount: Makes a file system available for use
+      nsenter: Run a program with namespaces of other processes
+      partx: Tell the kernel about disk partition changes from util-linux
+      script: make typescript of terminal session
+      setarch: Change reported architecture in new program environment and/or set personality flags
+      setpriv: Run a program with different Linux privilege settings
+      sfdisk: Partition table manipulator from util-linux
+      umount: Unmount filesystems
+      uuidgen: UUID generator from util-linux
+      wipefs: Utility to wipe filesystems from device from util-linux
+
+subpackages:
+  - name: util-linux-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - merged-bin
+        - merged-sbin
+        - merged-usrsbin
+        - util-linux
+        - wolfi-baselayout
+    description: util-linux dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: util-linux-doc
+    pipeline:
+      - uses: split/manpages
+    description: util-linux manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+    dependencies:
+      runtime:
+        - merged-bin
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - range: libs
+    name: ${{range.key}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib/${{range.key}}.so.* ${{targets.subpkgdir}}/usr/lib/
+    description: ${{range.value}}
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    dependencies:
+      runtime:
+        - merged-bin
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - range: bins
+    name: ${{range.key}}
+    description: ${{range.value}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+          for i in usr/bin usr/sbin bin sbin; do
+            if [ -e ${{targets.destdir}}/$i/${{range.key}} ]; then
+              mv ${{targets.destdir}}/$i/${{range.key}} ${{targets.subpkgdir}}/usr/bin/${{range.key}}
+            fi
+          done
+    dependencies:
+      runtime:
+        - merged-bin
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+    test:
+      environment:
+        contents:
+          packages:
+            - posix-libc-utils
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: ${{range.key}}
+        - name: Functional test for specific binaries
+          runs: |
+            case "${{range.key}}" in
+              flock)
+                flock /tmp/test.lock echo "locked" | grep -F "locked"
+                ;;
+              hexdump)
+                echo "ABC" | hexdump -C | grep -F "41 42 43"
+                ;;
+              lsblk)
+                ldd /usr/bin/lsblk | grep libudev.so.1
+                ;;
+              mcookie)
+                mcookie | grep -E '^[0-9a-f]{32}$'
+                ;;
+              uuidgen)
+                uuidgen | grep -iE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                ;;
+            esac
+
+  - name: util-linux-login
+    description: Login utils from util-linux package newgrp last lastb login lslogins nologin sulogin
+    dependencies:
+      runtime:
+        - cmd:su
+        - merged-bin
+        - merged-sbin
+        - merged-usrsbin
+        - runuser
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/etc/pam.d
+
+          # install pam configuration for 'sulogin'
+          install -Dm644 su-l.pamd ${{targets.subpkgdir}}/etc/pam.d/su-l
+
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+          for cmd in newgrp last lastb login lslogins nologin sulogin; do
+            mv ${{targets.destdir}}/usr/bin/$cmd ${{targets.subpkgdir}}/usr/bin/
+          done
+    test:
+      pipeline:
+        - runs: |
+            login --version
+            login --help
+            su --version
+            su --help
+            test -x /usr/bin/nologin
+            sulogin --version
+            sulogin --help
+            last --version
+            last --help
+            lastb --version
+            lastb --help
+            lslogins --version
+            lslogins --help
+            newgrp --version
+            newgrp --help
+
+  - name: util-linux-su
+    description: Login utils from util-linux su
+    dependencies:
+      runtime:
+        - merged-bin
+        - merged-sbin
+        - merged-usrsbin
+        - runuser
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+          mv ${{targets.destdir}}/usr/bin/su ${{targets.subpkgdir}}/usr/bin/
+    test:
+      pipeline:
+        - runs: |
+            su --version
+            su --help
+
+  - name: util-linux-misc
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+          for dir in usr/bin usr/sbin bin sbin; do
+            if [ -e ${{targets.destdir}}/$dir ]; then
+              mv ${{targets.destdir}}/$dir/* ${{targets.subpkgdir}}/usr/bin/
+              rmdir ${{targets.destdir}}/$dir
+            fi
+          done
+    description: Misc binaries for util-linux
+    test:
+      pipeline:
+        - runs: |
+            dmesg --version
+            dmesg --help
+            getopt --version
+            getopt --help
+            lsfd --version
+            lsfd --help
+            more --version
+            more --help
+            mountpoint --version
+            mountpoint --help
+            pipesz --version
+            pipesz --help
+            rev --version
+            rev --help
+            wdctl --version
+            wdctl --help
+            blkdiscard --version
+            blkdiscard --help
+            blkpr --version
+            blkpr --help
+            blkzone --version
+            blkzone --help
+            chcpu --version
+            chcpu --help
+            ctrlaltdel --version
+            ctrlaltdel --help
+            fdisk --version
+            fdisk --help
+            findfs --version
+            findfs --help
+            fsck --version
+            fsck --help
+            fsck.cramfs --version
+            fsck.cramfs --help
+            fsck.minix --version
+            fsck.minix --help
+            fsfreeze --version
+            fsfreeze --help
+            hwclock --version
+            hwclock --help
+            mkfs --version
+            mkfs --help
+            mkfs.bfs --version
+            mkfs.bfs --help
+            mkfs.cramfs --version
+            mkfs.cramfs --help
+            mkfs.minix --version
+            mkfs.minix --help
+            mkswap --version
+            mkswap --help
+            pivot_root --version
+            pivot_root --help
+            swaplabel --version
+            swaplabel --help
+            swapoff --version
+            swapoff --help
+            swapon --version
+            swapon --help
+            switch_root --version
+            switch_root --help
+            zramctl --version
+            zramctl --help
+            cal --version
+            cal --help
+            choom --version
+            choom --help
+            chrt --version
+            chrt --help
+            col --version
+            col --help
+            colcrt --version
+            colcrt --help
+            colrm --version
+            colrm --help
+            column --version
+            column --help
+            eject --version
+            eject --help
+            enosys --version
+            enosys --help
+            exch --version
+            exch --help
+            fadvise --version
+            fadvise --help
+            fallocate --version
+            fallocate --help
+            fincore --version
+            fincore --help
+            hardlink --version
+            hardlink --help
+            ionice --version
+            ionice --help
+            ipcmk --version
+            ipcmk --help
+            ipcrm --version
+            ipcrm --help
+            ipcs --version
+            ipcs --help
+            irqtop --version
+            irqtop --help
+            isosize --version
+            isosize --help
+            lastlog2 --version
+            lastlog2 --help
+            linux32 --help
+            linux64 --help
+            look --version
+            look --help
+            lsclocks --version
+            lsclocks --help
+            lscpu --version
+            lscpu --help
+            lsipc --version
+            lsipc --help
+            lsirq --version
+            lsirq --help
+            lslocks --version
+            lslocks --help
+            lsmem --version
+            lsmem --help
+            lsns --version
+            lsns --help
+            mesg --version
+            mesg --help
+            namei --version
+            namei --help
+            prlimit --version
+            prlimit --help
+            rename --version
+            rename --help
+            renice --version
+            renice --help
+            setpgid --version
+            setpgid --help
+            setsid --version
+            setsid --help
+            setterm --version
+            setterm --help
+            taskset --version
+            taskset --help
+            uclampset --version
+            uclampset --help
+            ul --version
+            ul --help
+            unshare --version
+            unshare --help
+            utmpdump --version
+            utmpdump --help
+            uuidparse --version
+            uuidparse --help
+            waitpid --version
+            waitpid --help
+            wall --version
+            wall --help
+            whereis --version
+            whereis --help
+            addpart --version
+            addpart --help
+            delpart --version
+            delpart --help
+            ldattach --version
+            ldattach --help
+            readprofile --version
+            readprofile --help
+            resizepart --version
+            resizepart --help
+            rfkill --version
+            rfkill --help
+            rtcwake --version
+            rtcwake --help
+            uuidd --version
+            uuidd --help
+        - name: Functional tests for misc utilities
+          runs: |
+            # Test rev: reverse characters in a line
+            echo "hello" | rev | grep -F "olleh"
+
+            # Test column: format data into columns
+            printf 'a:b:c\n1:2:3' | column -t -s: | grep -F "a"
+
+            # Test cal: display a calendar
+            cal 2024 | grep -F "January"
+
+            # Test namei: follow a pathname to its components
+            namei /usr/bin | grep -F "usr"
+
+            # Test look: display lines beginning with a given string
+            echo -e 'apple\nbanana\ncherry' > /tmp/words.txt
+            look ban /tmp/words.txt | grep -F "banana"
+    dependencies:
+      runtime:
+        - merged-bin
+        - merged-sbin
+        - merged-usrsbin
+        - nsenter
+        - setarch
+        - wolfi-baselayout
+
+  - name: util-linux-bins
+    description: metapackage for all util-linux bins
+    dependencies:
+      runtime:
+        - agetty
+        - blkid
+        - blockdev
+        - cfdisk
+        - findmnt
+        - flock
+        - fstrim
+        - hexdump
+        - logger
+        - losetup
+        - lsblk
+        - mcookie
+        - mount
+        - nsenter
+        - partx
+        - runuser
+        - script
+        - setarch
+        - setpriv
+        - sfdisk
+        - umount
+        - util-linux-login
+        - util-linux-misc
+        - util-linux-su
+        - uuidgen
+        - wipefs
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+
+update:
+  enabled: true
+  github:
+    identifier: util-linux/util-linux
+    use-tag: true
+    strip-prefix: v
+    tag-filter-prefix: v
+  ignore-regex-patterns:
+    - -rc
+    - -devel
+    - -start
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

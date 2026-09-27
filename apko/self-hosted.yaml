@@ -5,14 +5,32 @@
 # to get correct, checksum-verified entries for these names, then splices
 # them over the same-named entries in los-angeles-linux.yaml's own lock.
 #
-# Locking THIS config (rather than pinning @local directly in
-# los-angeles-linux.yaml) is what sidesteps the so:libc.so.6 resolution
-# conflict described there: nothing else in this tiny want-list creates a
-# competing so:-based edge for these packages, so @local resolves cleanly
-# here.
+# Two distinct problems land here, both solved the same way:
 #
-# Add a package's @local name here once it's self-hosted and its name
-# collides with an upstream Wolfi package -- then re-run
+# - glibc-2.44 and glibc-2.44-iconv: pinning @local directly in
+#   los-angeles-linux.yaml breaks the solver outright (see that file's
+#   comment) -- apk-tools' so:libc.so.6 need is a *separate* edge from the
+#   direct "glibc-2.44" want, and once the direct want is pinned, the
+#   solver disqualifies every other glibc revision for that edge and
+#   fails, instead of reusing the pinned package.
+#
+# - libblkid, libfdisk, libmount, libsmartcols, libuuid, fstrim: these are
+#   util-linux's own SUBPACKAGES, pulled in transitively (util-linux's
+#   runtime deps, or another package's dependency on one of these shared
+#   libs) rather than wanted directly -- util-linux@local itself resolves
+#   fine, but that pin has no effect on these separate, same-version,
+#   same-epoch named wants, so they resolve to whichever repo the solver
+#   happens to pick (observed: Wolfi's, every time, verified via `apko
+#   lock` on util-linux@local in isolation).
+#
+# Locking THIS minimal config (rather than pinning @local directly in
+# los-angeles-linux.yaml for names that show either problem) sidesteps
+# both: nothing else in this tiny want-list creates a competing edge, so
+# @local resolves cleanly here.
+#
+# Add a package's @local name here once it's self-hosted and either (a)
+# pinning it directly breaks the solver, or (b) it's a subpackage that
+# could get pulled in transitively under its own name -- then re-run
 # generate-lockfile.sh (invoked automatically by `make build-rootfs`).
 contents:
   repositories:
@@ -24,6 +42,12 @@ contents:
   packages:
     - glibc-2.44@local
     - glibc-2.44-iconv@local
+    - libblkid@local
+    - libfdisk@local
+    - libmount@local
+    - libsmartcols@local
+    - libuuid@local
+    - fstrim@local
 
 archs:
   - x86_64

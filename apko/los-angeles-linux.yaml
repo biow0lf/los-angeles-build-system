@@ -24,7 +24,6 @@ contents:
   packages:
     # Track A
     - wolfi-baselayout
-    - util-linux
     - e2fsprogs
     - dosfstools
     - systemd
@@ -42,17 +41,22 @@ contents:
     # Track B: built by us, not borrowed
     - los-angeles-linux-release@local
     - los-angeles-linux-base@local
-    # busybox, bash, coreutils, and glibc-2.44 are the first self-hosted
-    # packages (see the plan's self-hosting roadmap): built from actual
-    # source via packages/busybox.yaml, packages/bash.yaml,
-    # packages/coreutils.yaml, and packages/glibc-2.44.yaml, not pulled
-    # from Wolfi -- which also has same-named packages.
+    # busybox, bash, coreutils, util-linux, and glibc-2.44 are the first
+    # self-hosted packages (see the plan's self-hosting roadmap): built
+    # from actual source via packages/busybox.yaml, packages/bash.yaml,
+    # packages/coreutils.yaml, packages/util-linux.yaml, and
+    # packages/glibc-2.44.yaml, not pulled from Wolfi -- which also has
+    # same-named packages.
     #
-    # busybox@local, bash@local, and coreutils@local: verified (in
-    # isolation, via `apko lock`) to correctly force our own build.
-    # Nothing else in this want-list needs any of the three satisfied
-    # through a separate, transitive constraint, so the pin is
-    # unambiguous for each.
+    # busybox@local, bash@local, coreutils@local, and util-linux@local:
+    # verified (in isolation, via `apko lock`) to correctly force our own
+    # build for the *direct* want in each case. util-linux is a partial
+    # exception: the direct want resolves fine, but its own subpackages
+    # (libblkid, libfdisk, libmount, libsmartcols, libuuid, fstrim) are
+    # pulled in transitively under their own names and, unpinned, resolve
+    # to Wolfi's identically-versioned copies instead -- same fix as
+    # glibc-2.44 below (apko/self-hosted.yaml), just for a plain
+    # name-collision instead of a solver conflict.
     #
     # glibc-2.44 is deliberately NOT pinned here with @local. Pinning it
     # directly fixes the *direct* "glibc-2.44" want to our repo, but
@@ -80,6 +84,7 @@ contents:
     - busybox@local
     - bash@local
     - coreutils@local
+    - util-linux@local
     - glibc-2.44
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`

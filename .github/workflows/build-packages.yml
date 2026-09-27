@@ -1,23 +1,38 @@
 name: Build packages
 
-# Rebuilds every package on every change under packages/, rather than
-# diffing for just the changed ones: melange has no build-time dependency
-# graph across packages (see the plan's Risks section), so a diff-based
-# trigger would miss stale build-time consumers of a changed package (e.g.
-# a glibc bump). Rebuilding everything is simpler and strictly more
-# correct.
+# Rebuilds every package on every change under packages/ or pipelines/,
+# rather than diffing for just the changed ones: melange has no
+# build-time dependency graph across packages (see the plan's Risks
+# section), so a diff-based trigger would miss stale build-time consumers
+# of a changed package (e.g. a glibc bump). Rebuilding everything is
+# simpler and strictly more correct.
 #
 # Each package gets its own matrix job (rather than one job looping over
 # all of them) so a slow, heavy package -- glibc's full upstream testsuite
 # in particular -- doesn't make every unrelated package push wait on it;
 # total wall-clock is the slowest single package, not the sum of all of
 # them.
+#
+# apko/**, Makefile, docker/builder/**, image/** and test/** are also in
+# the trigger: those can't change what a package *contains*, but they can
+# break whether the packages this workflow just built actually assemble
+# into a bootable image (see the boot-test job below) -- a change to
+# apko/generate-lockfile.sh, say, gets no CI signal at all otherwise.
+#
+# boot-test (below) downloads this workflow's own packages-out artifact
+# rather than rebuilding from source a second time. A separate workflow
+# that reran `make build-package` for every package on the same trigger
+# paths (this repo's actual first cut at this) double-builds everything
+# on any push that touches both a package and the image pipeline in the
+# same commit -- twice the compute and wall-clock for zero extra
+# coverage, since the boot test only cares that the packages built here
+# assemble and boot, not that they can be rebuilt a second time.
 on:
   push:
     branches: [main]
-    paths: ["packages/**", "pipelines/**"]
+    paths: ["packages/**", "pipelines/**", "apko/**", "Makefile", "docker/builder/**", "image/**", "test/**"]
   pull_request:
-    paths: ["packages/**", "pipelines/**"]
+    paths: ["packages/**", "pipelines/**", "apko/**", "Makefile", "docker/builder/**", "image/**", "test/**"]
   workflow_dispatch: {}
 
 concurrency:
@@ -91,11 +106,46 @@ jobs:
           path: packages-out/
           retention-days: 14
 
+  # Assembles the disk image from the packages just built above (no
+  # rebuild -- downloads this run's own packages-out artifact) and
+  # boot-tests it in QEMU. Doesn't need the melange signing key: apko
+  # only verifies against the already-committed public key
+  # (keys/melange.rsa.pub), it doesn't sign anything itself.
+  boot-test:
+    needs: index
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download built packages
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-out
+          path: packages-out/
+
+      - name: Build disk image
+        run: make build-image
+
+      - name: Boot smoke test (QEMU)
+        run: make test-boot
+
+      - name: Upload boot log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-log
+          path: work/boot.log
+          retention-days: 14
+
   # Publishes the repo to GitHub Pages so `apk add`/`apk upgrade` on a
   # booted Los Angeles Linux system (the mutable runtime model) has
-  # something real to point at -- only from main, never from a PR.
+  # something real to point at -- only from main, never from a PR, and
+  # only once the packages built above are confirmed to actually produce
+  # a bootable image (needs: boot-test, not just index) -- a package that
+  # indexes fine but breaks the final image should never reach the public
+  # repo.
   publish:
-    needs: index
+    needs: boot-test
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:

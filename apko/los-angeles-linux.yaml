@@ -89,9 +89,13 @@ contents:
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`
   # work on a booted system (the mutable runtime model) -- not consulted at
-  # apko build time. http://localhost:8080 is only correct for local dev
-  # (`make serve-repo`); replace it with the real published repo URL once
-  # one exists (see Phase 4 / repo hosting in the plan).
+  # apko build time. https://biow0lf.github.io/los-angeles-build-system is
+  # build-packages.yml's `publish` job's real output (GitHub Pages, from
+  # main, gated on boot-test passing -- see that workflow), not a
+  # placeholder: verified live, serving a real APKINDEX.tar.gz per arch.
+  # For local dev against packages that haven't been pushed yet, point a
+  # booted image at `make serve-repo` instead (localhost:8080 from the
+  # *host* -- see that Makefile target for how to reach it from a guest).
   # No runtime_keyring needed: apko installs contents.keyring above into
   # /etc/apk/keys of the built image automatically (that's how build-time
   # package verification is possible in the first place), so both keys are
@@ -99,7 +103,7 @@ contents:
   # same filename collides with apko's own install of it.
   runtime_repositories:
     - https://packages.wolfi.dev/os
-    - http://localhost:8080
+    - https://biow0lf.github.io/los-angeles-build-system
 
 archs:
   - x86_64

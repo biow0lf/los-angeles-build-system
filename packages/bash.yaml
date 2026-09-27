@@ -1,0 +1,198 @@
+package:
+  name: bash
+  version: "5.3"
+  epoch: 13 # glibc: 2.43->2.44
+  description: "GNU bourne again shell"
+  copyright:
+    - license: GPL-3.0-or-later
+  dependencies:
+    runtime:
+      - merged-bin
+      - wolfi-baselayout
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - ncurses-dev
+  environment:
+    # Should be able to drop this once v5.3 is released
+    CFLAGS: -std=c17
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/bash.git
+      tag: bash-${{package.version}}
+      expected-commit: b8c60bc9ca365f8261fa97900b6fa939f6ebc303
+
+  - runs: |
+      export CFLAGS="${CFLAGS} -DSYS_BASHRC='\"/etc/bash.bashrc\"' -DSYS_BASH_LOGOUT='\"/etc/bash.bash_logout\"'"
+      ./configure \
+        --host=${{host.triplet.gnu}} \
+        --target=${{host.triplet.gnu}} \
+        --prefix=/usr \
+        --bindir=/usr/bin \
+        --sysconfdir=/etc \
+        --without-libidn \
+        --with-ssl=openssl \
+        --disable-nls \
+        --enable-readline \
+        --without-bash-malloc \
+        --with-curses
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: bash-binsh
+    dependencies:
+      provider-priority: 60
+      runtime:
+        - bash
+        - merged-bin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          ln -s bash "${{targets.subpkgdir}}"/usr/bin/sh
+    test:
+      pipeline:
+        - runs: |
+            [ /usr/bin/sh -ef /usr/bin/bash ] || { echo "/usr/bin/sh is not same as /usr/bin/bash"; exit 1; }
+        - uses: test/tw/ver-check
+          with:
+            bins: sh
+        - uses: test/tw/help-check
+          with:
+            bins: sh
+
+  - name: "bash-doc"
+    description: "bash documentation"
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/share
+          mv "${{targets.destdir}}"/usr/share/doc "${{targets.subpkgdir}}"/usr/share/
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      runtime:
+        - merged-bin
+        - wolfi-baselayout
+
+  - name: "bash-dev"
+    description: "bash development headers"
+    pipeline:
+      - uses: split/dev
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/bashbug "${{targets.subpkgdir}}"/usr/bin/
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/tw/ver-check
+          with:
+            bins: bashbug
+        - uses: test/tw/help-check
+          with:
+            bins: bashbug
+        - uses: test/pkgconf
+    dependencies:
+      runtime:
+        - merged-bin
+        - wolfi-baselayout
+
+  - name: "bash-builtins"
+    description: "bash loadable builtins"
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv "${{targets.destdir}}/usr/lib/bash" ${{targets.subpkgdir}}/usr/lib/
+    dependencies:
+      runtime:
+        - merged-bin
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/contains-files
+
+update:
+  enabled: true
+  git:
+    tag-filter-prefix: bash-
+    strip-prefix: bash-
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: bash
+    - uses: test/tw/help-check
+      with:
+        bins: bash
+    - name: Test variable expansion
+      runs: |
+        out=$(bash -c 'x=hello; echo $x')
+        [ "$out" = "hello" ] || { echo "FAIL: Expected 'hello', got '$out'"; exit 1; }
+        echo "SUCCESS: Variable expansion works"
+    - name: Test command substitution and pipes
+      runs: |
+        # Test command substitution
+        out=$(bash -c 'echo $(echo test)')
+        [ "$out" = "test" ] || { echo "FAIL: Command substitution failed"; exit 1; }
+
+        # Test pipes
+        out=$(bash -c 'echo test | cat')
+        [ "$out" = "test" ] || { echo "FAIL: Pipe failed"; exit 1; }
+
+        echo "SUCCESS: Command substitution and pipes work"
+    - name: Test script execution from file
+      runs: |
+        set -euo pipefail
+        # Create a test script with shell constructs
+        tee /tmp/test_script.sh <<'EOF'
+        #!/bin/bash
+        x=5
+        if [ "$x" -eq 5 ]; then
+          for i in 1 2 3; do
+            echo "iteration $i"
+          done
+          echo "success"
+        fi
+        EOF
+
+        chmod +x /tmp/test_script.sh
+        out=$(bash /tmp/test_script.sh)
+        echo "$out" | grep -F "iteration 1" || { echo "FAIL: Loop iteration 1 not found"; exit 1; }
+        echo "$out" | grep -F "iteration 3" || { echo "FAIL: Loop iteration 3 not found"; exit 1; }
+        echo "$out" | grep -F "success" || { echo "FAIL: Conditional success not found"; exit 1; }
+        echo "SUCCESS: Script execution with variables, conditionals, and loops works"
+    - name: Test built-in commands
+      runs: |
+        # Test 'test' builtin
+        bash -c 'test -d /tmp' || { echo "FAIL: test builtin failed"; exit 1; }
+
+        # Test '[' builtin
+        bash -c '[ -f /etc/passwd ]' || { echo "FAIL: [ builtin failed"; exit 1; }
+
+        # Test 'cd' builtin
+        out=$(bash -c 'cd /tmp && pwd')
+        [ "$out" = "/tmp" ] || { echo "FAIL: cd builtin failed"; exit 1; }
+
+        # Test 'type' builtin
+        bash -c 'type echo' || { echo "FAIL: type builtin failed"; exit 1; }
+
+        echo "SUCCESS: Built-in commands work"

@@ -24,7 +24,6 @@ contents:
   packages:
     # Track A
     - wolfi-baselayout
-    - coreutils
     - util-linux
     - e2fsprogs
     - dosfstools
@@ -43,16 +42,17 @@ contents:
     # Track B: built by us, not borrowed
     - los-angeles-linux-release@local
     - los-angeles-linux-base@local
-    # busybox, bash, and glibc-2.44 are the first self-hosted packages
-    # (see the plan's self-hosting roadmap): built from actual source via
-    # packages/busybox.yaml, packages/bash.yaml, and
-    # packages/glibc-2.44.yaml, not pulled from Wolfi -- which also has
-    # same-named packages.
+    # busybox, bash, coreutils, and glibc-2.44 are the first self-hosted
+    # packages (see the plan's self-hosting roadmap): built from actual
+    # source via packages/busybox.yaml, packages/bash.yaml,
+    # packages/coreutils.yaml, and packages/glibc-2.44.yaml, not pulled
+    # from Wolfi -- which also has same-named packages.
     #
-    # busybox@local and bash@local: verified (in isolation, via `apko
-    # lock`) to correctly force our own build. Nothing else in this
-    # want-list needs busybox or bash satisfied through a separate,
-    # transitive constraint, so the pin is unambiguous for either.
+    # busybox@local, bash@local, and coreutils@local: verified (in
+    # isolation, via `apko lock`) to correctly force our own build.
+    # Nothing else in this want-list needs any of the three satisfied
+    # through a separate, transitive constraint, so the pin is
+    # unambiguous for each.
     #
     # glibc-2.44 is deliberately NOT pinned here with @local. Pinning it
     # directly fixes the *direct* "glibc-2.44" want to our repo, but
@@ -79,6 +79,7 @@ contents:
     # still boots to multi-user.target.
     - busybox@local
     - bash@local
+    - coreutils@local
     - glibc-2.44
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`

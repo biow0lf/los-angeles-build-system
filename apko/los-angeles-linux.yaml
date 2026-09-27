@@ -24,12 +24,6 @@ contents:
   packages:
     # Track A
     - wolfi-baselayout
-    - systemd
-    # Wolfi splits systemd-udevd out of the `systemd` package into `udev`
-    # (distinct from `eudev`, the non-systemd fork) -- without it there's no
-    # udevd running, so systemd never gets a "device found" event for
-    # anything, including /dev/ttyS0, and every device unit times out.
-    - udev
     - dbus
     - apk-tools
     - ca-certificates
@@ -39,26 +33,48 @@ contents:
     # Track B: built by us, not borrowed
     - los-angeles-linux-release@local
     - los-angeles-linux-base@local
-    # busybox, bash, coreutils, util-linux, e2fsprogs, dosfstools, and
-    # glibc-2.44 are the first self-hosted packages (see the plan's
+    # busybox, bash, coreutils, util-linux, e2fsprogs, dosfstools, systemd,
+    # and glibc-2.44 are the first self-hosted packages (see the plan's
     # self-hosting roadmap): built from actual source via
     # packages/busybox.yaml, packages/bash.yaml, packages/coreutils.yaml,
     # packages/util-linux.yaml, packages/e2fsprogs.yaml,
-    # packages/dosfstools.yaml, and packages/glibc-2.44.yaml, not pulled
-    # from Wolfi -- which also has same-named packages.
+    # packages/dosfstools.yaml, packages/systemd.yaml, and
+    # packages/glibc-2.44.yaml, not pulled from Wolfi -- which also has
+    # same-named packages.
     #
     # busybox@local, bash@local, coreutils@local, util-linux@local,
-    # e2fsprogs@local, and dosfstools@local: verified (in isolation, via
-    # `apko lock`) to correctly force our own build for the *direct* want
-    # in each case. util-linux and e2fsprogs are a partial exception: the
-    # direct want resolves fine, but their own subpackages (libblkid,
-    # libfdisk, libmount, libsmartcols, libuuid, fstrim for util-linux;
-    # libcom_err, e2fsprogs-libs for e2fsprogs) are pulled in transitively
-    # under their own names and, unpinned, resolve to Wolfi's
-    # identically-versioned copies instead -- same fix as glibc-2.44
-    # below (apko/self-hosted.yaml), just for a plain name-collision
-    # instead of a solver conflict. dosfstools has no such subpackage
-    # (only dosfstools-doc, never pulled transitively by anything here).
+    # e2fsprogs@local, dosfstools@local, and systemd@local: verified (in
+    # isolation, via `apko lock`) to correctly force our own build for the
+    # *direct* want in each case. util-linux, e2fsprogs, and systemd are a
+    # partial exception: the direct want resolves fine, but their own
+    # subpackages (libblkid, libfdisk, libmount, libsmartcols, libuuid,
+    # fstrim for util-linux; libcom_err, e2fsprogs-libs for e2fsprogs;
+    # libsystemd, libsystemd-shared, libsystemd-compression-libs,
+    # systemd-boot, systemd-systemctl for systemd) are pulled in
+    # transitively under their own names and, unpinned, resolve to
+    # Wolfi's identically-versioned copies instead -- same fix as
+    # glibc-2.44 below (apko/self-hosted.yaml), just for a plain
+    # name-collision instead of a solver conflict. dosfstools has no such
+    # subpackage (only dosfstools-doc, never pulled transitively by
+    # anything here).
+    #
+    # udev@local: Wolfi splits systemd-udevd out of the `systemd` package
+    # into `udev` (distinct from `eudev`, the non-systemd fork) --
+    # without it there's no udevd running, so systemd never gets a
+    # "device found" event for anything, including /dev/ttyS0, and every
+    # device unit times out. It's a systemd *subpackage* too, but (unlike
+    # the five above) resolves correctly when directly wanted @local --
+    # verified in the same isolated `apko lock` check as systemd itself.
+    #
+    # packages/systemd.yaml passes -Dbpf-framework=false (see that file's
+    # comment): the eBPF CO-RE objects it would otherwise build get
+    # compiled against a vmlinux.h generated from the *host kernel's*
+    # BTF data, which under Docker's --platform linux/amd64 on Apple
+    # Silicon is genuinely arm64 underneath (QEMU only emulates
+    # userspace) -- x86_64-targeted BPF against an arm64-shaped struct
+    # pt_regs fails to compile. Disabling it trades away one hardening
+    # feature (userns-restrict) for the ability to verify this build on
+    # every dev machine, not just x86_64 CI.
     #
     # glibc-2.44 is deliberately NOT pinned here with @local. Pinning it
     # directly fixes the *direct* "glibc-2.44" want to our repo, but
@@ -89,6 +105,8 @@ contents:
     - util-linux@local
     - e2fsprogs@local
     - dosfstools@local
+    - systemd@local
+    - udev@local
     - glibc-2.44
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`

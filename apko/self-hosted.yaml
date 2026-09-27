@@ -14,14 +14,15 @@
 #   solver disqualifies every other glibc revision for that edge and
 #   fails, instead of reusing the pinned package.
 #
-# - libblkid, libfdisk, libmount, libsmartcols, libuuid, fstrim: these are
-#   util-linux's own SUBPACKAGES, pulled in transitively (util-linux's
-#   runtime deps, or another package's dependency on one of these shared
-#   libs) rather than wanted directly -- util-linux@local itself resolves
-#   fine, but that pin has no effect on these separate, same-version,
-#   same-epoch named wants, so they resolve to whichever repo the solver
-#   happens to pick (observed: Wolfi's, every time, verified via `apko
-#   lock` on util-linux@local in isolation).
+# - libblkid, libfdisk, libmount, libsmartcols, libuuid, fstrim
+#   (util-linux's own subpackages) and libcom_err, e2fsprogs-libs
+#   (e2fsprogs's): pulled in transitively (the parent's own runtime deps,
+#   or another package's dependency on one of these shared libs) rather
+#   than wanted directly -- util-linux@local/e2fsprogs@local themselves
+#   resolve fine, but that pin has no effect on these separate,
+#   same-version, same-epoch named wants, so they resolve to whichever
+#   repo the solver happens to pick (observed: Wolfi's, every time,
+#   verified via `apko lock` on the parent package @local in isolation).
 #
 # Locking THIS minimal config (rather than pinning @local directly in
 # los-angeles-linux.yaml for names that show either problem) sidesteps
@@ -48,6 +49,8 @@ contents:
     - libsmartcols@local
     - libuuid@local
     - fstrim@local
+    - libcom_err@local
+    - e2fsprogs-libs@local
 
 archs:
   - x86_64

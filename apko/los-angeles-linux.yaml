@@ -24,7 +24,6 @@ contents:
   packages:
     # Track A
     - wolfi-baselayout
-    - e2fsprogs
     - dosfstools
     - systemd
     # Wolfi splits systemd-udevd out of the `systemd` package into `udev`
@@ -41,22 +40,25 @@ contents:
     # Track B: built by us, not borrowed
     - los-angeles-linux-release@local
     - los-angeles-linux-base@local
-    # busybox, bash, coreutils, util-linux, and glibc-2.44 are the first
-    # self-hosted packages (see the plan's self-hosting roadmap): built
-    # from actual source via packages/busybox.yaml, packages/bash.yaml,
-    # packages/coreutils.yaml, packages/util-linux.yaml, and
+    # busybox, bash, coreutils, util-linux, e2fsprogs, and glibc-2.44 are
+    # the first self-hosted packages (see the plan's self-hosting
+    # roadmap): built from actual source via packages/busybox.yaml,
+    # packages/bash.yaml, packages/coreutils.yaml,
+    # packages/util-linux.yaml, packages/e2fsprogs.yaml, and
     # packages/glibc-2.44.yaml, not pulled from Wolfi -- which also has
     # same-named packages.
     #
-    # busybox@local, bash@local, coreutils@local, and util-linux@local:
-    # verified (in isolation, via `apko lock`) to correctly force our own
-    # build for the *direct* want in each case. util-linux is a partial
-    # exception: the direct want resolves fine, but its own subpackages
-    # (libblkid, libfdisk, libmount, libsmartcols, libuuid, fstrim) are
-    # pulled in transitively under their own names and, unpinned, resolve
-    # to Wolfi's identically-versioned copies instead -- same fix as
-    # glibc-2.44 below (apko/self-hosted.yaml), just for a plain
-    # name-collision instead of a solver conflict.
+    # busybox@local, bash@local, coreutils@local, util-linux@local, and
+    # e2fsprogs@local: verified (in isolation, via `apko lock`) to
+    # correctly force our own build for the *direct* want in each case.
+    # util-linux and e2fsprogs are a partial exception: the direct want
+    # resolves fine, but their own subpackages (libblkid, libfdisk,
+    # libmount, libsmartcols, libuuid, fstrim for util-linux; libcom_err,
+    # e2fsprogs-libs for e2fsprogs) are pulled in transitively under their
+    # own names and, unpinned, resolve to Wolfi's identically-versioned
+    # copies instead -- same fix as glibc-2.44 below
+    # (apko/self-hosted.yaml), just for a plain name-collision instead of
+    # a solver conflict.
     #
     # glibc-2.44 is deliberately NOT pinned here with @local. Pinning it
     # directly fixes the *direct* "glibc-2.44" want to our repo, but
@@ -85,6 +87,7 @@ contents:
     - bash@local
     - coreutils@local
     - util-linux@local
+    - e2fsprogs@local
     - glibc-2.44
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`

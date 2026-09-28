@@ -13,6 +13,14 @@
 # Track A (borrowed as-is from Wolfi, glibc-based, itself melange-built) vs.
 # Track B (los-angeles-linux-*, built by us) are marked below. See the
 # self-hosting roadmap in the top-level plan for moving packages from A to B.
+#
+# Every package that has real upstream source to build from has now moved
+# to Track B (busybox, bash, coreutils, util-linux, e2fsprogs, dosfstools,
+# systemd, udev, dbus, apk-tools, openssh, ca-certificates, glibc-2.44) --
+# wolfi-baselayout is Track A's sole remaining entry, and stays there
+# deliberately: it's Wolfi's own filesystem-skeleton/distro-identity
+# package (owns things like /etc/os-release), not upstream software with
+# a source tree to fork -- "self-hosting" it wouldn't mean anything.
 
 contents:
   repositories:
@@ -24,43 +32,43 @@ contents:
   packages:
     # Track A
     - wolfi-baselayout
-    - iproute2
-    - iputils
     # Track B: built by us, not borrowed
     - los-angeles-linux-release@local
     - los-angeles-linux-base@local
     # busybox, bash, coreutils, util-linux, e2fsprogs, dosfstools, systemd,
-    # dbus, apk-tools, openssh, ca-certificates, and glibc-2.44 are the
-    # first self-hosted packages (see the plan's self-hosting roadmap):
-    # built from actual source via packages/busybox.yaml,
-    # packages/bash.yaml, packages/coreutils.yaml, packages/util-linux.yaml,
-    # packages/e2fsprogs.yaml, packages/dosfstools.yaml,
-    # packages/systemd.yaml, packages/dbus.yaml, packages/apk-tools.yaml,
-    # packages/openssh.yaml, packages/ca-certificates.yaml, and
-    # packages/glibc-2.44.yaml, not pulled from Wolfi -- which also has
-    # same-named packages.
+    # dbus, apk-tools, openssh, ca-certificates, iproute2, iputils, and
+    # glibc-2.44 are the self-hosted packages (see the plan's
+    # self-hosting roadmap): built from actual source via
+    # packages/busybox.yaml, packages/bash.yaml, packages/coreutils.yaml,
+    # packages/util-linux.yaml, packages/e2fsprogs.yaml,
+    # packages/dosfstools.yaml, packages/systemd.yaml, packages/dbus.yaml,
+    # packages/apk-tools.yaml, packages/openssh.yaml,
+    # packages/ca-certificates.yaml, packages/iproute2.yaml,
+    # packages/iputils.yaml, and packages/glibc-2.44.yaml, not pulled
+    # from Wolfi -- which also has same-named packages.
     #
     # busybox@local, bash@local, coreutils@local, util-linux@local,
     # e2fsprogs@local, dosfstools@local, systemd@local, dbus@local,
-    # apk-tools@local, openssh@local, and ca-certificates@local: verified
-    # (in isolation, via `apko lock`) to correctly force our own build for
-    # the *direct* want in each case. util-linux, e2fsprogs, systemd,
-    # dbus, openssh, and ca-certificates are a partial exception: the
-    # direct want resolves fine, but their own subpackages (libblkid,
-    # libfdisk, libmount, libsmartcols, libuuid, fstrim for util-linux;
-    # libcom_err, e2fsprogs-libs for e2fsprogs; libsystemd,
-    # libsystemd-shared, systemd-boot, systemd-systemctl for systemd;
-    # dbus-libs for dbus; openssh-client, openssh-server,
-    # openssh-sftp-server, openssh-keygen, openssh-server-config for
-    # openssh; ca-certificates-bundle for ca-certificates) are pulled in
-    # transitively under their own names and, unpinned, resolve to
-    # Wolfi's identically-versioned copies instead -- same fix as
-    # glibc-2.44 below (apko/self-hosted.yaml), just for a plain
-    # name-collision instead of a solver conflict. dosfstools and
-    # apk-tools have no such subpackage (only -doc/-dev/lua5.3-apk, never
-    # pulled transitively by anything here). systemd's
-    # libsystemd-compression-libs is a deliberate exception left unpinned
-    # -- see self-hosted.yaml's own comment for why.
+    # apk-tools@local, openssh@local, ca-certificates@local, iproute2@local,
+    # and iputils@local: verified (in isolation, via `apko lock`) to
+    # correctly force our own build for the *direct* want in each case.
+    # util-linux, e2fsprogs, systemd, dbus, openssh, and ca-certificates
+    # are a partial exception: the direct want resolves fine, but their
+    # own subpackages (libblkid, libfdisk, libmount, libsmartcols,
+    # libuuid, fstrim for util-linux; libcom_err, e2fsprogs-libs for
+    # e2fsprogs; libsystemd, libsystemd-shared, systemd-boot,
+    # systemd-systemctl for systemd; dbus-libs for dbus; openssh-client,
+    # openssh-server, openssh-sftp-server, openssh-keygen,
+    # openssh-server-config for openssh; ca-certificates-bundle for
+    # ca-certificates) are pulled in transitively under their own names
+    # and, unpinned, resolve to Wolfi's identically-versioned copies
+    # instead -- same fix as glibc-2.44 below (apko/self-hosted.yaml),
+    # just for a plain name-collision instead of a solver conflict.
+    # dosfstools, apk-tools, iproute2, and iputils have no such
+    # subpackage (only -doc, or none at all, never pulled transitively by
+    # anything here). systemd's libsystemd-compression-libs is a
+    # deliberate exception left unpinned -- see self-hosted.yaml's own
+    # comment for why.
     #
     # packages/apk-tools.yaml also switches its git-checkout source from
     # Wolfi's gitlab.alpinelinux.org to the github.com/alpinelinux mirror
@@ -121,6 +129,8 @@ contents:
     - apk-tools@local
     - openssh@local
     - ca-certificates@local
+    - iproute2@local
+    - iputils@local
     - glibc-2.44
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`

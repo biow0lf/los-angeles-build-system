@@ -1,0 +1,155 @@
+package:
+  name: iproute2
+  version: "7.2.0"
+  epoch: 0 # glibc: 2.43->2.44
+  description: IP Routing Utilities
+  copyright:
+    - license: GPL-2.0-or-later
+  dependencies:
+    runtime:
+      - db
+      - merged-sbin
+      - wolfi-baselayout
+
+capabilities:
+  add:
+    - CAP_NET_ADMIN
+
+environment:
+  contents:
+    packages:
+      - bash
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - db-dev
+      - elfutils-dev
+      - flex
+      - glibc-2.44-dev
+      - iptables-dev
+      - libbpf-dev
+      - libcap-dev
+      - libmnl-dev
+      - libselinux-dev
+      - libtirpc-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://kernel.googlesource.com/pub/scm/network/iproute2/iproute2
+      tag: v${{package.version}}
+      expected-commit: 880505966c17d90243c39e446d79da6236fb06ba
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --build=${{host.triplet.gnu}} \
+        --host=${{host.triplet.gnu}} \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --mandir=/usr/share/man \
+        --localstatedir=/var
+
+  - uses: autoconf/make
+    with:
+      opts: |
+        CCOPTS="-D_GNU_SOURCE $CFLAGS" LIBDIR=/lib
+
+  - uses: autoconf/make-install
+    with:
+      opts: SBINDIR=/usr/bin
+
+  - uses: strip
+
+subpackages:
+  - name: iproute2-doc
+    description: iproute2 documentation
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+    dependencies:
+      runtime:
+        - merged-sbin
+        - wolfi-baselayout
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1392
+
+test:
+  environment:
+    contents:
+      packages:
+        - bash
+        - coreutils
+        - grep
+  pipeline:
+    - name: "Version and help checks for core utilities"
+    - runs: |
+        bridge -V
+        ctstat --help
+        genl -V
+        ifstat --version
+        ip -V
+        lnstat --help
+        nstat --version
+        rtacct -v
+        rtmon -V
+        rtstat --help
+        ss --version
+        tc help
+        ctstat -v
+        ifstat help
+        lnstat -v
+        nstat help
+        rtstat -v
+        ss --help
+    - name: "Test ip show operations"
+      runs: |
+        # List interfaces (read-only)
+        ip link show
+        ip addr show
+        ip route show
+    - name: "Test traffic control show operations"
+      runs: |
+        # Show existing qdiscs and filters
+        tc qdisc show
+        tc filter show
+        tc class show
+    - name: "Test network statistics tools"
+      runs: |
+        # Read-only statistics commands
+        ss -n
+        ss -t
+        ss -u
+        nstat --zero
+        ifstat -v
+    - name: "Test bridge show operations"
+      runs: |
+        # Read-only bridge operations
+        bridge link show
+        bridge vlan show
+        bridge mdb show
+    - name: "Test routing information display"
+      runs: |
+        # Show routing information (read-only)
+        ip route show
+        ip route show table local
+        ip rule show
+    - name: "Test network tunnel show operations"
+      runs: |
+        # Show existing tunnels
+        ip tunnel show
+    - name: "Test adding dummy interface"
+      runs: |
+        # qemu x86_64 and docker arm64 behave differently with the dummy module
+        if ! ip link add dev myinterface type dummy 2>/dev/null; then
+          out=$(ip link add dev myinterface type dummy 2>&1 || true)
+          echo "$out" | grep -qE 'RTNETLINK answers: Operation not permitted|Error: Unknown device type'
+        fi
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs

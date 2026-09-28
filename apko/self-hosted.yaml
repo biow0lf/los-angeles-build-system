@@ -17,16 +17,17 @@
 # - libblkid, libfdisk, libmount, libsmartcols, libuuid, fstrim
 #   (util-linux's own subpackages), libcom_err, e2fsprogs-libs
 #   (e2fsprogs's), libsystemd, libsystemd-shared, systemd-boot,
-#   systemd-systemctl (systemd's), dbus-libs (dbus's), and
-#   openssh-client, openssh-server, openssh-sftp-server,
-#   openssh-keygen, openssh-server-config (openssh's): pulled in
-#   transitively (the parent's own runtime deps, or another package's
-#   dependency on one of these shared libs/binaries) rather than wanted
-#   directly -- the parent package @local itself resolves fine, but that
-#   pin has no effect on these separate, same-version, same-epoch named
-#   wants, so they resolve to whichever repo the solver happens to pick
-#   (observed: Wolfi's, every time, verified via `apko lock` on the
-#   parent package @local in isolation).
+#   systemd-systemctl (systemd's), dbus-libs (dbus's), openssh-client,
+#   openssh-server, openssh-sftp-server, openssh-keygen,
+#   openssh-server-config (openssh's), and ca-certificates-bundle
+#   (ca-certificates's): pulled in transitively (the parent's own
+#   runtime deps, or another package's dependency on one of these shared
+#   libs/binaries) rather than wanted directly -- the parent package
+#   @local itself resolves fine, but that pin has no effect on these
+#   separate, same-version, same-epoch named wants, so they resolve to
+#   whichever repo the solver happens to pick (observed: Wolfi's, every
+#   time, verified via `apko lock` on the parent package @local in
+#   isolation).
 #
 # libsystemd-compression-libs (also a systemd subpackage, same shape as
 # the above) is a deliberate EXCEPTION, left unpinned: once both
@@ -79,6 +80,7 @@ contents:
     - openssh-sftp-server@local
     - openssh-keygen@local
     - openssh-server-config@local
+    - ca-certificates-bundle@local
 
 archs:
   - x86_64

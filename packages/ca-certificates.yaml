@@ -28,19 +28,23 @@ environment:
       - perl
 
 pipeline:
-  # Fetches the release tarball instead of git-checkout (which Wolfi's own
-  # recipe uses): gitlab.alpinelinux.org started returning HTTP 418 to
-  # every git-clone/fetch from GitHub Actions' runner IPs specifically
-  # (reachable fine from other networks) -- a WAF/CDN fingerprinting git's
-  # smart-HTTP protocol, not a real outage. The `fetch` pipeline uses
-  # plain wget instead, which isn't blocked, and matches how Alpine's own
-  # APKBUILD for this package actually sources it (a source= tarball URL,
-  # not a live git clone -- see
-  # https://gitlab.alpinelinux.org/alpine/aports/-/raw/master/main/ca-certificates/APKBUILD).
-  - uses: fetch
-    with:
-      uri: https://gitlab.alpinelinux.org/alpine/ca-certificates/-/archive/${{package.version}}/ca-certificates-${{package.version}}.tar.bz2
-      expected-sha256: dc460c535f3833432be4e561d214a5fe816b05ede5a2ade64787e501671cd082
+  # Uses a vendored copy of the release tarball instead of git-checkout
+  # (which Wolfi's own recipe uses) or a live fetch: gitlab.alpinelinux.org
+  # returns HTTP 418 to every request from GitHub Actions' runner IPs
+  # specifically (git-checkout, and a plain wget via the `fetch` pipeline,
+  # both hit it identically) -- reachable fine from every other network,
+  # including this one, so it's IP-reputation-based bot-blocking on
+  # gitlab.alpinelinux.org's end (most likely Cloudflare flagging shared
+  # CI IP ranges), not protocol-specific and not a real outage. No GitHub
+  # mirror exists for this package to route around it the way
+  # packages/apk-tools.yaml does (github.com/alpinelinux/ca-certificates
+  # is years stale). The tarball itself is genuinely small (227K), so
+  # vendoring it here -- verified against the same sha256 a live fetch
+  # would have checked -- sidesteps the network dependency entirely
+  # rather than gambling on gitlab.alpinelinux.org unblocking CI's IPs.
+  - runs: |
+      echo "dc460c535f3833432be4e561d214a5fe816b05ede5a2ade64787e501671cd082  ca-certificates-${{package.version}}.tar.bz2" | sha256sum -c
+      tar -xjf ca-certificates-${{package.version}}.tar.bz2 --strip-components=1
 
   - runs: |
       make CC="${{host.triplet.gnu}}-gcc"

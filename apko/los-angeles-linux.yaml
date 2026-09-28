@@ -74,15 +74,17 @@ contents:
     # packages/apk-tools.yaml switches its git-checkout source to the
     # github.com/alpinelinux mirror (verified true mirror: same commit
     # once the tag is peeled) -- the host was down for an extended period
-    # (500/502/403 errors) at the time. packages/ca-certificates.yaml
-    # (no viable mirror -- that one's github.com/alpinelinux mirror is
-    # years stale) instead switches from git-checkout to fetch against
-    # the release tarball: the host itself was fine, but returned HTTP
-    # 418 to every git-clone specifically from GitHub Actions' runner
-    # IPs (reachable fine elsewhere) -- a WAF fingerprinting git's
-    # smart-HTTP protocol. fetch uses plain wget, unaffected, and
-    # matches how Alpine's own APKBUILD for that package actually
-    # sources it (a tarball, not a live clone).
+    # (500/502/403 errors) at the time. packages/ca-certificates.yaml (no
+    # viable mirror -- that one's github.com/alpinelinux mirror is years
+    # stale) hit a different, IP-reputation-based problem instead: the
+    # host itself was fine, but returned HTTP 418 to *every* request --
+    # git-checkout, and separately a plain wget via the `fetch` pipeline
+    # -- specifically from GitHub Actions' runner IPs (reachable fine
+    # elsewhere, including from wherever this comment is being read).
+    # Not protocol-specific, so switching pipelines didn't help; instead
+    # vendors the (227K) release tarball directly into
+    # packages/ca-certificates/, checksum-verified at build time, which
+    # sidesteps the network dependency for this one source entirely.
     #
     # udev@local: Wolfi splits systemd-udevd out of the `systemd` package
     # into `udev` (distinct from `eudev`, the non-systemd fork) --

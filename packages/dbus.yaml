@@ -1,0 +1,130 @@
+package:
+  name: dbus
+  version: "1.16.2"
+  epoch: 6 # glibc: 2.43->2.44
+  description: Freedesktop.org message bus system
+  copyright:
+    - license: AFL-2.1 OR GPL-2.0-or-later
+
+environment:
+  contents:
+    packages:
+      - audit-dev
+      - autoconf
+      - automake
+      - bash
+      # - glib-dev # TODO needed by libdbus-glib
+      # - util-linux-dev # TODO adding unit-linux at a later date
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - expat-dev
+      - glibc-2.44-dev
+      - libselinux-dev
+      - libsm-dev
+      - libx11-dev
+      - meson
+      - python3-dev
+      - systemd-dev
+      - xmlto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/dbus/dbus
+      tag: dbus-${{package.version}}
+      expected-commit: 958bf9db2100553bcd2fe2a854e1ebb42e886054
+
+  - uses: meson/configure
+    with:
+      opts: |
+        -Dsystem_pid_file=/run/dbus/dbus.pid \
+        -Dxml_docs=disabled \
+        -Ddoxygen_docs=disabled
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  # Ensure that /run/dbus exists, even in a VM.
+  # This may be unnecessary: Debian is likewise configured to listen on
+  # /run/dbus/system_bus_socket and to write a pid file to /run/dbus/pid,
+  # and /run/dbus seems to be automatically created as root:root 0755.  But
+  # in the absence of being able to point to the exact code that creates it
+  # and to prove that it will always do so, this is a harmless
+  # belt-and-braces measure.
+  - runs: |
+      echo 'd /run/dbus 0755 root root -' >"${{targets.destdir}}"/usr/lib/tmpfiles.d/dbus-run.conf
+
+  - uses: strip
+
+subpackages:
+  - name: dbus-doc
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/share
+          mv ${{targets.destdir}}/usr/share/doc ${{targets.subpkgdir}}/usr/share
+    description: dbus manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: dbus-libs
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib/lib*.so.* ${{targets.subpkgdir}}/usr/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    description: D-BUS access libraries
+
+  - name: dbus-x11
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+          mv ${{targets.destdir}}/usr/bin/dbus-launch ${{targets.subpkgdir}}/usr/bin/dbus-launch
+    description: X11 add-ons for D-BUS
+    test:
+      pipeline:
+        - runs: |
+            dbus-launch --version
+            dbus-launch --help
+
+  - name: dbus-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - dbus
+        # - util-linux-dev todo add when util-linux is packaged
+    description: dbus dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: ${{subpkg.name}}
+
+update:
+  enabled: true
+  git:
+    strip-prefix: dbus-
+  ignore-regex-patterns:
+    - object-names-branchpoint # Bad tag
+    - DBUS_1_0_3 # Bad tag
+    - before-object-names-merge # Bad tag
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        dbus-cleanup-sockets --version
+        dbus-daemon --version
+        dbus-monitor --help
+        dbus-run-session --version
+        dbus-uuidgen --version
+        dbus-cleanup-sockets --help
+        dbus-run-session --help
+        dbus-uuidgen --help
+    - uses: test/no-docs

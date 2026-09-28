@@ -24,7 +24,6 @@ contents:
   packages:
     # Track A
     - wolfi-baselayout
-    - dbus
     - apk-tools
     - ca-certificates
     - openssh
@@ -34,29 +33,31 @@ contents:
     - los-angeles-linux-release@local
     - los-angeles-linux-base@local
     # busybox, bash, coreutils, util-linux, e2fsprogs, dosfstools, systemd,
-    # and glibc-2.44 are the first self-hosted packages (see the plan's
-    # self-hosting roadmap): built from actual source via
+    # dbus, and glibc-2.44 are the first self-hosted packages (see the
+    # plan's self-hosting roadmap): built from actual source via
     # packages/busybox.yaml, packages/bash.yaml, packages/coreutils.yaml,
     # packages/util-linux.yaml, packages/e2fsprogs.yaml,
-    # packages/dosfstools.yaml, packages/systemd.yaml, and
-    # packages/glibc-2.44.yaml, not pulled from Wolfi -- which also has
-    # same-named packages.
+    # packages/dosfstools.yaml, packages/systemd.yaml, packages/dbus.yaml,
+    # and packages/glibc-2.44.yaml, not pulled from Wolfi -- which also
+    # has same-named packages.
     #
     # busybox@local, bash@local, coreutils@local, util-linux@local,
-    # e2fsprogs@local, dosfstools@local, and systemd@local: verified (in
-    # isolation, via `apko lock`) to correctly force our own build for the
-    # *direct* want in each case. util-linux, e2fsprogs, and systemd are a
-    # partial exception: the direct want resolves fine, but their own
-    # subpackages (libblkid, libfdisk, libmount, libsmartcols, libuuid,
-    # fstrim for util-linux; libcom_err, e2fsprogs-libs for e2fsprogs;
-    # libsystemd, libsystemd-shared, libsystemd-compression-libs,
-    # systemd-boot, systemd-systemctl for systemd) are pulled in
-    # transitively under their own names and, unpinned, resolve to
-    # Wolfi's identically-versioned copies instead -- same fix as
-    # glibc-2.44 below (apko/self-hosted.yaml), just for a plain
+    # e2fsprogs@local, dosfstools@local, systemd@local, and dbus@local:
+    # verified (in isolation, via `apko lock`) to correctly force our own
+    # build for the *direct* want in each case. util-linux, e2fsprogs,
+    # systemd, and dbus are a partial exception: the direct want resolves
+    # fine, but their own subpackages (libblkid, libfdisk, libmount,
+    # libsmartcols, libuuid, fstrim for util-linux; libcom_err,
+    # e2fsprogs-libs for e2fsprogs; libsystemd, libsystemd-shared,
+    # systemd-boot, systemd-systemctl for systemd; dbus-libs for dbus)
+    # are pulled in transitively under their own names and, unpinned,
+    # resolve to Wolfi's identically-versioned copies instead -- same fix
+    # as glibc-2.44 below (apko/self-hosted.yaml), just for a plain
     # name-collision instead of a solver conflict. dosfstools has no such
     # subpackage (only dosfstools-doc, never pulled transitively by
-    # anything here).
+    # anything here). systemd's libsystemd-compression-libs is a
+    # deliberate exception left unpinned -- see self-hosted.yaml's own
+    # comment for why.
     #
     # udev@local: Wolfi splits systemd-udevd out of the `systemd` package
     # into `udev` (distinct from `eudev`, the non-systemd fork) --
@@ -107,6 +108,7 @@ contents:
     - dosfstools@local
     - systemd@local
     - udev@local
+    - dbus@local
     - glibc-2.44
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`

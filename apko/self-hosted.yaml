@@ -16,15 +16,29 @@
 #
 # - libblkid, libfdisk, libmount, libsmartcols, libuuid, fstrim
 #   (util-linux's own subpackages), libcom_err, e2fsprogs-libs
-#   (e2fsprogs's), and libsystemd, libsystemd-shared,
-#   libsystemd-compression-libs, systemd-boot, systemd-systemctl
-#   (systemd's): pulled in transitively (the parent's own runtime deps,
-#   or another package's dependency on one of these shared libs) rather
-#   than wanted directly -- util-linux@local/e2fsprogs@local/systemd@local
-#   themselves resolve fine, but that pin has no effect on these separate,
-#   same-version, same-epoch named wants, so they resolve to whichever
-#   repo the solver happens to pick (observed: Wolfi's, every time,
-#   verified via `apko lock` on the parent package @local in isolation).
+#   (e2fsprogs's), libsystemd, libsystemd-shared, systemd-boot,
+#   systemd-systemctl (systemd's), and dbus-libs (dbus's): pulled in
+#   transitively (the parent's own runtime deps, or another package's
+#   dependency on one of these shared libs) rather than wanted directly
+#   -- the parent package @local itself resolves fine, but that pin has
+#   no effect on these separate, same-version, same-epoch named wants, so
+#   they resolve to whichever repo the solver happens to pick (observed:
+#   Wolfi's, every time, verified via `apko lock` on the parent package
+#   @local in isolation).
+#
+# libsystemd-compression-libs (also a systemd subpackage, same shape as
+# the above) is a deliberate EXCEPTION, left unpinned: once both
+# libsystemd@local and dbus-libs@local are present in this same want-list
+# (dbus-libs needs so:libsystemd.so.0, i.e. libsystemd, which itself
+# needs libsystemd-compression-libs), pinning it too makes the solver
+# hit "selecting package libsystemd-compression-libs-*.apk conflicts
+# with libsystemd-compression-libs-*.apk on libsystemd-compression-libs"
+# -- an apparent go-apk limitation when the same name is reachable via
+# both a direct want and a transitive edge from another already-pinned
+# package. Not worth chasing: libsystemd-compression-libs is a pure
+# metapackage (see systemd.yaml -- no files, just runtime deps on lz4,
+# xz, zstd, none of which we self-host), so which repo's copy of it
+# resolves is functionally meaningless either way.
 #
 # Locking THIS minimal config (rather than pinning @local directly in
 # los-angeles-linux.yaml for names that show either problem) sidesteps
@@ -55,9 +69,9 @@ contents:
     - e2fsprogs-libs@local
     - libsystemd@local
     - libsystemd-shared@local
-    - libsystemd-compression-libs@local
     - systemd-boot@local
     - systemd-systemctl@local
+    - dbus-libs@local
 
 archs:
   - x86_64

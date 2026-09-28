@@ -1,0 +1,174 @@
+#nolint:git-checkout-must-use-github-updates
+package:
+  name: binutils
+  version: "2.47"
+  epoch: 1 # glibc: 2.43->2.44
+  cpe:
+    vendor: "gnu"
+    product: "binutils"
+  description: "GNU binutils"
+  copyright:
+    - license: GPL-2.0
+  resources:
+    cpu: 16
+    memory: 16Gi
+
+environment:
+  contents:
+    packages:
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - flex
+      - glibc-2.44-dev
+      - isl
+      - posix-libc-utils
+      - texinfo
+      - wolfi-baselayout
+      - zlib-dev
+      - zstd-dev
+
+var-transforms:
+  - from: ${{package.version}}
+    match: \.
+    replace: _
+    to: mangled-package-version
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.com/gnutools/binutils-gdb.git
+      tag: binutils-${{vars.mangled-package-version}}
+      expected-commit: 6ce87bbc521cf46eaee9a1f7ef61cee2cdfb3e32
+
+  - name: 'Configure binutils'
+    runs: |
+      ./configure \
+        --prefix=/usr \
+        --build=$(./config.guess) \
+        --host=${{host.triplet.gnu}} \
+        --target=${{host.triplet.gnu}} \
+        --disable-nls \
+        --disable-werror \
+        --disable-multilib \
+        --disable-gprofng \
+        --disable-gdb \
+        --disable-gdbserver \
+        --disable-sim \
+        --enable-deterministic-archives \
+        --enable-ld=default \
+        --enable-gold \
+        --enable-plugins \
+        --enable-default-execstack=no \
+        --enable-default-hash-style=gnu \
+        --enable-textrel-check=error \
+        --with-system-zlib
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - name: 'Clean up documentation'
+    runs: |
+      rm -rf ${{targets.destdir}}/usr/share/info
+
+  - uses: strip
+
+subpackages:
+  - name: "binutils-dev"
+    description: "binutils development headers"
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+
+  - name: "binutils-gold"
+    description: "binutils (gold linker)"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/ld.gold "${{targets.subpkgdir}}"/usr/bin/
+    test:
+      pipeline:
+        - runs: |
+            ld.gold --version
+            ld.gold --help
+
+  - name: binutils-doc
+    description: binutils documentation
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  version-transform:
+    - match: _
+      replace: .
+  git:
+    tag-filter-prefix: binutils-
+    strip-prefix: binutils-
+
+test:
+  pipeline:
+    - name: Verify no gdb or gdbserver
+      runs: |
+        set +x
+        fails=""
+        for p in gdb gdbserver; do
+          if ! out=$(command -v "$p"); then
+            echo "PASS: package does not contain '$p'"
+            continue
+          fi
+          echo "FAIL: package contains $p:  $out"
+          fails="$fails $out"
+        done
+        [ -z "$fails" ] || exit 1
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          addr2line
+          ar
+          as
+          c++filt
+          dwp
+          elfedit
+          gprof
+          ld
+          ld.bfd
+          nm
+          objcopy
+          objdump
+          ranlib
+          readelf
+          size
+          strings
+          strip
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          addr2line
+          ar
+          as
+          c++filt
+          dwp
+          elfedit
+          gprof
+          ld
+          ld.bfd
+          nm
+          objcopy
+          objdump
+          ranlib
+          readelf
+          size
+          strings
+          strip
+    - uses: test/tw/ldd-check
+    - name: Verify zlib is linked from the system, not bundled
+      runs: |
+        readelf --dynamic /usr/bin/ld | grep NEEDED | grep 'libz\.so'

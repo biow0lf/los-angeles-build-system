@@ -37,7 +37,17 @@ Needed to build almost everything else. `gcc` must be built against our own
 `glibc-2.44` (already self-hosted), so this phase couldn't start before this
 session's work.
 
-- [ ] `binutils`
+- [x] `binutils` (`packages/binutils.yaml`) -- forked verbatim from Wolfi's
+      recipe, no deviations needed. Unlike `wolfi-baselayout`, this one did
+      *not* need `apko/self-hosted.yaml`-style handling: that mechanism is
+      specific to `apko lock`'s rootfs-want resolution, and binutils is a
+      build-time-only tool that never appears in `apko/los-angeles-linux.yaml`.
+      What actually matters here is melange's own build-environment
+      installer (a different code path, driven by the Makefile's
+      `--repository-append` order) -- confirmed via `make build-package
+      PKG=binutils`'s log: `installing wolfi-baselayout (20230201-r31)`,
+      `installing glibc-2.44 (2.44-r7)`, `installing glibc-2.44-dev
+      (2.44-r7)`, all our own epochs, pulled from `PUBLISHED_REPO`.
 - [ ] `gcc` (expect this one to need `apko/self-hosted.yaml`-style handling for
       transitive-edge pin failures, same as `wolfi-baselayout` -- see that
       file's comment for the pattern)

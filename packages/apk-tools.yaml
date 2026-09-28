@@ -1,0 +1,189 @@
+package:
+  name: apk-tools
+  version: "2.14.10"
+  epoch: 15 # glibc: 2.43->2.44
+  description: "apk-tools (Wolfi package manager)"
+  copyright:
+    - license: GPL-2.0-only
+  dependencies:
+    runtime:
+      - ca-certificates-bundle
+      - merged-sbin
+      - wolfi-baselayout
+
+vars:
+  # Extra CFLAGS passed to every make invocation below.
+  apk-build-cflags: '-DAPK_DEFAULT_ALLOW_MISSING_AUTH=\"\*.cgr.dev/\*\"'
+  openssl-version: "3.6"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - lua5.3
+      - lua5.3-dev
+      - lua5.3-lzlib
+      - openssl-hardened-${{vars.openssl-version}}-dev
+      - scdoc
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      # Temporary mirror: gitlab.alpinelinux.org was down (500/502/403
+      # "GitLab is not responding") for an extended period while this was
+      # being self-hosted. Verified true mirror: v${{package.version}}
+      # peels to the same commit on both
+      # (`git ls-remote <repo> 'refs/tags/v2.14.10^{}'`).
+      repository: https://github.com/alpinelinux/apk-tools.git
+      tag: v${{package.version}}
+      expected-commit: 9d074efdc12bc41b5d24190595a5269a770e852a
+
+  - uses: patch
+    with:
+      patches: |
+        292.patch
+        357.patch
+        0001-Work-without-fips-sha1.patch
+        usrmerge-lib.patch
+        387.patch
+        11074.patch
+        auth-repos-non-fatal.patch
+
+  - runs: |
+      sed -i -e 's:-Werror::' Make.rules
+      echo "FULL_VERSION=${{package.version}}-r${{package.epoch}}" > config.mk
+
+  - runs: |
+      make LUA="lua5.3" V=1 CFLAGS_EXTRA='${{vars.apk-build-cflags}}'
+
+  - runs: |
+      # Run the upstream unit test suite (non-root, no network). Uses the same
+      # LUA and CFLAGS_EXTRA so kbuild does not recompile shared objects and the
+      # compile-time default is preserved in the installed binary.
+      # The suite runs the test scripts as ./<name>.sh, so make sure any added
+      # by our patches are executable.
+      chmod +x test/*.sh
+      make LUA="lua5.3" V=1 CFLAGS_EXTRA='${{vars.apk-build-cflags}}' check
+
+  - runs: |
+      make LUA="lua5.3" V=1 CFLAGS_EXTRA='${{vars.apk-build-cflags}}' DESTDIR="${{targets.destdir}}" install SBINDIR=/usr/bin LIBDIR=/usr/lib
+
+      install -d "${{targets.destdir}}"/var/lib/apk
+      install -d "${{targets.destdir}}"/var/cache/misc
+      install -d "${{targets.destdir}}"/etc/apk/keys
+      install -d "${{targets.destdir}}"/etc/apk/protected_paths.d
+
+  - uses: strip
+
+subpackages:
+  - name: "apk-tools-dev"
+    description: "headers for libapk"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - apk-tools
+        - merged-sbin
+        - openssl-hardened-${{vars.openssl-version}}-dev
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: apk-tools-doc
+    description: apk-tools docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      runtime:
+        - merged-sbin
+        - wolfi-baselayout
+
+  - name: "lua5.3-apk"
+    description: "Lua module for libapk"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/lua "${{targets.subpkgdir}}"/usr/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    dependencies:
+      runtime:
+        - merged-sbin
+        - wolfi-baselayout
+
+test:
+  environment:
+    contents:
+      packages:
+        - wget
+  pipeline:
+    - name: Verify apk-tools can work with RSA256 signed repositories
+      runs: |
+        wget https://raw.githubusercontent.com/chainguard-dev/apko/71f1961fde53a10c5bd40b80dd4c00a9250dd9f7/pkg/apk/apk/testdata/rsa256-signed/test-rsa256.rsa.pub -O /etc/apk/keys/test-rsa256.rsa.pub
+        mkdir -p packages/aarch64/
+        wget https://raw.githubusercontent.com/chainguard-dev/apko/71f1961fde53a10c5bd40b80dd4c00a9250dd9f7/pkg/apk/apk/testdata/rsa256-signed/APKINDEX.tar.gz -O packages/aarch64/APKINDEX.tar.gz
+        apk --arch aarch64 --repository ./packages/ info --all alpine-baselayout
+        apk update
+        apk --version
+        apk info apk-tools
+    - name: Default allowlisted auth repo with HTTP_AUTH unset is skipped with a warning
+      runs: |
+        tmpfile=$(mktemp)
+        echo "https://apk.cgr.dev/chainguard-private" > "$tmpfile"
+
+        unset HTTP_AUTH
+
+        # We now explicitly allow apk.cgr.dev by default.
+        out=$(apk --repositories-file "$tmpfile" update 2>&1)
+        echo "$out"
+        echo "$out" | grep -F "ignoring authenticated repository"
+
+        rm -f "$tmpfile"
+    - name: A non-allowlisted auth repo still errors out
+      runs: |
+        tmpfile=$(mktemp)
+        echo "https://apk.chainreg.biz/chainguard-private" > "$tmpfile"
+
+        unset HTTP_AUTH
+
+        # The staging apk repo is not allowlisted by default, so fail.
+        if apk --repositories-file "$tmpfile" update 2>&1; then
+          rm -f "$tmpfile"
+          echo "ERROR: apk update should have failed with invalid HTTP_AUTH"
+          exit 1
+        fi
+
+        rm -f "$tmpfile"
+    - name: HTTP_AUTH set but invalid still causes apk update to fail
+      runs: |
+        tmpfile=$(mktemp)
+        echo "https://apk.cgr.dev/chainguard-private" > "$tmpfile"
+
+        # Garbage Authorization value -> 401 -> EACCES. Because HTTP_AUTH is
+        # non-empty, the patch must NOT skip; apk update should exit non-zero.
+        if HTTP_AUTH="Basic invalid" \
+           apk --repositories-file "$tmpfile" update 2>&1; then
+          rm -f "$tmpfile"
+          echo "ERROR: apk update should have failed with invalid HTTP_AUTH"
+          exit 1
+        fi
+
+        rm -f "$tmpfile"
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v2.

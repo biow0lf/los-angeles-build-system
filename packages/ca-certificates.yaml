@@ -28,11 +28,19 @@ environment:
       - perl
 
 pipeline:
-  - uses: git-checkout
+  # Fetches the release tarball instead of git-checkout (which Wolfi's own
+  # recipe uses): gitlab.alpinelinux.org started returning HTTP 418 to
+  # every git-clone/fetch from GitHub Actions' runner IPs specifically
+  # (reachable fine from other networks) -- a WAF/CDN fingerprinting git's
+  # smart-HTTP protocol, not a real outage. The `fetch` pipeline uses
+  # plain wget instead, which isn't blocked, and matches how Alpine's own
+  # APKBUILD for this package actually sources it (a source= tarball URL,
+  # not a live git clone -- see
+  # https://gitlab.alpinelinux.org/alpine/aports/-/raw/master/main/ca-certificates/APKBUILD).
+  - uses: fetch
     with:
-      repository: https://gitlab.alpinelinux.org/alpine/ca-certificates
-      tag: ${{package.version}}
-      expected-commit: 5aaf4043e057e23cc8e0dd5cfbe4f9ceba41ca3b
+      uri: https://gitlab.alpinelinux.org/alpine/ca-certificates/-/archive/${{package.version}}/ca-certificates-${{package.version}}.tar.bz2
+      expected-sha256: dc460c535f3833432be4e561d214a5fe816b05ede5a2ade64787e501671cd082
 
   - runs: |
       make CC="${{host.triplet.gnu}}-gcc"

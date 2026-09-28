@@ -70,11 +70,19 @@ contents:
     # deliberate exception left unpinned -- see self-hosted.yaml's own
     # comment for why.
     #
-    # packages/apk-tools.yaml also switches its git-checkout source from
-    # Wolfi's gitlab.alpinelinux.org to the github.com/alpinelinux mirror
-    # (verified true mirror: same commit once the tag is peeled) --
-    # gitlab.alpinelinux.org was down for an extended period (500/502/403
-    # errors) while this was being self-hosted.
+    # gitlab.alpinelinux.org caused trouble twice while self-hosting these:
+    # packages/apk-tools.yaml switches its git-checkout source to the
+    # github.com/alpinelinux mirror (verified true mirror: same commit
+    # once the tag is peeled) -- the host was down for an extended period
+    # (500/502/403 errors) at the time. packages/ca-certificates.yaml
+    # (no viable mirror -- that one's github.com/alpinelinux mirror is
+    # years stale) instead switches from git-checkout to fetch against
+    # the release tarball: the host itself was fine, but returned HTTP
+    # 418 to every git-clone specifically from GitHub Actions' runner
+    # IPs (reachable fine elsewhere) -- a WAF fingerprinting git's
+    # smart-HTTP protocol. fetch uses plain wget, unaffected, and
+    # matches how Alpine's own APKBUILD for that package actually
+    # sources it (a tarball, not a live clone).
     #
     # udev@local: Wolfi splits systemd-udevd out of the `systemd` package
     # into `udev` (distinct from `eudev`, the non-systemd fork) --

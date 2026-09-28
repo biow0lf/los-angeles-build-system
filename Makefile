@@ -13,10 +13,19 @@ PKG ?=
 PLATFORM := linux/amd64
 
 # Bootstrap repo/keyring: until a given build-time dependency is self-hosted
-# (see packages/README.md), melange build environments resolve it from
-# Wolfi's public repo -- same glibc/systemd family, itself melange-built.
+# (see BOOTSTRAP.md), melange build environments resolve it from Wolfi's
+# public repo -- same glibc/systemd family, itself melange-built.
 BOOTSTRAP_REPO := https://packages.wolfi.dev/os
 BOOTSTRAP_KEY := https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+
+# build-packages.yml's CI matrix builds each package in its own isolated
+# checkout -- packages-out (below) only accumulates within a single working
+# directory, so it can't help one matrix leg see another leg's output, or a
+# leg on one CI run see a previous run's. The published repo (updated by
+# that same workflow's publish job on every successful main build) is what
+# makes a self-hosted build-time dependency actually reach CI, not just
+# local dev.
+PUBLISHED_REPO := https://biow0lf.github.io/los-angeles-build-system
 
 # Every target below runs the same builder image; docker.sock and privileged
 # access are opted into only by the specific targets that need them, so
@@ -48,6 +57,17 @@ build-package: build-builder-image
 	# the host daemon over the socket, so the workspace dirs it bind-mounts
 	# into build-guest containers must exist at identical paths on the host
 	# -- sharing /tmp verbatim keeps that true.
+	#
+	# Repos tried in order: packages-out (this working directory's own
+	# already-built output -- freshest, but invisible to other CI matrix
+	# legs/runs), PUBLISHED_REPO (what actually makes a self-hosted
+	# build-time dependency reach CI, not just local dev), then Wolfi's
+	# live repo as the final fallback for whatever hasn't been
+	# self-hosted yet (see BOOTSTRAP.md). Verified melange tolerates
+	# packages-out/x86_64/APKINDEX.tar.gz not existing yet (a fresh
+	# checkout, or before any package has been built this session): it's
+	# just a WARN, not a fatal error, and resolution falls through to the
+	# next repo in the list.
 	docker run --rm --privileged --platform $(PLATFORM) \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v /tmp:/tmp \
@@ -55,7 +75,10 @@ build-package: build-builder-image
 		melange build packages/$(PKG).yaml \
 		--arch $(ARCH) \
 		--runner=docker \
+		--repository-append=packages-out \
+		--repository-append=$(PUBLISHED_REPO) \
 		--repository-append=$(BOOTSTRAP_REPO) \
+		--keyring-append=keys/melange.rsa.pub \
 		--keyring-append=$(BOOTSTRAP_KEY) \
 		--signing-key=keys/melange.rsa \
 		--out-dir=./packages-out \

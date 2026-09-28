@@ -5,7 +5,7 @@
 # to get correct, checksum-verified entries for these names, then splices
 # them over the same-named entries in los-angeles-linux.yaml's own lock.
 #
-# Two distinct problems land here, both solved the same way:
+# Three distinct problems land here, all solved the same way:
 #
 # - glibc-2.44 and glibc-2.44-iconv: pinning @local directly in
 #   los-angeles-linux.yaml breaks the solver outright (see that file's
@@ -13,6 +13,17 @@
 #   direct "glibc-2.44" want, and once the direct want is pinned, the
 #   solver disqualifies every other glibc revision for that edge and
 #   fails, instead of reusing the pinned package.
+#
+# - wolfi-baselayout: same direct-want-vs-transitive-edge shape as
+#   glibc-2.44, but via plain name deps instead of a soname, and it fails
+#   *silently* instead of erroring -- almost every other package's own
+#   runtime deps reference wolfi-baselayout directly (it provides
+#   merged-bin/merged-sbin/merged-usrsbin/merged-lib/merged-varrun), so
+#   pinning it directly in los-angeles-linux.yaml quietly resolves to
+#   Wolfi's copy instead, even with our epoch bumped past Wolfi's (their
+#   own live epoch happened to be an exact tie when this was
+#   self-hosted -- the bump was still needed: without it, even resolving
+#   *this* file in isolation picks Wolfi's copy).
 #
 # - libblkid, libfdisk, libmount, libsmartcols, libuuid, fstrim
 #   (util-linux's own subpackages), libcom_err, e2fsprogs-libs
@@ -81,6 +92,7 @@ contents:
     - openssh-keygen@local
     - openssh-server-config@local
     - ca-certificates-bundle@local
+    - wolfi-baselayout@local
 
 archs:
   - x86_64

@@ -14,13 +14,11 @@
 # Track B (los-angeles-linux-*, built by us) are marked below. See the
 # self-hosting roadmap in the top-level plan for moving packages from A to B.
 #
-# Every package that has real upstream source to build from has now moved
-# to Track B (busybox, bash, coreutils, util-linux, e2fsprogs, dosfstools,
-# systemd, udev, dbus, apk-tools, openssh, ca-certificates, glibc-2.44) --
-# wolfi-baselayout is Track A's sole remaining entry, and stays there
-# deliberately: it's Wolfi's own filesystem-skeleton/distro-identity
-# package (owns things like /etc/os-release), not upstream software with
-# a source tree to fork -- "self-hosting" it wouldn't mean anything.
+# Track A is now empty: every package here, including wolfi-baselayout
+# (Wolfi's own filesystem-skeleton/distro-identity package, the one that
+# looked least like "upstream software with a source tree to fork" --
+# but it turned out to just be static vendored files plus a melange
+# recipe, same as everything else) is built from source via Track B.
 
 contents:
   repositories:
@@ -30,22 +28,21 @@ contents:
     - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
     - keys/melange.rsa.pub
   packages:
-    # Track A
-    - wolfi-baselayout
     # Track B: built by us, not borrowed
     - los-angeles-linux-release@local
     - los-angeles-linux-base@local
     # busybox, bash, coreutils, util-linux, e2fsprogs, dosfstools, systemd,
-    # dbus, apk-tools, openssh, ca-certificates, iproute2, iputils, and
-    # glibc-2.44 are the self-hosted packages (see the plan's
-    # self-hosting roadmap): built from actual source via
+    # dbus, apk-tools, openssh, ca-certificates, iproute2, iputils,
+    # glibc-2.44, and wolfi-baselayout are the self-hosted packages (see
+    # the plan's self-hosting roadmap): built from actual source via
     # packages/busybox.yaml, packages/bash.yaml, packages/coreutils.yaml,
     # packages/util-linux.yaml, packages/e2fsprogs.yaml,
     # packages/dosfstools.yaml, packages/systemd.yaml, packages/dbus.yaml,
     # packages/apk-tools.yaml, packages/openssh.yaml,
     # packages/ca-certificates.yaml, packages/iproute2.yaml,
-    # packages/iputils.yaml, and packages/glibc-2.44.yaml, not pulled
-    # from Wolfi -- which also has same-named packages.
+    # packages/iputils.yaml, packages/glibc-2.44.yaml, and
+    # packages/wolfi-baselayout.yaml, not pulled from Wolfi -- which also
+    # has same-named packages.
     #
     # busybox@local, bash@local, coreutils@local, util-linux@local,
     # e2fsprogs@local, dosfstools@local, systemd@local, dbus@local,
@@ -127,6 +124,23 @@ contents:
     # `apko build --lockfile=...` installs glibc-2.44-2.44-r7 (ours, not
     # Wolfi's r6) end-to-end, and `make build-image && make test-boot`
     # still boots to multi-user.target.
+    #
+    # wolfi-baselayout is the same shape as glibc-2.44, but for a
+    # completely different reason. It provides virtual capabilities
+    # (merged-bin, merged-sbin, merged-usrsbin, merged-lib,
+    # merged-varrun) that nearly every other package's own runtime
+    # dependencies reference -- so almost everything in this want-list
+    # creates its own separate, unpinned "wolfi-baselayout" edge, the
+    # same direct-want-vs-transitive-edge collision pattern as glibc-2.44's
+    # so:libc.so.6, just via plain name deps instead of a soname. Unlike
+    # glibc-2.44, pinning it directly doesn't error -- it silently picks
+    # Wolfi's copy instead, even with our epoch bumped past Wolfi's
+    # (30->31; Wolfi's own live epoch happened to be an exact tie at 30
+    # when this was self-hosted). Confirmed via `apko lock` in isolation
+    # that the epoch bump *does* work when nothing else can create that
+    # competing edge -- exactly the situation apko/self-hosted.yaml
+    # provides, since none of its other entries are top-level packages
+    # with their own wolfi-baselayout dependency (only shared libs).
     - busybox@local
     - bash@local
     - coreutils@local
@@ -142,6 +156,7 @@ contents:
     - iproute2@local
     - iputils@local
     - glibc-2.44
+    - wolfi-baselayout
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`
   # work on a booted system (the mutable runtime model) -- not consulted at

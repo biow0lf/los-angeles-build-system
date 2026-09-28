@@ -1,0 +1,508 @@
+package:
+  name: gcc
+  version: "16.2.0"
+  epoch: 1
+  description: "the GNU compiler collection"
+  copyright:
+    - license: GPL-3.0-or-later WITH GCC-exception-3.1
+  resources:
+    cpu: "26"
+    memory: 16Gi
+  dependencies:
+    provides:
+      - gcc-${{vars.major-version}}=${{package.full-version}}
+      - gcc-${{vars.major-version}}-default=${{package.full-version}}
+    runtime:
+      - binutils
+      - glibc-dev
+      - libgcc>=${{package.full-version}}
+      - libquadmath # This is a temporary workaround for issues with single-arch packages.
+      - libstdc++-dev
+      - openssf-compiler-options
+      - posix-cc-wrappers
+  test-resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - file
+      - flex-dev
+      - gawk
+      - glibc-${{vars.glibc-version}}-dev
+      - glibc-${{vars.glibc-version}}-iconv
+      - gmp-dev
+      - isl-dev
+      - make
+      - mpc-dev
+      - mpfr-dev
+      - openssf-compiler-options
+      - patch
+      - texinfo
+      - wolfi-baselayout
+      - zlib-dev
+      - zstd-dev
+
+var-transforms:
+  - from: ${{package.version}}
+    match: ^(\d+).*
+    replace: $1
+    to: major-version
+
+vars:
+  glibc-version: "2.44"
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 78d4ac73dd391005b895a6148cd9831e28e1208b
+      repository: https://gitlab.com/gnutools/gcc.git
+      tag: releases/gcc-${{package.version}}
+
+  - uses: patch
+    with:
+      patches: optc-gen-awk-gawk-compat.patch
+
+  - name: 'Set up build directory'
+    runs: |
+      mkdir build
+
+  - runs: |
+      tmpdir="$(mktemp -d)"
+      trap 'rm -rf "${tmpdir}"' EXIT
+      grep -F -- --package-metadata= .melange.gcc.spec > "${tmpdir}/specline"
+      sed -r 's/.*--package-metadata=(\{[^}]*\}).*/--package-metadata=\1/' < "${tmpdir}/specline" > "${tmpdir}/flag"
+      # Use JSON %[] encoding to avoid issues passing special chars through -Wl
+      sed -e 's/"/%[quot]/g' -e 's/,/%[comma]/g' -e 's/{/%[lbrace]/g' -e 's/}/%[rbrace]/g' -e 's/ /%[space]/g' < "${tmpdir}/flag" > "${tmpdir}/flag.%encoded"
+      flag="-Wl,$(cat "${tmpdir}/flag.%encoded")"
+      echo "export LDFLAGS_FOR_TARGET=\"${flag}\"" > .env
+
+  - name: 'Configure GCC'
+    runs: |
+      source .env
+      # Check https://aws.amazon.com/ec2/instance-types/ and
+      # https://cloud.google.com/compute/docs/general-purpose-machines
+      # for most current CPU types on arm64 and x86 to set mtune to
+      # the current generation of CPUs. Other clouds are typically
+      # roughly at the same level (Azure, Oracle, IBM, Linode, etc).
+      case "${{build.arch}}" in
+        "aarch64")
+          march=armv8-a+crc+crypto
+          mtune=neoverse-v2
+          CFLAGS="-mbranch-protection=standard"
+          CXXFLAGS="-mbranch-protection=standard"
+          specs=""
+          ;;
+        "x86_64")
+          march=x86-64-v2
+          mtune=sapphirerapids
+          # Currently hangs on Apple Rosetta 2 emulator
+          specs="-mno-sahf"
+          ;;
+      esac
+      cd build
+
+      CFLAGS="$CFLAGS" \
+      CXXFLAGS="$CXXFLAGS" \
+      LDFLAGS_FOR_TARGET="$LDFLAGS_FOR_TARGET" \
+      ../configure \
+        --prefix=/usr \
+        --disable-nls \
+        --disable-werror \
+        --with-pkgversion='Wolfi ${{package.full-version}}' \
+        --with-glibc-version=2.43 \
+        --enable-initfini-array \
+        --disable-nls \
+        --disable-multilib \
+        --enable-host-shared \
+        --enable-host-pie \
+        --enable-host-bind-now \
+        --enable-shared \
+        --enable-threads \
+        --enable-tls \
+        --enable-default-pie \
+        --enable-default-ssp \
+        --with-system-zlib \
+        --with-arch=$march \
+        --with-tune=$mtune \
+        --with-specs=$specs \
+        --enable-languages=c,c++,fortran,jit \
+        --enable-bootstrap \
+        --enable-gnu-indirect-function \
+        --enable-gnu-unique-object \
+        --enable-cet=auto \
+        --enable-link-mutex \
+        --with-gcc-major-version-only \
+        --with-linker-hash-style=gnu
+
+  - runs: |
+      make -C build -j$(nproc)
+
+  - runs: |
+      make -C build -j$(nproc) install DESTDIR="${{targets.destdir}}"
+
+  # Despite disable-multilib, gcc installs things into lib64
+  # This breaks apk audit, as we symlink lib64 to lib.
+  # https://stackoverflow.com/questions/28696199/build-gcc-from-scratch-without-lib64-directory
+  - name: Fix /usr/lib64 usage
+    runs: |
+      mv ${{targets.destdir}}/usr/lib64/* ${{targets.destdir}}/usr/lib/
+      rmdir ${{targets.destdir}}/usr/lib64
+
+  # We don't want to keep the .la files.
+  - runs: |
+      find ${{targets.destdir}} -name '*.la' -print -exec rm \{} \;
+
+  - runs: |
+      chmod 755 ${{targets.destdir}}/usr/lib/libgcc_s.*
+      chmod 755 ${{targets.destdir}}/usr/lib/libgcc_s_asneeded.*
+
+  # These are outdated and only cause issues with newer glibc.
+  - name: Remove some unneeded include-fixed
+    runs: |
+      rm -f ${{targets.destdir}}/usr/lib/gcc/${{host.triplet.gnu}}/${{vars.major-version}}/include-fixed/pthread.h
+
+  - name: 'Clean up documentation'
+    runs: |
+      rm -rf ${{targets.destdir}}/usr/share/info
+
+  - name: Create versioned symlinks
+    working-directory: ${{targets.destdir}}/usr/bin
+    runs: |
+      for bin in *; do
+        # Skip if binary is already versioned
+        case $bin in
+          *-${{vars.major-version}})
+            continue
+            ;;
+        esac
+
+        # Skip if destination exists
+        [ -e $bin-${{vars.major-version}} ] && continue
+
+        ln -s $bin $bin-${{vars.major-version}}
+      done
+
+  - uses: strip
+
+subpackages:
+  - name: 'gcc-doc'
+    dependencies:
+      provides:
+        - gcc-${{vars.major-version}}-doc=${{package.full-version}}
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: 'libstdc++'
+    dependencies:
+      provides:
+        - libstdc++-${{vars.major-version}}=${{package.full-version}}
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/*++.so.* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: 'libstdc++-dev'
+    dependencies:
+      provides:
+        - libstdc++-${{vars.major-version}}-dev=${{package.full-version}}
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mkdir -p "${{targets.subpkgdir}}"/usr/include
+          mkdir -p "${{targets.subpkgdir}}"/usr/share/gcc-${{vars.major-version}}/python/libstdcxx
+          mv "${{targets.destdir}}"/usr/lib/*++.a "${{targets.subpkgdir}}"/usr/lib/
+          mv "${{targets.destdir}}"/usr/lib/libstdc++.so "${{targets.subpkgdir}}"/usr/lib/
+          mv "${{targets.destdir}}"/usr/include/*++* "${{targets.subpkgdir}}"/usr/include/
+          mv "${{targets.destdir}}"/usr/share/gcc-${{vars.major-version}}/python/libstdcxx/* \
+            "${{targets.subpkgdir}}"/usr/share/gcc-${{vars.major-version}}/python/libstdcxx/
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+
+  - name: "libquadmath"
+    description: "128-bit math library provided by GCC"
+    dependencies:
+      provides:
+        - libquadmath-${{vars.major-version}}=${{package.full-version}}
+    pipeline:
+      - if: ${{build.arch}} == 'x86_64'
+        runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libquadmath.so.* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: "libgfortran"
+    description: "Fortran runtime library provided by GCC"
+    dependencies:
+      provides:
+        - libgfortran-${{vars.major-version}}=${{package.full-version}}
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libgfortran.so.* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: "gfortran"
+    description: "GNU Fortran Compiler"
+    dependencies:
+      provides:
+        - gfortran-${{vars.major-version}}=${{package.full-version}}
+      runtime:
+        - gcc=${{package.full-version}}
+        - libgfortran=${{package.full-version}}
+    pipeline:
+      - runs: |
+          _libexecdir=/usr/libexec/gcc/${{host.triplet.gnu}}/${{vars.major-version}}
+          _libdir=/usr/lib/gcc/${{host.triplet.gnu}}/${{vars.major-version}}
+
+          for i in "$_libexecdir" "$_libdir" usr/lib usr/bin; do
+            mkdir -p "${{targets.subpkgdir}}"/$i
+          done
+
+          mv "${{targets.destdir}}"/usr/bin/*fortran* "${{targets.subpkgdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/lib/libgfortran* "${{targets.subpkgdir}}"/usr/lib
+          for f in "${{targets.destdir}}"/usr/lib/libquadmath*; do
+            [ -f "$f" ] && mv "$f" "${{targets.subpkgdir}}"/usr/lib
+          done
+
+          mv "${{targets.destdir}}"/$_libdir/finclude "${{targets.subpkgdir}}"/$_libdir
+          mv "${{targets.destdir}}"/$_libexecdir/f951 "${{targets.subpkgdir}}"/$_libexecdir
+    test:
+      pipeline:
+        - runs: |
+            gfortran --version
+            gfortran --help
+            gfortran-${{vars.major-version}} --version
+            gfortran-${{vars.major-version}} --help
+        - name: Compile and run a Fortran program
+          runs: |
+            cat > hello.f90 << 'EOF'
+            program hello
+              implicit none
+              integer :: x, y, result
+              x = 6
+              y = 7
+              result = x * y
+              if (result /= 42) stop 1
+              print *, "hello fortran"
+            end program hello
+            EOF
+            gfortran -o hello hello.f90
+            out=$(./hello)
+            echo "$out" | grep -F "hello fortran"
+
+  - name: "libgccjit"
+    description: "GCC JIT library"
+    dependencies:
+      provides:
+        - libgccjit-${{vars.major-version}}=${{package.full-version}}
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libgccjit.so.* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: "libgccjit-dev"
+    description: "GCC JIT library headers"
+    dependencies:
+      provides:
+        - libgccjit-${{vars.major-version}}-dev=${{package.full-version}}
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mkdir -p "${{targets.subpkgdir}}"/usr/include
+
+          mv "${{targets.destdir}}"/usr/lib/libgccjit.so "${{targets.subpkgdir}}"/usr/lib/
+          mv "${{targets.destdir}}"/usr/include/libgccjit*.h "${{targets.subpkgdir}}"/usr/include/
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+
+  - name: "libssp"
+    description: "GCC stack protection library"
+    dependencies:
+      provides:
+        - libssp-${{vars.major-version}}=${{package.full-version}}
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libssp* "${{targets.subpkgdir}}"/usr/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: "libgomp"
+    description: "GNU parallel programming library"
+    dependencies:
+      provides:
+        - libgomp-${{vars.major-version}}=${{package.full-version}}
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libgomp.so.* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      environment:
+        contents:
+          packages:
+            - binutils # readelf
+      pipeline:
+        - uses: test/tw/ldd-check
+        - name: "verify that packaging metadata is included in our ELF notes"
+        - runs: |
+            readelf -n /usr/lib/libgomp.so.* | grep -F '"name":"${{package.name}}"'
+
+  - name: "libgcc"
+    description: "GCC runtime library"
+    dependencies:
+      provides:
+        - libgcc-${{vars.major-version}}=${{package.full-version}}
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libgcc_s.so.* "${{targets.subpkgdir}}"/usr/lib/
+          mv "${{targets.destdir}}"/usr/lib/libgcc_s_asneeded.so "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: "libatomic"
+    description: "GCC atomic library"
+    dependencies:
+      provides:
+        - libatomic-${{vars.major-version}}=${{package.full-version}}
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libatomic.so.* "${{targets.subpkgdir}}"/usr/lib/
+          mv "${{targets.destdir}}"/usr/lib/libatomic_asneeded.so "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+test:
+  environment:
+    contents:
+      packages:
+        - glibc-dev
+  pipeline:
+    - name: Check basic usage of top level & libexec binaries
+      runs: |
+        # Check C frontend compiler
+        gcc --version | grep ${{package.version}}
+        # Check C++ frontend compiler
+        g++ --version | grep ${{package.version}}
+        # Check C empty translation unit compilation
+        : > empty.c
+        gcc -c empty.c
+
+        # Check C++ empty translation unit compilation
+        rm -f empty.cpp
+        : > empty.cpp
+        g++ -c empty.cpp
+    - name: Version & help checks
+      runs: |
+        c++ --version
+        c++ --help
+        cpp --version
+        cpp --help
+        g++ --help
+        gcc --help
+        gcc-ar --version
+        gcc-ar --help
+        gcc-nm --version
+        gcc-nm --help
+        gcc-ranlib --version
+        gcc-ranlib --help
+        gcov --version
+        gcov --help
+        gcov-dump --version
+        gcov-dump --help
+        gcov-tool --version
+        gcov-tool --help
+        lto-dump --version
+        lto-dump --help
+
+        # Version & help checks with symlinks
+        c++-${{vars.major-version}} --version
+        c++-${{vars.major-version}} --help
+        cpp-${{vars.major-version}} --version
+        cpp-${{vars.major-version}} --help
+        g++-${{vars.major-version}} --help
+        gcc-${{vars.major-version}} --help
+        gcc-ar-${{vars.major-version}} --version
+        gcc-ar-${{vars.major-version}} --help
+        gcc-nm-${{vars.major-version}} --version
+        gcc-nm-${{vars.major-version}} --help
+        gcc-ranlib-${{vars.major-version}} --version
+        gcc-ranlib-${{vars.major-version}} --help
+        gcov-${{vars.major-version}} --version
+        gcov-${{vars.major-version}} --help
+        gcov-dump-${{vars.major-version}} --version
+        gcov-dump-${{vars.major-version}} --help
+        gcov-tool-${{vars.major-version}} --version
+        gcov-tool-${{vars.major-version}} --help
+        lto-dump-${{vars.major-version}} --version
+        lto-dump-${{vars.major-version}} --help
+    - name: hello world c
+      runs: |
+        cat >hello.c <<"EOF"
+        #include <stdio.h>
+        int main(int argc, char* argv[]) {
+            printf("hello-c");
+            return 0;
+        }
+        EOF
+
+        gcc -o hello-c hello.c
+        out=$(./hello-c)
+        [ "$out" = "hello-c" ]
+    - name: hello world c++
+      runs: |
+        cat >hello.cpp <<"EOF"
+        #include <iostream>
+        int main() {
+            std::cout << "hello-c++";
+            return 0;
+        }
+        EOF
+
+        g++ -o hello-c++ hello.cpp
+        out=$(./hello-c++)
+        [ "$out" = "hello-c++" ]
+    - uses: test/compiler/hardening-check
+      with:
+        cc: gcc
+    - uses: test/compiler/asan
+      with:
+        cc: gcc
+    - uses: test/compiler/hardening-check
+      with:
+        cc: gcc-${{vars.major-version}}
+    - uses: test/compiler/asan
+      with:
+        cc: gcc-${{vars.major-version}}
+    - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  git:
+    tag-filter-prefix: releases/gcc-
+    strip-prefix: releases/gcc-

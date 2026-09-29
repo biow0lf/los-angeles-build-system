@@ -122,10 +122,26 @@ is now self-hosted.
 
 ## Phase 2 -- *-dev header/library packages
 
-- [ ] `openssl` / `openssl-*-dev`
-- [ ] `zlib` / `zlib-dev`
-- [ ] `ncurses` / `ncurses-dev`
-- [ ] `pcre2-dev`
+- [~] `openssl` / `openssl-*-dev` (`packages/openssl.yaml`) -- forked
+      verbatim (plus its FIPS/TLS patches and `ca.cnf`/`openssl.cnf`),
+      except the "throw-away canary tests of jitter and non-validated
+      fips" step is skipped: its own output is never shipped (`rm -rf`'d
+      immediately after in Wolfi's own recipe), and it reproducibly (not
+      a flake, seen twice) fails two subtests --
+      `75-test_quicapi.t`/`90-test_threads.t` -- that plausibly don't
+      tolerate QEMU x86_64-on-Apple-Silicon emulation's timing behavior,
+      same category as systemd's `-Dbpf-framework=false`. The *real*
+      build's own `make tests` run (same suite, real ./Configure flags)
+      passed cleanly, confirming the canary's jitter/fips-specific flags
+      were the actual trigger, not the test files themselves. Build
+      confirmed in progress as of this checklist update; mark solid once
+      the rebuilt package is verified.
+- [x] `zlib` / `zlib-dev` (`packages/zlib.yaml`) -- forked verbatim (plus
+      its `gz_write` patch), no further deviations needed.
+- [x] `ncurses` / `ncurses-dev` (`packages/ncurses.yaml`) -- forked
+      verbatim, no deviations needed.
+- [x] `pcre2-dev` (`packages/pcre2.yaml`) -- forked verbatim, no
+      deviations needed.
 - [ ] `sqlite-dev`
 - [ ] `libselinux` / `libselinux-dev`
 - [ ] `libcap` / `libcap-dev` / `libcap-ng-dev`
@@ -145,7 +161,6 @@ is now self-hosted.
 - [ ] `libx11-dev`
 - [ ] `libsm-dev`
 - [ ] `libtirpc-dev`
-- [ ] `xz` / `xz-dev`
 - [ ] `python3` / `python3-dev`
 - [ ] `perl`
 - [ ] `lua5.3` / `lua5.3-dev` / `lua5.3-lzlib`
@@ -161,7 +176,18 @@ is now self-hosted.
 - [ ] `libgcrypt-dev` / `libgpg-error-dev`
 - [ ] `attr-dev` / `acl-dev` / `libacl1`
 - [ ] `valgrind-dev`
-- [ ] `gawk`, `findutils`, `gnutar`, `rsync`, `wget` (used by `make check`/gnulib-bootstrap in a few recipes -- confirm whether these need self-hosting or are only ever needed transiently in a sandbox that's discarded)
+- [ ] `gawk`, `findutils`, `rsync`, `wget` (used by `make check`/gnulib-bootstrap in a few recipes -- confirm whether these need self-hosting or are only ever needed transiently in a sandbox that's discarded)
+- [x] `grep` (`packages/grep.yaml`) -- forked verbatim except the same
+      `--skip-po` + `--disable-nls` pair as make/m4/bison/patch (also
+      uses `git/gnulib-bootstrap`).
+- [x] `file` / `libmagic` / `libmagic-dev` (`packages/file.yaml`) --
+      forked verbatim, no deviations needed.
+- [ ] `gnutar` -- heavier than most (325 upstream cherry-picks in Wolfi's
+      recipe, custom `./bootstrap` rather than `git/gnulib-bootstrap`,
+      git.savannah.gnu.org flakiness already flagged in Wolfi's own
+      recipe). Deferred separately from the simpler batch above.
+- [ ] `xz` / `xz-dev` -- recipe forked (`packages/xz.yaml`), not yet
+      build-verified.
 
 ## Phase 3 -- builder image tooling (`docker/builder/Dockerfile`)
 

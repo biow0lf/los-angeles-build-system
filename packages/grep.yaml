@@ -1,0 +1,150 @@
+package:
+  name: grep
+  version: "3.12"
+  epoch: 8 # glibc: 2.43->2.44
+  description: "GNU grep implementation"
+  copyright:
+    - license: GPL-3.0-or-later
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - coreutils
+      - gettext-dev
+      - glibc-2.44-dev
+      - pcre2-dev
+      - pkgconf-dev
+      - texinfo
+      - wget
+      - xz
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/grep.git
+      tag: v${{package.version}}
+      expected-commit: 3f8c09ec197a2ced82855f9ecd2cbc83874379ab
+
+  - uses: git/gnulib-bootstrap
+    with:
+      # ./bootstrap otherwise wgets translation .po files from
+      # translationproject.org -- same slow/unreliable hang observed
+      # self-hosting coreutils, make, m4, bison, and patch (see
+      # packages/coreutils.yaml).
+      bootstrap-args: --skip-po
+
+  - name: Configure
+    runs: |
+      # --disable-nls: --skip-po above means the po/*.po translation
+      # files were never fetched, but po/Makefile still tries to build
+      # po/*.gmo from them unless NLS is disabled outright (confirmed via
+      # self-hosting make, which hit exactly this failure).
+      ./configure \
+         --host=${{host.triplet.gnu}} \
+         --target=${{host.triplet.gnu}} \
+         --prefix=/usr \
+         --datadir=/usr/share \
+         --disable-nls
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: grep-doc
+    description: grep docs
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1251
+
+test:
+  pipeline:
+    - name: Version and help check
+      runs: |
+        grep --version
+        egrep --version
+        egrep --help
+        fgrep --version
+        fgrep --help
+        grep --help
+    - name: Simple pattern matching
+      runs: |
+        # Create test file
+        echo "apple banana cherry" > test.txt
+        echo "grape orange lemon" >> test.txt
+
+        # Test basic pattern matching and verify output
+        OUTPUT=$(grep "apple" test.txt)
+        [ "$OUTPUT" = "apple banana cherry" ]
+
+        # Test -v (invert match) option and verify output
+        OUTPUT=$(grep -v "apple" test.txt)
+        [ "$OUTPUT" = "grape orange lemon" ]
+
+        # Test -c (count) option
+        OUTPUT=$(grep -c "apple" test.txt)
+        [ "$OUTPUT" = "1" ]
+    - name: Simple numeric test
+      runs: |
+        # Create numeric test file
+        echo "123 456 789" > numbers.txt
+        echo "abc def ghi" >> numbers.txt
+
+        # Test numeric pattern matching and verify output
+        OUTPUT=$(grep "[0-9]" numbers.txt)
+        [ "$OUTPUT" = "123 456 789" ]
+
+        # Test -n (line number) option
+        OUTPUT=$(grep -n "[0-9]" numbers.txt)
+        [ "$OUTPUT" = "1:123 456 789" ]
+
+        # Test -l (list files) option
+        OUTPUT=$(grep -l "[0-9]" numbers.txt)
+        [ "$OUTPUT" = "numbers.txt" ]
+    - name: Complex patterns and options test
+      runs: |
+        # Create a more complex test file
+        cat > complex.txt << 'EOF'
+        Line 1 with text and 42 numbers
+        Line 2 with different TEXT
+        Line 3 contains email@example.com
+        Line 4 with more TEXT here
+        EOF
+
+        # Test -i (case insensitive) with result validation
+        OUTPUT=$(grep -i "text" complex.txt)
+        LINE_COUNT=$(echo "$OUTPUT" | wc -l)
+        [ "$LINE_COUNT" -eq 3 ]
+
+        # Test -w (whole word match) with result validation
+        OUTPUT=$(grep -w "TEXT" complex.txt)
+        LINE_COUNT=$(echo "$OUTPUT" | wc -l)
+        [ "$LINE_COUNT" -eq 2 ]
+
+        # Test regex pattern with result validation
+        OUTPUT=$(grep "[0-9]\+" complex.txt)
+        [ "$(echo "$OUTPUT" | grep "42")" != "" ]
+
+        # Test -E (extended regex) with result validation
+        OUTPUT=$(grep -E "email@.+\.com" complex.txt)
+        [ "$OUTPUT" = "Line 3 contains email@example.com" ]
+    - name: Binary reliability checks
+      uses: test/tw/ldd-check

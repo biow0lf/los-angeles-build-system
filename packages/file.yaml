@@ -1,0 +1,115 @@
+package:
+  name: file
+  version: "5.48"
+  epoch: 2 # glibc: 2.43->2.44
+  description: "file-type identification utility"
+  copyright:
+    - license: BSD-2-Clause
+  resources:
+    cpu: "2"
+    memory: 2Gi
+
+var-transforms:
+  - from: ${{package.version}}
+    match: \.
+    replace: _
+    to: mangled-package-version
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - file
+      - glibc-2.44-dev
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/file/file.git
+      tag: FILE${{vars.mangled-package-version}}
+      expected-commit: eb754ace19fed5481d8142426543100a2d6bae4e
+
+  - runs: |
+      autoreconf -vif
+
+  - name: Configure
+    runs: |
+      ./configure \
+         --host=${{host.triplet.gnu}} \
+         --target=${{host.triplet.gnu}} \
+         --prefix=/usr \
+         --datadir=/usr/share
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "libmagic-dev"
+    description: "libmagic headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libmagic
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: ${{subpkg.name}}
+
+  - name: "libmagic"
+    description: "file-type guessing library"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libmagic.so.* "${{targets.subpkgdir}}"/usr/lib
+
+          mkdir -p "${{targets.subpkgdir}}"/usr/share
+          mv "${{targets.destdir}}"/usr/share/misc "${{targets.subpkgdir}}"/usr/share
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: "file-doc"
+    description: "file documentation"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  version-separator: _
+  github:
+    identifier: file/file
+    tag-filter-prefix: FILE
+    strip-prefix: FILE
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: file
+    - uses: test/tw/help-check
+      with:
+        bins: file
+    - name: Test text file identification
+      runs: |
+        echo 'hello world' > /tmp/test.txt
+        file /tmp/test.txt | grep -F 'text'
+    - name: Test ELF binary identification
+      runs: |
+        file /bin/busybox | grep -F 'ELF'

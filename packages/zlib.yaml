@@ -1,0 +1,213 @@
+package:
+  name: zlib
+  # Version in develop branch is set to 1.3.2.1 but not released yet
+  # _git suffix is more than the version and would be wrong using _rc
+  # suffix which is less than, such that future 1.3.2.1-r0 release
+  # would be higher than this version
+  version: "1.3.2.1_rc20260601"
+  epoch: 0
+  description: "a library implementing the zlib compression algorithms"
+  copyright:
+    - license: MPL-2.0 AND MIT
+  dependencies:
+    runtime:
+      - merged-lib
+      - wolfi-baselayout
+  resources:
+    cpu: "1"
+    memory: 6Gi
+  cpe:
+    vendor: zlib
+    product: zlib
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - wolfi-baselayout
+  environment:
+    # Using openssf-compiler-options instead
+    CFLAGS: ""
+    CPPFLAGS: ""
+    CXXFLAGS: ""
+    LDFLAGS: ""
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: e3dc0a85b7032e98380dec011bc8f2c2ee0d8fca
+      repository: https://github.com/madler/zlib
+      branch: develop
+
+  - uses: patch
+    with:
+      patches: |
+        0001-gz_write-don-t-keep-a-pointer-into-callers-buffer-on.patch
+
+  - runs: |
+      ./configure \
+        --prefix=/usr \
+        --libdir=/usr/lib \
+        --shared
+
+  - uses: autoconf/make
+    with:
+      targets: check
+
+  - runs: |
+      make install pkgconfigdir="/usr/lib/pkgconfig" DESTDIR="${{targets.destdir}}"
+
+  - uses: strip
+
+subpackages:
+  - name: "zlib-static"
+    description: "zlib static library"
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+    dependencies:
+      runtime:
+        - merged-lib
+        - wolfi-baselayout
+
+  - name: "zlib-dev"
+    description: "zlib development headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - zlib=${{package.full-version}}
+        - merged-lib
+        - wolfi-baselayout
+    test:
+      environment:
+        contents:
+          packages:
+            - gcc
+            - glibc-dev
+            - zlib-dev
+      pipeline:
+        - uses: test/tw/devpackage
+        - name: Compile and Test zlib
+          runs: |
+            # Create a test program that exercises zlib compress/uncompress
+            tee test_zlib.c <<'EOF'
+            #include <stdio.h>
+            #include <string.h>
+            #include <zlib.h>
+
+            int main() {
+                const char *original = "Hello, zlib! This is a compression test.";
+                uLong orig_len = (uLong)strlen(original) + 1;
+
+                /* Allocate buffer for compressed data */
+                uLong comp_len = compressBound(orig_len);
+                Bytef compressed[1024];
+                Bytef decompressed[1024];
+
+                /* Compress */
+                int ret = compress(compressed, &comp_len, (const Bytef *)original, orig_len);
+                if (ret != Z_OK) {
+                    fprintf(stderr, "FAIL: compress() returned %d\n", ret);
+                    return 1;
+                }
+                printf("Compressed %lu bytes to %lu bytes\n", orig_len, comp_len);
+
+                /* Decompress */
+                uLong decomp_len = sizeof(decompressed);
+                ret = uncompress(decompressed, &decomp_len, compressed, comp_len);
+                if (ret != Z_OK) {
+                    fprintf(stderr, "FAIL: uncompress() returned %d\n", ret);
+                    return 1;
+                }
+                printf("Decompressed %lu bytes to %lu bytes\n", comp_len, decomp_len);
+
+                /* Verify decompressed data matches original */
+                if (strcmp((const char *)decompressed, original) != 0) {
+                    fprintf(stderr, "FAIL: decompressed data does not match original\n");
+                    fprintf(stderr, "  Original:     '%s'\n", original);
+                    fprintf(stderr, "  Decompressed: '%s'\n", (const char *)decompressed);
+                    return 1;
+                }
+
+                /* Verify zlib version is available */
+                printf("zlib version: %s\n", zlibVersion());
+                printf("SUCCESS: compression and decompression verified\n");
+                return 0;
+            }
+            EOF
+
+            # Compile using pkg-config flags
+            gcc test_zlib.c -I/usr/include -L/usr/lib -lz -o test_zlib
+
+            # Run the test and verify output
+            output=$(./test_zlib)
+            echo "$output"
+            echo "$output" | grep -F "SUCCESS: compression and decompression verified"
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: "minizip"
+    description: "a library for manipulation with files from .zip archives"
+    pipeline:
+      - runs: |
+          cd contrib/minizip
+          autoreconf -fiv
+          ./configure --prefix=/usr \
+            --enable-static=no
+          make
+          make install DESTDIR="${{targets.contextdir}}"
+
+          # Some newer header files are only installed by the `cmake` build
+          # process: until we're building with CMake, ensure they're all
+          # installed ourselves
+          for header in crypt.h ints.h ioapi.h mztools.h skipset.h unzip.h zip.h; do
+            cp $header "${{targets.contextdir}}"/usr/include/minizip
+          done
+      - name: remove libtool .la files
+        runs: find "${{targets.contextdir}}" -name '*.la' -delete
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/pkgconf
+    dependencies:
+      runtime:
+        - merged-lib
+        - wolfi-baselayout
+
+  - name: zlib-doc
+    description: zlib docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+    dependencies:
+      runtime:
+        - merged-lib
+        - wolfi-baselayout
+
+test:
+  environment:
+    contents:
+      packages:
+        - minizip
+  pipeline:
+    - uses: test/hardening-check
+      with:
+        package-match: "zlib\\|minizip"
+    - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v

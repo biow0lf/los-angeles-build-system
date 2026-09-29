@@ -1,0 +1,196 @@
+package:
+  name: bison
+  version: 3.8.2
+  epoch: 63 # go/wolfi-rsc/bison
+  description: "The GNU general-purposes parser generator"
+  copyright:
+    - license: GPL-3.0-or-later
+  dependencies:
+    runtime:
+      - m4
+      - merged-lib
+      - wolfi-baselayout
+  resources:
+    cpu: "2"
+    memory: 6Gi
+  test-resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - coreutils
+      - flex
+      - gettext-dev
+      - glibc-2.44-dev
+      - gperf
+      - help2man
+      - m4
+      - texinfo
+      - wget # for gnulib translations
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/bison.git
+      tag: v${{package.version}}
+      expected-commit: 9beba1919cad5dd08b0cac277c27896808719e4b
+
+  - uses: git/gnulib-bootstrap
+    with:
+      # ./bootstrap otherwise wgets translation .po files from
+      # translationproject.org -- same slow/unreliable hang observed
+      # self-hosting coreutils, make, and m4 (see packages/coreutils.yaml).
+      bootstrap-args: --skip-po
+
+  - name: 'Configure bison'
+    runs: |
+      # --disable-nls: --skip-po above means the po/*.po translation
+      # files were never fetched, but po/Makefile still tries to build
+      # po/*.gmo from them unless NLS is disabled outright (confirmed via
+      # self-hosting make, which hit exactly this failure).
+      ./configure \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --host=${{host.triplet.gnu}} \
+        --target=${{host.triplet.gnu}} \
+        --disable-nls
+
+  - runs: |
+      make -j$(nproc) V=1
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: bison-doc
+    description: bison documentation
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      runtime:
+        - merged-lib
+        - wolfi-baselayout
+
+  - name: bison-lang
+    description: bison locales
+    pipeline:
+      - uses: split/locales
+    dependencies:
+      runtime:
+        - merged-lib
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/langpackage
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 193
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - m4
+        - gcc
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: "Verify basic command availability"
+      runs: |
+        bison --version
+        yacc --version
+    - name: "Test basic grammar parsing"
+      runs: |
+        cat > calc.y << 'EOF'
+        %{
+        #include <stdio.h>
+        void yyerror(const char *s) { fprintf(stderr, "%s\n", s); }
+        int yylex(void) { return 0; }
+        int main(void) { return 0; }
+        %}
+        %token NUMBER
+        %%
+        exp: NUMBER
+        %%
+        EOF
+        bison calc.y
+    - name: "Test yacc compatibility mode"
+      runs: |
+        cat > simple.y << 'EOF'
+        %token TOKEN
+        %%
+        start: TOKEN
+        %%
+        EOF
+        yacc simple.y
+    - name: "Verify different output formats"
+      runs: |
+        cat > test.y << 'EOF'
+        %token TEST
+        %%
+        rule: TEST
+        %%
+        EOF
+        bison -d test.y
+        test -f test.tab.h
+        test -f test.tab.c
+    - name: "Test verbose output generation"
+      runs: |
+        bison -v test.y
+        test -f test.output
+    - name: "Test XML output capability"
+      runs: |
+        bison -x test.y
+        test -f test.xml
+    - name: "Test error handling with invalid input"
+      runs: |
+        cat > invalid.y << 'EOF'
+        %invalid_directive
+        %%
+        invalid: grammar
+        %%
+        EOF
+        ! bison invalid.y
+    - name: "Test grammar with multiple rules"
+      runs: |
+        cat > multi.y << 'EOF'
+        %token NUM ID
+        %%
+        expr: NUM
+           | ID
+           | expr '+' expr
+           | expr '*' expr
+           ;
+        %%
+        EOF
+        bison multi.y
+    - name: "Test location tracking feature"
+      runs: |
+        cat > loc.y << 'EOF'
+        %locations
+        %token TOKEN
+        %%
+        start: TOKEN
+        %%
+        EOF
+        bison --locations loc.y
+    - name: "Verify report generation"
+      runs: |
+        bison --report=all test.y
+        test -f test.output
+    - uses: test/no-docs

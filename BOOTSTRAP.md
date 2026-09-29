@@ -48,13 +48,36 @@ session's work.
       PKG=binutils`'s log: `installing wolfi-baselayout (20230201-r31)`,
       `installing glibc-2.44 (2.44-r7)`, `installing glibc-2.44-dev
       (2.44-r7)`, all our own epochs, pulled from `PUBLISHED_REPO`.
-- [ ] `gcc` (expect this one to need `apko/self-hosted.yaml`-style handling for
-      transitive-edge pin failures, same as `wolfi-baselayout` -- see that
-      file's comment for the pattern)
-- [ ] `make`
-- [ ] `m4`
-- [ ] `bison`
-- [ ] `flex`
+- [x] `gcc` (`packages/gcc.yaml`) -- forked verbatim from Wolfi's recipe, no
+      deviations needed in the end. The `apko/self-hosted.yaml`-style
+      handling anticipated here never applied (that mechanism is specific
+      to `apko lock`'s rootfs-want resolution; gcc is build-time-only,
+      like binutils). What *did* surface, self-hosting gcc, was an
+      unrelated real bug: `packages/gcc/` (this package's own patch
+      directory) made every OTHER package's build think it was sitting in
+      a combined gcc+binutils source tree, since nothing scoped a
+      package's build-time workspace to just its own aux directory --
+      see the Makefile's `SOURCE_DIR_FLAG` fix and
+      `packages/.empty-source-dir/`. Confirmed end-to-end via CI:
+      `discover` -> all 21 package builds -> `index` -> `boot-test` ->
+      `publish`, all green.
+- [x] `make` (`packages/make.yaml`) -- forked verbatim except
+      `bootstrap-args: --skip-po` (avoids the same translationproject.org
+      hang as coreutils, see that file) plus `--disable-nls` (--skip-po
+      alone leaves `po/Makefile` trying to build `.gmo` files from `.po`
+      files that were never fetched, a hard `make` error, not just a
+      slow/unreliable step -- discovered self-hosting make, then applied
+      to m4/bison below too).
+- [x] `m4` (`packages/m4.yaml`) -- forked verbatim except the same
+      `--skip-po` + `--disable-nls` pair as make, for the identical
+      reason (also uses `git/gnulib-bootstrap`).
+- [x] `bison` (`packages/bison.yaml`) -- forked verbatim except the same
+      `--skip-po` + `--disable-nls` pair as make/m4. Also needed
+      `pipelines/test/tw/langpackage.yaml` fetched from Wolfi's os repo
+      (missing custom pipeline, used by the `bison-lang` subpackage's
+      test).
+- [x] `flex` (`packages/flex.yaml`) -- forked verbatim, no deviations
+      needed (doesn't use `git/gnulib-bootstrap`).
 - [ ] `gperf`
 - [ ] `patch`
 - [ ] `texinfo`

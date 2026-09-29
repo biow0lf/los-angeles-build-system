@@ -1,0 +1,95 @@
+package:
+  name: m4
+  version: "1.4.21"
+  epoch: 8 # glibc: 2.43->2.44
+  description: "GNU macro processor"
+  copyright:
+    - license: GPL-3.0
+  resources:
+    cpu: "2"
+    memory: 4Gi
+  test-resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - coreutils
+      - gettext-dev
+      - glibc-2.44-dev
+      - gperf
+      - help2man
+      - patch
+      - python3 # for faster gnulib-tool implementation
+      - rsync # for gnulib translations
+      - texinfo
+      - xz
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/m4.git
+      tag: v${{package.version}}
+      expected-commit: fe2f13ab9ab9b3e712c6529f0b2a49a81feb6ce2
+
+  - uses: git/gnulib-bootstrap
+    with:
+      # ./bootstrap otherwise wgets translation .po files from
+      # translationproject.org -- same slow/unreliable hang observed
+      # self-hosting coreutils and make (see packages/coreutils.yaml).
+      bootstrap-args: --skip-po
+
+  - name: Configure
+    runs: |
+      # --disable-nls: --skip-po above means the po/*.po translation
+      # files were never fetched, but po/Makefile still tries to build
+      # po/*.gmo from them unless NLS is disabled outright (confirmed via
+      # self-hosting make, which hit exactly this failure).
+      ./configure \
+        --prefix=/usr \
+        --host=${{host.triplet.gnu}} \
+        --disable-nls
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: m4-doc
+    description: m4 docs
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1871
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/help-check
+      with:
+        bins: m4
+    - uses: test/tw/ver-check
+      with:
+        bins: m4
+        version: ${{package.version}}
+    - name: Test macro definition and expansion
+      runs: |
+        echo 'define(FOO, bar)FOO' | m4 | grep -F 'bar'
+    - name: Test macro arithmetic evaluation
+      runs: |
+        echo 'eval(2+3)' | m4 | grep -F '5'

@@ -1,0 +1,93 @@
+package:
+  name: gperf
+  version: "3.3"
+  epoch: 6 # glibc: 2.43->2.44
+  description: Perfect hash function generator.
+  copyright:
+    - license: GPL-3.0-or-later
+  resources:
+    cpu: "1"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - python3
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/gperf.git
+      tag: v${{package.version}}
+      expected-commit: d2aeec9b9c1fd04dbf747afe4ada8e772d315ccd
+
+  - name: git.savannah.gnu.org is flaky
+    runs: sed -i 's,^\([[:space:]]*url = \).*,\1https://github.com/coreutils/gnulib.git,' .gitmodules
+
+  # This requires a tex binary, and the PDF isn't installed anyway.
+  - name: Disable PDF generation
+    runs: |
+      sed -i 's/^\(all : .* \)pdf /\1/' doc/Makefile.in
+
+  - runs: ./autopull.sh --one-time
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: gperf-doc
+    pipeline:
+      - uses: split/manpages
+    description: gperf manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1237
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        gperf --version
+        gperf --help
+    - name: Functional test - generate perfect hash from keyword list
+      runs: |
+        # Create a simple keyword input file in gperf format
+        cat > /tmp/keywords.gperf << 'EOF'
+        %{
+        #include <string.h>
+        %}
+        %%
+        if
+        else
+        while
+        for
+        do
+        return
+        int
+        char
+        EOF
+        # Run gperf to generate a perfect hash function
+        gperf /tmp/keywords.gperf > /tmp/hash.c
+        # Verify the output is valid C code with expected content
+        grep -q "in_word_set" /tmp/hash.c
+        grep -q "if" /tmp/hash.c
+        grep -q "return" /tmp/hash.c
+        echo "gperf functional test passed"

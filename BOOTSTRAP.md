@@ -78,8 +78,13 @@ session's work.
       test).
 - [x] `flex` (`packages/flex.yaml`) -- forked verbatim, no deviations
       needed (doesn't use `git/gnulib-bootstrap`).
-- [ ] `gperf`
-- [ ] `patch`
+- [x] `gperf` (`packages/gperf.yaml`) -- forked verbatim, no deviations
+      needed (uses `./autopull.sh`/`./autogen.sh` rather than
+      `git/gnulib-bootstrap`, so the po-fetch issue doesn't apply).
+- [x] `patch` (`packages/patch.yaml`) -- forked verbatim except the same
+      `--skip-po` + `--disable-nls` pair as make/m4/bison (also uses
+      `git/gnulib-bootstrap`), this time added to the built-in
+      `autoconf/configure` pipeline's own `opts` field.
 - [ ] `texinfo`
 - [ ] `autoconf`
 - [ ] `automake`

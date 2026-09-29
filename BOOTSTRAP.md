@@ -106,6 +106,20 @@ session's work.
 bison, flex, gperf, patch, texinfo, autoconf, automake, libtool, pkgconf)
 is now self-hosted.
 
+## `build-base` -- the highest-leverage single fix
+
+- [x] `build-base` (`packages/build-base.yaml`) -- forked verbatim from
+      Wolfi's trivial metapackage (epoch bumped 9->10 to avoid an
+      exact-tie resolution risk, same reasoning as `wolfi-baselayout`).
+      27 of our ~30 recipes list `build-base` in
+      `environment.contents.packages` -- since every one of the six
+      things it bundles (binutils, gcc, glibc-dev, make, pkgconf,
+      wolfi-baselayout) was already self-hosted, publishing our own
+      `build-base` immediately stops all 27 recipes from touching Wolfi
+      for this one name, no other file needed to change. Verified: a
+      rebuild of binutils (using packages-out as the local repo tier)
+      now installs `build-base (1-r10)`, ours, not Wolfi's r9.
+
 ## Phase 2 -- *-dev header/library packages
 
 - [ ] `openssl` / `openssl-*-dev`

@@ -1,0 +1,41 @@
+#nolint:update-disabled-reason
+# Deviation from Wolfi's own recipe: epoch bumped from 9 (their current
+# live value) to 10. Every one of the 6 things this metapackage bundles
+# is already self-hosted, but if our own build-base tied Wolfi's epoch
+# exactly, melange's build-environment resolver would have no
+# version-based way to prefer ours -- the same exact-epoch-tie trap that
+# caused wolfi-baselayout to silently resolve to Wolfi's copy earlier in
+# this repo's self-hosting work (see packages/wolfi-baselayout.yaml).
+package:
+  name: build-base
+  version: 1
+  epoch: 10
+  description: "virtual package for builds"
+  copyright:
+    - license: MIT
+  dependencies:
+    runtime:
+      - binutils
+      - gcc
+      - glibc-dev
+      - make
+      - pkgconf
+      - wolfi-baselayout
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - wolfi-baselayout
+
+pipeline:
+  - name: Install
+    runs: |
+      mkdir -p "${{targets.destdir}}"
+
+update:
+  enabled: false
+
+test:
+  pipeline:
+    - uses: test/emptypackage

@@ -46,9 +46,22 @@ keygen: build-builder-image
 # --source-dir=packages/$(PKG): melange populates the build workspace from
 # this directory (patches, embedded config files, etc. that pipeline steps
 # reference by relative path), *not* from the directory containing the
-# YAML -- only passed when packages/$(PKG)/ actually exists, since pointing
-# it at a nonexistent directory isn't something melange tolerates gracefully.
-SOURCE_DIR_FLAG = $(if $(wildcard packages/$(PKG)),--source-dir=packages/$(PKG),)
+# YAML. ALWAYS passed, even when packages/$(PKG)/ doesn't exist (pointing
+# it at packages/.empty-source-dir/ instead, a directory checked into git
+# containing only a .gitkeep) -- melange's default behavior when
+# --source-dir is omitted entirely is to populate the guest workspace
+# from melange's own CWD, which under this Makefile's `-w /work` is the
+# ENTIRE repository, not nothing. That silently leaked every other
+# package's own packages/<name>/ aux directory (patches, vendored
+# tarballs, etc.) into builds that never asked for them -- harmless until
+# packages/gcc/ started existing and a plain "test -d gcc" check in
+# binutils's own (unrelated) build made binutils's configure think it was
+# part of a combined gcc+binutils source tree, requiring gmp/mpc/mpfr/isl
+# and a real gcc/lto frontend that was never actually there. Pointing
+# every package's --source-dir at an explicitly empty directory by
+# default closes this off for good, rather than special-casing gcc/
+# specifically.
+SOURCE_DIR_FLAG = --source-dir=$(if $(wildcard packages/$(PKG)),packages/$(PKG),packages/.empty-source-dir)
 
 build-package: build-builder-image
 	@if [ -z "$(PKG)" ]; then echo "usage: make build-package PKG=<name>"; exit 1; fi

@@ -1,0 +1,125 @@
+package:
+  name: texinfo
+  version: "7.3"
+  epoch: 8 # glibc: 2.43->2.44
+  description: "GNU documentation tool"
+  copyright:
+    - license: GPL-3.0-or-later
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gawk
+      - gettext
+      - glibc-2.44-dev
+      - help2man
+      - libtool
+      - ncurses
+      - ncurses-dev
+      - perl
+      - wolfi-baselayout
+      - xz
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/texinfo.git
+      tag: texinfo-${{package.version}}
+      expected-commit: 3fa5d8f7081ab2e38c5590ef852e0732a858bc3f
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      rm -f "${{targets.destdir}}"/usr/share/info/dir
+
+  - uses: strip
+
+update:
+  enabled: true
+  git:
+    tag-filter-prefix: texinfo-
+    strip-prefix: texinfo-
+
+test:
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          install-info
+          makeinfo
+          pdftexi2dvi
+          texi2any
+          texi2dvi
+          texi2pdf
+          texindex
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          info
+          install-info
+          makeinfo
+          pdftexi2dvi
+          pod2texi
+          texi2any
+          texi2dvi
+          texi2pdf
+          texindex
+    - runs: |
+        # Create a minimal Texinfo source document for functional testing
+        cat > /tmp/test.texi <<'EOF'
+        \input texinfo
+        @setfilename test.info
+        @settitle Test Document
+        @dircategory Test
+        @direntry
+        * Test: (test). Test Document.
+        @end direntry
+        @node Top
+        @top Test Document
+        Hello from Texinfo.
+        @bye
+        EOF
+
+        # Convert .texi to Info format and verify output
+        texi2any --plaintext --output=/tmp/test.txt /tmp/test.texi
+        grep -F "Hello from Texinfo" /tmp/test.txt
+
+        # Convert .texi to HTML and verify output
+        texi2any --html --no-split --output=/tmp/test.html /tmp/test.texi
+        grep -F "Hello from Texinfo" /tmp/test.html
+
+        # Convert .texi to Info format (binary) and verify output
+        makeinfo --output=/tmp/test.info /tmp/test.texi
+        grep -F "Hello from Texinfo" /tmp/test.info
+
+        # Test install-info by registering the generated info file
+        install-info /tmp/test.info /tmp/dir
+        grep -F "test" /tmp/dir
+
+subpackages:
+  - name: texinfo-doc
+    description: texinfo documentation
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    test:
+      pipeline:
+        - uses: test/docs

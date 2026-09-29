@@ -1,0 +1,160 @@
+package:
+  name: pkgconf
+  version: "3.0.7"
+  epoch: 0 # glibc: 2.43->2.44
+  description: "An implementation of pkg-config"
+  copyright:
+    - license: ISC
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - m4
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pkgconf/pkgconf
+      tag: pkgconf-${{package.version}}
+      expected-commit: 0c9e506b64124d8727b68d8af0ed73739e66e2ba
+
+  - runs: |
+      autoreconf -fiv
+
+  - name: 'Configure pkgconf'
+    runs: |
+      ./configure \
+        --prefix=/usr \
+        --libdir=/usr/lib \
+        --sysconfdir=/etc \
+        --mandir=/usr/share/man \
+        --infodir=/usr/share/info \
+        --with-pkg-config-dir=/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig \
+        --host=${{host.triplet.gnu}} \
+        --target=${{host.triplet.gnu}}
+
+  - runs: |
+      make -j$(nproc) V=1
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      ln -s pkgconf "${{targets.destdir}}"/usr/bin/pkg-config
+
+  - name: 'Clean up documentation'
+    runs: |
+      rm -rf ${{targets.destdir}}/usr/share/info
+
+  - uses: strip
+
+subpackages:
+  - name: "pkgconf-dev"
+    description: "pkgconf headers"
+    pipeline:
+      - uses: split/dev
+      - runs: |
+          mv "${{targets.subpkgdir}}"/usr/bin/pkg-config "${{targets.destdir}}"/usr/bin/
+    dependencies:
+      runtime:
+        - pkgconf
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: "pkgconf-doc"
+    description: "pkgconf documentation"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: pkgconf/pkgconf
+    strip-prefix: pkgconf-
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - gcc
+        - zlib-dev # Common package to test against
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: bomtool pkg-config pkgconf
+        version: ${{package.version}}
+    - uses: test/tw/help-check
+      with:
+        bins: bomtool pkg-config pkgconf
+    - name: "Test package query functionality"
+      runs: |
+        # Query zlib as a common package
+        pkgconf --print-provides zlib
+        pkgconf --modversion zlib
+        pkgconf --libs zlib
+        pkgconf --cflags zlib
+    - name: "Test pkg-config compatibility"
+      runs: |
+        # Same tests with pkg-config symlink
+        pkg-config --modversion zlib
+        pkg-config --libs zlib
+        pkg-config --cflags zlib
+    - name: "Test path resolution"
+      runs: |
+        pkgconf --validate zlib
+    - name: "Test variable operations"
+      runs: |
+        pkgconf --variable=prefix zlib
+        pkgconf --variable=libdir zlib
+    - name: "Test error handling"
+      runs: |
+        # Should fail gracefully
+        if pkgconf --modversion nonexistent-package; then
+          exit 1
+        fi
+    - name: "Test dependency resolution"
+      runs: |
+        pkgconf --print-requires zlib
+        pkgconf --list-all
+    - name: "Test development package functionality"
+      runs: |
+        # Create a temporary .pc file
+        cat > test.pc << EOF
+        prefix=/usr
+        exec_prefix=${prefix}
+        libdir=${prefix}/lib
+        includedir=${prefix}/include
+
+        Name: test
+        Description: Test package
+        Version: 1.0.0
+        Libs: -L${libdir} -ltest
+        Cflags: -I${includedir}
+        EOF
+
+        # Test with the created .pc file
+        PKG_CONFIG_PATH=. pkgconf --exists test
+        PKG_CONFIG_PATH=. pkgconf --modversion test
+    - name: "Test multiple package handling"
+      runs: |
+        pkgconf --cflags --libs zlib
+    - name: "Verify static and dynamic linking flags"
+      runs: |
+        pkgconf --libs --static zlib
+        pkgconf --libs --shared zlib
+    - uses: test/tw/ldd-check

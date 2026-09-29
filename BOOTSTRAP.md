@@ -85,11 +85,26 @@ session's work.
       `--skip-po` + `--disable-nls` pair as make/m4/bison (also uses
       `git/gnulib-bootstrap`), this time added to the built-in
       `autoconf/configure` pipeline's own `opts` field.
-- [ ] `texinfo`
-- [ ] `autoconf`
-- [ ] `automake`
-- [ ] `libtool`
-- [ ] `pkgconf`
+- [x] `texinfo` (`packages/texinfo.yaml`) -- forked verbatim, no
+      deviations needed.
+- [x] `autoconf` (`packages/autoconf.yaml`) -- forked verbatim, no
+      deviations needed.
+- [x] `automake` (`packages/automake.yaml`) -- forked verbatim except
+      adding `automake` itself to `environment.contents.packages` (a
+      self-dependency, same shape as busybox/flex/wolfi-baselayout
+      elsewhere in this repo): automake's own build rebuilds its bundled
+      `doc/amhello` example project via `autoreconf`, which needs the
+      versioned `aclocal-1.19` already on PATH -- that binary is only
+      produced, not yet installed, later in this same build, so an
+      already-installed automake has to be present first.
+- [x] `libtool` (`packages/libtool.yaml`) -- forked verbatim (plus its
+      `libtool-fix-cross-compile.patch`), no further deviations needed.
+- [x] `pkgconf` (`packages/pkgconf.yaml`) -- forked verbatim, no
+      deviations needed.
+
+**Phase 1 complete** -- the full GNU toolchain (binutils, gcc, make, m4,
+bison, flex, gperf, patch, texinfo, autoconf, automake, libtool, pkgconf)
+is now self-hosted.
 
 ## Phase 2 -- *-dev header/library packages
 

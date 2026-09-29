@@ -1,0 +1,27 @@
+--- libtool-2.4.6.orig/build-aux/ltmain.in
++++ libtool-2.4.6/build-aux/ltmain.in
+@@ -7628,9 +7628,11 @@
+ 	  test relink = "$opt_mode" || rpath=$compile_rpath$rpath
+ 	  for libdir in $rpath; do
+ 	    if test -n "$hardcode_libdir_flag_spec"; then
++		  func_replace_sysroot "$libdir"
++		  libdir=$func_replace_sysroot_result
++		  func_stripname '=' '' "$libdir"
++		  libdir=$func_stripname_result
+ 	      if test -n "$hardcode_libdir_separator"; then
+-		func_replace_sysroot "$libdir"
+-		libdir=$func_replace_sysroot_result
+ 		if test -z "$hardcode_libdirs"; then
+ 		  hardcode_libdirs=$libdir
+ 		else
+@@ -8360,6 +8362,10 @@
+       hardcode_libdirs=
+       for libdir in $compile_rpath $finalize_rpath; do
+ 	if test -n "$hardcode_libdir_flag_spec"; then
++	  func_replace_sysroot "$libdir"
++	  libdir=$func_replace_sysroot_result
++	  func_stripname '=' '' "$libdir"
++	  libdir=$func_stripname_result
+ 	  if test -n "$hardcode_libdir_separator"; then
+ 	    if test -z "$hardcode_libdirs"; then
+ 	      hardcode_libdirs=$libdir

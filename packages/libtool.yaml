@@ -1,0 +1,101 @@
+package:
+  name: libtool
+  version: "2.5.4"
+  epoch: 4 # glibc: 2.43->2.44
+  description: "GNU libtool"
+  copyright:
+    - license: LGPL-2.0-or-later AND GPL-2.0-or-later
+  dependencies:
+    runtime:
+      - libltdl
+  resources:
+    cpu: "2"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - apk-tools
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - coreutils
+      - glibc-2.44-dev
+      - help2man
+      - m4
+      - texinfo
+      - xz
+  environment:
+    M4: /usr/bin/m4
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/libtool.git
+      tag: v${{package.version}}
+      expected-commit: db22f7fce768951ac89a83ea3ddedbb8a46511f7
+
+  - name: git.savannah.gnu.org is flaky
+    runs: git submodule set-url gnulib https://github.com/coreutils/gnulib.git
+
+  - uses: patch
+    with:
+      patches: libtool-fix-cross-compile.patch
+
+  - runs: ./bootstrap
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "libtool-doc"
+    description: "libtool documentation"
+    pipeline:
+      - uses: split/alldocs
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: "libltdl"
+    description: "GNU libtool dynamic module loader"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libltdl.so* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  git:
+    # 2.6.0 is alpha release so far
+    tag-filter-prefix: v2.5
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+  pipeline:
+    - name: Compile and Execute Test
+      runs: |
+        cat <<'EOF' > hello.c
+        #include <stdio.h>
+        int main() { puts("Hello, world!"); return 0; }
+        EOF
+        libtool --mode=compile --tag=CC gcc -c hello.c -o hello.o
+        libtool --mode=link --tag=CC gcc hello.o -o hello
+        ./hello | grep -q "Hello, world!"
+        libtool --version
+        libtool --help
+        libtoolize --version
+        libtoolize --help

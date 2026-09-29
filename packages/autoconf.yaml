@@ -1,0 +1,126 @@
+package:
+  name: autoconf
+  version: "2.73"
+  epoch: 0 # go/wolfi-rsc/autoconf
+  description: "GNU tool for generating configure scripts"
+  copyright:
+    - license: GPL-2.0
+  dependencies:
+    runtime:
+      - m4
+      - perl
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - help2man
+      - m4
+      - perl
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/autoconf.git
+      tag: v${{package.version}}
+      expected-commit: 44d712a26b0e14931bf2df57e2c9b80a2747dfce
+
+  - runs: echo ${{package.version}} >.tarball-version
+
+  - runs: ./bootstrap
+
+  - runs: |
+      M4=/usr/bin/m4 ./configure \
+        --prefix=/usr
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "autoconf-doc"
+    description: "autoconf documentation"
+    pipeline:
+      - uses: split/manpages
+      - runs: |
+          rm -f "${{targets.destdir}}"/usr/share/info/dir
+          rm -f "${{targets.destdir}}"/usr/share/info/standards.info
+
+          mkdir -p "${{targets.subpkgdir}}"/usr/share
+          mv "${{targets.destdir}}"/usr/share/info "${{targets.subpkgdir}}"/usr/share/
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 141
+
+test:
+  environment:
+    contents:
+      packages:
+        - m4
+        - perl
+        - automake
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          autoconf
+          autoheader
+          autom4te
+          autoreconf
+          autoscan
+          autoupdate
+          ifnames
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          autoconf
+          autoheader
+          autom4te
+          autoreconf
+          autoscan
+          autoupdate
+          ifnames
+    - name: Test autoconf generates configure script
+      runs: |
+        set -e
+
+        # Create a minimal project directory
+        mkdir -p /tmp/autoconf-test
+        cd /tmp/autoconf-test
+
+        # Create a minimal configure.ac
+        cat > configure.ac <<'EOF'
+        AC_INIT([testproject], [1.0])
+        AC_OUTPUT
+        EOF
+
+        # Run autoreconf to generate configure script
+        autoreconf --install --force
+
+        # Verify configure script was generated
+        test -f configure || { echo "FAIL: configure script not generated"; exit 1; }
+        test -x configure || { echo "FAIL: configure script is not executable"; exit 1; }
+
+        # Verify configure script contains expected content
+        grep -qF "testproject" configure || { echo "FAIL: configure does not reference testproject"; exit 1; }
+
+        # Run the generated configure script to verify it works
+        ./configure
+        test -f config.status || { echo "FAIL: config.status not created by configure"; exit 1; }
+
+        echo "SUCCESS: autoconf generated and ran configure script"
+    - uses: test/no-docs

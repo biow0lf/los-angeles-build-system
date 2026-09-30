@@ -147,12 +147,24 @@ is now self-hosted.
       shape). Referenced by gcc.yaml, binutils.yaml, openssl.yaml, and
       others as a build-time dependency.
 - [x] `sqlite-dev` (`packages/sqlite.yaml`) -- forked verbatim, no
-      deviations needed. Its own `./configure` is Tcl-based (autosetup)
-      and needs a working `tcl-dev` at build time -- this surfaced a
-      real, separate bug the hard way: CI failed with "Cannot find a
-      usable init.tcl" days after this recipe was first verified working
-      locally. Root cause and fix: see `packages/tcl.yaml`'s own comment
-      below.
+      deviations needed *to the build itself*. Its own `./configure` is
+      Tcl-based (autosetup) and needs a working `tcl-dev` at build time
+      -- this surfaced a real, separate bug the hard way: CI failed with
+      "Cannot find a usable init.tcl" days after this recipe was first
+      verified working locally. Root cause: see `packages/tcl.yaml`'s
+      own comment below. Fixing tcl.yaml alone wasn't enough, though --
+      `.github/workflows/build-packages.yml` builds every package in its
+      own isolated matrix job with no shared local repo, and `index`/
+      `boot-test`/`publish` all require every `build` job (sqlite
+      included) to succeed before tcl ever gets published. The very
+      first push introducing tcl.yaml deadlocks: sqlite's CI job can't
+      see a tcl-dev that only gets published once sqlite's own job
+      succeeds. Fixed by adding a defensive step to sqlite.yaml itself
+      that fixes up *whichever* tcl-dev this job happens to install
+      (ours once published, or Wolfi's currently-broken one until then)
+      with the same init.tcl symlink -- so sqlite's CI job self-heals
+      instead of depending on publish order. Verified locally (doesn't
+      break the already-working case).
 - [x] `tcl` / `tcl-dev` / `tcl-doc` (`packages/tcl.yaml`) -- forked from
       Wolfi with three deviations, discovered through direct debugging
       of the sqlite CI failure above:
@@ -232,15 +244,18 @@ is now self-hosted.
       themselves work (they link and install fine). Same category as
       openssl's jitter/fips canary tests. Fixed by narrowing to `make
       check TESTS='test/attr.run'`; verified.
-- [ ] `db` / `db-dev` (`packages/db.yaml`) -- forked verbatim except the
-      `git-checkout` tag: upstream `berkeleydb/libdb` deleted the
+- [x] `db` / `db-dev` (`packages/db.yaml`) -- forked verbatim except the
+      source-acquisition step: upstream `berkeleydb/libdb` deleted the
       `v5.3.37` tag (moved to a date-based tagging scheme) -- the commit
       itself is still reachable and confirmed (via its own merge-commit
-      message) to be exactly the 5.3.37 release, so `tag:` now names
-      that commit SHA directly (GitHub serves arbitrary reachable commit
-      SHAs over the git protocol). First attempt (before this fix) also
-      hit a separate, likely-transient Docker build-cache image race
-      (`No such image: apko.local/cache:...`) -- retry in progress.
+      message) to be exactly the 5.3.37 release. Tried naming that
+      commit SHA directly as `git-checkout`'s `tag:` first (a raw `git
+      fetch <sha>` works fine against GitHub), but melange's own
+      git-checkout needs an actual resolvable ref, not a bare SHA:
+      "fatal: Remote branch <sha> not found in upstream origin".
+      Switched to `uses: fetch` against GitHub's own per-commit archive
+      tarball URL instead, which sidesteps ref resolution entirely.
+      Verified.
 - [ ] `libselinux` / `libselinux-dev` (`packages/libselinux.yaml`) --
       forked verbatim (plus its `swig-4.5-pyunicode.patch`); not yet
       built.

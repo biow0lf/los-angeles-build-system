@@ -45,6 +45,25 @@ pipeline:
       unzip sqlite-src-${{vars.sqlite-download-version}}.zip -d ../
       mv ../sqlite-src-${{vars.sqlite-download-version}}/* .
 
+  # Deviation from Wolfi's own recipe: sqlite's own ./configure is a
+  # Tcl script (autosetup) and needs a working tclsh to even run. Our
+  # own tcl-dev (packages/tcl.yaml) fixes the underlying bug -- tclsh's
+  # compiled-in library search path doesn't match where init.tcl
+  # actually gets installed -- but CI's build-packages.yml builds every
+  # package in its own isolated matrix job with no shared local repo,
+  # and publish only happens once ALL jobs (sqlite included) succeed.
+  # The very first push that introduces tcl.yaml can't rely on it being
+  # published yet, so this defensively fixes up *whichever* tcl-dev
+  # this job happens to install (ours once published, or Wolfi's
+  # currently-broken one in the meantime) with the same symlink, rather
+  # than letting sqlite's CI job deadlock waiting on tcl's own.
+  - name: Work around any installed tclsh's own init.tcl path mismatch
+    runs: |
+      tclver=$(echo 'puts [info tclversion]' | tclsh 2>/dev/null || true)
+      if [ -n "$tclver" ] && [ ! -e "/usr/lib/tcl${tclver}/init.tcl" ] && [ -e /usr/library/init.tcl ]; then
+        ln -sf ../library "/usr/lib/tcl${tclver}"
+      fi
+
   - name: Configure
     runs: |
       _amalgamation="-DSQLITE_ENABLE_FTS4 \

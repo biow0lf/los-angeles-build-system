@@ -1,0 +1,109 @@
+package:
+  name: libsm
+  version: "1.2.6"
+  epoch: 5 # glibc: 2.43->2.44
+  description: X11 Session Management library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bash
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext-dev
+      - glibc-2.44-dev
+      - intltool
+      - libice-dev
+      - libtool
+      - libuuid
+      - pkgconf-dev
+      - util-linux-dev
+      - util-macros
+      - util-macros-dev
+      - xmlto
+      - xorgproto
+      - xtrans-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libsm.git
+      tag: libSM-${{package.version}}
+      expected-commit: 5f6da959a34bcefc425b6e37462553acf44369a3
+
+  - runs: autoreconf -vfi
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --enable-docs \
+        --with-xmlto \
+        --without-fop \
+        --with-libuuid
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libsm-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libsm
+        - util-linux-dev
+    description: libsm dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libsm-doc
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}/usr/share"
+          mv "${{targets.destdir}}/usr/share/doc" "${{targets.subpkgdir}}/usr/share"
+    description: libsm manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1726
+
+test:
+  environment:
+    contents:
+      packages:
+        - libsm-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation
+      runs: |
+        tee test.c <<'EOF'
+        #include <X11/SM/SMlib.h>
+        int main() {
+            SmcCloseStatus status;
+            (void)status;
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags sm) test.c -o test $(pkg-config --libs sm)
+        ./test

@@ -1,0 +1,113 @@
+package:
+  name: libsepol
+  version: "3.11"
+  epoch: 3 # split/manpages
+  description: "SELinux binary policy manipulation library"
+  copyright:
+    - license: LGPL-2.1
+  dependencies:
+    runtime:
+      - merged-lib
+      - wolfi-baselayout
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - coreutils
+      - flex
+      - gcc
+      - glibc-2.44-dev
+      - linux-headers
+      - pcre2-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/SELinuxProject/selinux.git
+      tag: ${{package.name}}-${{package.version}}
+      expected-commit: 2233a23a4d4f1bf29054037babec13f30d038e65
+
+  - uses: autoconf/make-install
+    working-directory: ${{package.name}}
+    with:
+      opts: LIBDIR=/usr/lib SHLIBDIR=/usr/lib
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: libsepol-dev
+    dependencies:
+      runtime:
+        - merged-lib
+        - wolfi-baselayout
+
+  - name: ${{package.name}}-doc
+    description: ${{package.name}} manpages
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: SELinuxProject/selinux
+    use-tag: true
+    tag-filter: libsepol-
+    strip-prefix: libsepol-
+
+test:
+  environment:
+    contents:
+      packages:
+        - libsepol-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - runs: |
+        # None of these binaries have --help/--version, but they emit a usage:
+        # string if called incorrectly (they exit non-zero, so capture output first)
+        for b in chkcon sepol_check_access sepol_compute_av sepol_compute_member sepol_compute_relabel sepol_validate_transition; do
+          output=$($b 2>&1 || true)
+          echo "$output" | grep "usage:"
+        done
+    - name: Test libsepol compile and link
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <sepol/sepol.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main() {
+            sepol_handle_t *handle;
+            handle = sepol_handle_create();
+            if (!handle) {
+                fprintf(stderr, "FAIL: sepol_handle_create returned NULL\n");
+                return 1;
+            }
+            printf("SUCCESS: libsepol handle created\n");
+            sepol_handle_destroy(handle);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libsepol) test.c -o test $(pkg-config --libs libsepol)
+        ./test
+    - uses: test/tw/ldd-check

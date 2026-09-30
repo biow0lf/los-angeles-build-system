@@ -1,0 +1,376 @@
+# Deviation from Wolfi's own recipe: none needed in the YAML itself --
+# needed the ebtables.confd/ip6tables.confd/iptables.confd OpenRC
+# service config files from Wolfi's own iptables/ aux directory,
+# missed on the initial fork (`install: can't stat 'iptables.confd':
+# No such file or directory`).
+package:
+  name: iptables
+  version: "1.8.13"
+  epoch: 4 # glibc: 2.43->2.44
+  description: Linux kernel firewall, NAT and packet mangling tools
+  copyright:
+    - license: GPL-2.0-or-later
+  dependencies:
+    replaces:
+      - ip6tables
+      - iptables-nft
+      - iptables-legacy
+    runtime:
+      - merged-sbin
+      - wolfi-baselayout
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bash
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - flex
+      - glibc-2.44-dev
+      - libcap-utils
+      - libmnl-dev
+      - libnftnl-dev
+      - libtool
+      - linux-headers
+      - pkgconf-dev
+  accounts:
+    # Need to run with privilege to be able to do setcap
+    run-as: root
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.netfilter.org/iptables/
+      tag: v${{package.version}}
+      expected-commit: afd52551c98871b8ac0321eed8efa0845956037c
+
+  - runs: |
+      ./autogen.sh
+
+  - runs: |
+      export CFLAGS="$CFLAGS -D_GNU_SOURCE"
+      ./configure \
+        --build="$CBUILD" \
+        --host="$CHOST" \
+        --prefix=/usr \
+        --mandir=/usr/share/man \
+        --sbindir=/usr/bin \
+        --sysconfdir=/etc \
+        --without-kernel \
+        --enable-devel \
+        --enable-libipq \
+        --enable-shared
+
+      # do not use rpath
+      sed -i 's|^hardcode_libdir_flag_spec=.*|hardcode_libdir_flag_spec=""|g' libtool
+      sed -i 's|^runpath_var=LD_RUN_PATH|runpath_var=DIE_RPATH_DIE|g' libtool
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      mkdir -p "${{targets.destdir}}"/usr/include/libiptc
+
+      install -m644 include/iptables.h include/ip6tables.h "${{targets.destdir}}"/usr/include/
+      install include/libiptc/*.h "${{targets.destdir}}"/usr/include/libiptc/
+
+      install -D -m644 iptables.confd "${{targets.destdir}}"/etc/conf.d/iptables
+      install -D -m644 ebtables.confd "${{targets.destdir}}"/etc/conf.d/ebtables
+
+subpackages:
+  - name: iptables-doc
+    description: iptables documentation
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      runtime:
+        - merged-sbin
+        - wolfi-baselayout
+
+  - name: iptables-dev
+    description: iptables development files
+    dependencies:
+      runtime:
+        - merged-sbin
+        - wolfi-baselayout
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: iptables-xtables-privileged
+    description: iptables with cap_net_raw and cap_net_admin capabilities set for xtables
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - merged-sbin
+        - wolfi-baselayout
+        - iptables
+      replaces:
+        - iptables
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/
+          cp -r ${{targets.destdir}}/* ${{targets.contextdir}}/
+          rm ${{targets.contextdir}}/usr/bin/ip*tables-apply
+          setcap cap_net_raw,cap_net_admin+eip ${{targets.contextdir}}/usr/bin/xtables-legacy-multi
+          setcap cap_net_raw,cap_net_admin+eip ${{targets.contextdir}}/usr/bin/xtables-nft-multi
+    test:
+      environment:
+        contents:
+          packages:
+            - libcap-utils
+      pipeline:
+        - if: ${{build.arch}} != 'aarch64'
+          uses: test/tw/ldd-check
+        # Not listed here because they don't have a --help option:
+        # arptables-restore, arptables-nft-restore, ebtables-restore,
+        # ebtables-nft-restore, iptables-xml
+        - if: ${{build.arch}} != 'aarch64'
+          uses: test/tw/help-check
+          with:
+            bins: |
+              arptables \
+              arptables-nft \
+              arptables-nft-save \
+              arptables-save \
+              arptables-translate \
+              ebtables \
+              ebtables-nft \
+              ebtables-nft-restore \
+              ebtables-nft-save \
+              ebtables-restore \
+              ebtables-save \
+              ebtables-translate \
+              ip6tables \
+              ip6tables-nft \
+              ip6tables-nft-restore \
+              ip6tables-nft-save \
+              ip6tables-restore \
+              ip6tables-restore-translate \
+              ip6tables-save \
+              ip6tables-translate \
+              iptables \
+              iptables-nft \
+              iptables-nft-restore \
+              iptables-nft-save \
+              iptables-restore \
+              iptables-restore-translate \
+              iptables-save \
+              iptables-translate \
+              iptables-xml \
+              xtables-monitor
+        # Not listed here because they don't have a --version option:
+        # arptables-restore, arptables-nft-restore, ebtables-restore,
+        # ebtables-nft-restore, iptables-xml
+        - if: ${{build.arch}} != 'aarch64'
+          uses: test/tw/ver-check
+          with:
+            bins: |
+              arptables \
+              arptables-nft \
+              arptables-nft-save \
+              arptables-save \
+              arptables-translate \
+              ebtables \
+              ebtables-nft \
+              ebtables-nft-save \
+              ebtables-save \
+              ebtables-translate \
+              ip6tables \
+              ip6tables-nft \
+              ip6tables-nft-restore \
+              ip6tables-nft-save \
+              ip6tables-restore \
+              ip6tables-restore-translate \
+              ip6tables-save \
+              ip6tables-translate \
+              iptables \
+              iptables-nft \
+              iptables-nft-restore \
+              iptables-nft-save \
+              iptables-restore \
+              iptables-restore-translate \
+              iptables-save \
+              iptables-translate \
+              xtables-monitor
+        - name: Verify capabilities on xtables binaries
+          runs: |
+            set -euo pipefail
+
+            # Verify cap_net_raw and cap_net_admin are set on xtables-legacy-multi
+            getcap /usr/bin/xtables-legacy-multi | grep -F "cap_net_admin,cap_net_raw" || {
+              echo "FAIL: Expected capabilities not set on xtables-legacy-multi"
+              getcap /usr/bin/xtables-legacy-multi
+              exit 1
+            }
+
+            # Verify cap_net_raw and cap_net_admin are set on xtables-nft-multi
+            getcap /usr/bin/xtables-nft-multi | grep -F "cap_net_admin,cap_net_raw" || {
+              echo "FAIL: Expected capabilities not set on xtables-nft-multi"
+              getcap /usr/bin/xtables-nft-multi
+              exit 1
+            }
+
+            echo "SUCCESS: Capabilities correctly set on xtables binaries"
+
+  # iptables-apply is a bash script, and therefore depends on bash
+  # only a subset of iptables users use this script, so we keep
+  # it split out to avoid adding bash into all images using iptables.
+  - name: iptables-apply
+    description: iptables-apply program
+    pipeline:
+      - runs: |
+          spd=${{targets.contextdir}}
+          mkdir -p "$spd/usr/bin"
+          mv ${{targets.destdir}}/usr/bin/ip*tables-apply "$spd/usr/bin"
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              ip6tables-apply
+              iptables-apply
+
+  - name: ip6tables
+    checks:
+      disabled:
+        - empty
+    dependencies:
+      runtime:
+        - iptables
+    test:
+      pipeline:
+        - uses: test/tw/emptypackage
+
+  - name: xtables
+    checks:
+      disabled:
+        - empty
+    dependencies:
+      runtime:
+        - iptables
+    test:
+      pipeline:
+        - uses: test/tw/emptypackage
+
+  - name: iptables-nft
+    checks:
+      disabled:
+        - empty
+    dependencies:
+      runtime:
+        - iptables
+    test:
+      pipeline:
+        - uses: test/tw/emptypackage
+
+  - name: iptables-legacy
+    checks:
+      disabled:
+        - empty
+    dependencies:
+      runtime:
+        - iptables
+    test:
+      pipeline:
+        - uses: test/tw/emptypackage
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    # Not listed here because they don't have a --help option:
+    # arptables-restore, arptables-nft-restore, ebtables-restore,
+    # ebtables-nft-restore, iptables-xml
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          arptables \
+          arptables-nft \
+          arptables-nft-save \
+          arptables-save \
+          arptables-translate \
+          ebtables \
+          ebtables-nft \
+          ebtables-nft-restore \
+          ebtables-nft-save \
+          ebtables-restore \
+          ebtables-save \
+          ebtables-translate \
+          ip6tables \
+          ip6tables-nft \
+          ip6tables-nft-restore \
+          ip6tables-nft-save \
+          ip6tables-restore \
+          ip6tables-restore-translate \
+          ip6tables-save \
+          ip6tables-translate \
+          iptables \
+          iptables-nft \
+          iptables-nft-restore \
+          iptables-nft-save \
+          iptables-restore \
+          iptables-restore-translate \
+          iptables-save \
+          iptables-translate \
+          iptables-xml \
+          xtables-monitor
+    # Not listed here because they don't have a --version option:
+    # arptables-restore, arptables-nft-restore, ebtables-restore,
+    # ebtables-nft-restore, iptables-xml
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          arptables \
+          arptables-nft \
+          arptables-nft-save \
+          arptables-save \
+          arptables-translate \
+          ebtables \
+          ebtables-nft \
+          ebtables-nft-save \
+          ebtables-save \
+          ebtables-translate \
+          ip6tables \
+          ip6tables-nft \
+          ip6tables-nft-restore \
+          ip6tables-nft-save \
+          ip6tables-restore \
+          ip6tables-restore-translate \
+          ip6tables-save \
+          ip6tables-translate \
+          iptables \
+          iptables-nft \
+          iptables-nft-restore \
+          iptables-nft-save \
+          iptables-restore \
+          iptables-restore-translate \
+          iptables-save \
+          iptables-translate \
+          xtables-monitor
+    - uses: test/no-docs

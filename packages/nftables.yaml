@@ -1,0 +1,158 @@
+package:
+  name: nftables
+  version: "1.1.7"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Netfilter tables userspace tools
+  copyright:
+    - license: GPL-2.0-or-later
+  dependencies:
+    runtime:
+      - merged-usrsbin
+      - wolfi-baselayout
+
+capabilities:
+  add:
+    - CAP_NET_ADMIN
+
+vars:
+  python-version: "3.13"
+
+environment:
+  contents:
+    packages:
+      - asciidoc
+      - autoconf
+      - automake
+      - bash-binsh
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - docbook-xml
+      - flex
+      - glibc-2.44-dev
+      - gmp-dev
+      - jansson-dev
+      - libedit-dev
+      - libmnl-dev
+      - libnftnl-dev
+      - libtool
+      - libxslt
+      - ncurses-dev
+      - pkgconf-dev
+      - py${{vars.python-version}}-gpep517
+      - py${{vars.python-version}}-setuptools
+      - py${{vars.python-version}}-wheel
+      - readline-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.netfilter.org/nftables
+      tag: v${{package.version}}
+      expected-commit: 8c2f60661c9e8e85869f82db25961b45a8d07554
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --with-json \
+        --sbindir=/usr/bin \
+        --enable-static
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: nftables-static
+    pipeline:
+      - uses: split/static
+    description: nftables static
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: nftables-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - nftables
+        - wolfi-baselayout
+    description: nftables dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: nftables-doc
+    pipeline:
+      - uses: split/manpages
+    description: nftables manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: nftables-slim
+    pipeline:
+      - uses: autoconf/configure
+        with:
+          opts: |
+            --with-json \
+            --sbindir=/usr/bin \
+            --without-cli \
+            --with-mini-gmp \
+            --disable-man-doc \
+            --disable-debug
+      - uses: autoconf/make
+        with:
+          opts: dist_pkgdoc_SCRIPTS=''
+      - uses: autoconf/make-install
+        with:
+          opts: dist_pkgdoc_SCRIPTS=''
+      - uses: strip
+    description: Netfilter tables userspace tools without interactive CLI
+    test:
+      environment:
+        contents:
+          packages:
+            - jq
+      pipeline:
+        - runs: |
+            nft --version
+            nft --help
+            nft -j list ruleset | jq -e .
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - jq
+  pipeline:
+    - runs: |
+        out=$(nft --version 2>&1) || echo "$out" | grep -F 'Protocol not supported'
+        out=$(nft --help 2>&1) || echo "$out" | grep -F 'Protocol not supported'
+        nft -j list ruleset | jq -e .
+    - name: Test JSON output
+      runs: |
+        nft -j list ruleset | jq -e .
+    - uses: test/tw/ldd-check

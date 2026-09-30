@@ -1,0 +1,127 @@
+package:
+  name: libx11
+  version: "1.8.13"
+  epoch: 7 # glibc: 2.43->2.44
+  description: X11 client-side library
+  copyright:
+    - license: XFree86-1.1
+  resources:
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44
+      - glibc-2.44-dev
+      - gtk-doc
+      - intltool
+      - libtool
+      - libxcb-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xmlto
+      - xorgproto
+      - xtrans
+      - xtrans-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libx11.git
+      tag: libX11-${{package.version}}
+      expected-commit: 6c75545a1deb51f5903992c52af6bc35cc9bc103
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --with-xcb \
+        --disable-thread-safety-constructor
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - name: Drop headers that are now provided by xorgproto (legacy=true)
+    runs: |
+      for h in XKBgeom.h XKBsrv.h XKBstr.h; do
+        rm -rf "${{targets.destdir}}/usr/include/X11/extensions/$h"
+      done
+
+  - uses: strip
+
+subpackages:
+  - name: libx11-static
+    description: libx11 static library
+    dependencies:
+      runtime:
+        - libxcb-static
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: libx11-doc
+    pipeline:
+      - uses: split/manpages
+    description: libx11 manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: libx11-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libx11
+        - libxcb-dev
+        - xtrans
+    description: libx11 dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+test:
+  environment:
+    contents:
+      packages:
+        - libx11-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation
+      runs: |
+        tee test.c <<'EOF'
+        #include <X11/Xlib.h>
+        #include <stdio.h>
+
+        int main() {
+            /* Attempt to open display - will return NULL without a display server,
+               but this proves the library links and the function is callable */
+            Display *dpy = XOpenDisplay(NULL);
+            if (dpy != NULL) {
+                XCloseDisplay(dpy);
+            }
+            printf("libX11 compile and link test passed\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags x11) test.c -o test $(pkg-config --libs x11)
+        ./test
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1764

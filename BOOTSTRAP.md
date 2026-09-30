@@ -256,27 +256,32 @@ is now self-hosted.
       Switched to `uses: fetch` against GitHub's own per-commit archive
       tarball URL instead, which sidesteps ref resolution entirely.
       Verified.
-- [ ] `libselinux` / `libselinux-dev` (`packages/libselinux.yaml`) --
-      forked verbatim (plus its `swig-4.5-pyunicode.patch`); not yet
-      built.
-- [ ] `elfutils-dev` (`packages/elfutils.yaml`) -- forked verbatim; not
-      yet built.
+- [x] `libselinux` / `libselinux-dev` (`packages/libselinux.yaml`) --
+      forked verbatim (plus its `swig-4.5-pyunicode.patch`). Verified.
+- [x] `elfutils-dev` (`packages/elfutils.yaml`) -- forked verbatim, no
+      deviations needed (its own upstream `git-checkout` against
+      `sourceware.org` hung once, transiently -- retried clean).
 - [x] `libarchive` / `libarchive-dev` (`packages/libarchive.yaml`) --
       forked verbatim, no deviations needed.
 - [x] `expat-dev` (`packages/expat.yaml`) -- forked verbatim, no
       deviations needed.
-- [ ] `audit-dev` (`packages/audit.yaml`) -- forked verbatim (plus its
-      two patches); not yet built.
-- [ ] `curl` / `curl-dev` (`packages/curl.yaml`) -- forked verbatim; not
-      yet built.
-- [ ] `cryptsetup-dev` (`packages/cryptsetup.yaml`) -- forked verbatim;
-      not yet built.
-- [ ] `iptables-dev` (`packages/iptables.yaml`) -- forked verbatim; not
-      yet built.
-- [ ] `nftables-dev` (`packages/nftables.yaml`) -- forked verbatim; not
-      yet built.
-- [ ] `kmod` / `kmod-dev` (`packages/kmod.yaml`) -- forked verbatim; not
-      yet built.
+- [x] `audit-dev` (`packages/audit.yaml`) -- forked verbatim (plus its
+      two patches). Verified.
+- [x] `curl` / `curl-dev` (`packages/curl.yaml`) -- forked verbatim, no
+      deviations needed. Verified.
+- [x] `cryptsetup-dev` (`packages/cryptsetup.yaml`) -- forked verbatim,
+      no deviations needed. Verified.
+- [x] `iptables-dev` (`packages/iptables.yaml`) -- forked verbatim, but
+      its own post-install step needed the
+      `ebtables.confd`/`ip6tables.confd`/`iptables.confd` OpenRC service
+      config files from Wolfi's own `iptables/` aux directory, missed on
+      the initial fork (`install: can't stat 'iptables.confd'`, same
+      shape as `linux-pam`'s own missing-aux-files issue above). Fetched
+      into `packages/iptables/`. Verified.
+- [x] `nftables-dev` (`packages/nftables.yaml`) -- forked verbatim, no
+      deviations needed. Verified.
+- [x] `kmod` / `kmod-dev` (`packages/kmod.yaml`) -- forked verbatim, no
+      deviations needed. Verified.
 - [x] `libidn2-dev` (`packages/libidn2.yaml`) -- forked with several
       deviations, all discovered the hard way (building from a git
       checkout rather than a release tarball): `--skip-po` on
@@ -299,12 +304,12 @@ is now self-hosted.
       progress.
 - [x] `libmicrohttpd-dev` (`packages/libmicrohttpd.yaml`) -- forked
       verbatim, no deviations needed.
-- [ ] `libx11-dev` (`packages/libx11.yaml`) -- forked verbatim; not yet
-      built.
-- [ ] `libsm-dev` (`packages/libsm.yaml`) -- forked verbatim; not yet
-      built.
-- [ ] `libtirpc-dev` (`packages/libtirpc.yaml`) -- forked verbatim; not
-      yet built.
+- [x] `libx11-dev` (`packages/libx11.yaml`) -- forked verbatim, no
+      deviations needed. Verified.
+- [x] `libsm-dev` (`packages/libsm.yaml`) -- forked verbatim, no
+      deviations needed. Verified.
+- [x] `libtirpc-dev` (`packages/libtirpc.yaml`) -- forked verbatim, no
+      deviations needed. Verified.
 - [ ] `python3` / `python3-dev` (`packages/python-3.13.yaml`) -- forked
       verbatim (Wolfi's own package name is `python-3.13`, not `python3`
       -- it `provides: python3=...` for other recipes to depend on); not
@@ -337,20 +342,18 @@ is now self-hosted.
       without them). Fetched into `packages/linux-pam/`. Verified.
 - [x] `valgrind-dev` (`packages/valgrind.yaml`) -- forked verbatim, no
       deviations needed.
-- [ ] `libsepol` (`packages/libsepol.yaml`) -- forked verbatim; not yet
-      built (a `libselinux` dependency).
+- [x] `libsepol` (`packages/libsepol.yaml`) -- forked verbatim, no
+      deviations needed (a `libselinux` dependency). Verified.
 - [x] `findutils`, `rsync`, `wget` -- all forked verbatim (`findutils`
       needed the same `--skip-po` gnulib-bootstrap fix, `wget` needed
       one upstream patch); verified.
-- [ ] `gawk` (`packages/gawk.yaml`) -- forked with one upstream patch,
+- [x] `gawk` (`packages/gawk.yaml`) -- forked with one upstream patch,
       plus tolerating 3 known environment-specific `make check` failures
       (pma: needs `personality()` blocked under this Docker/Rosetta
       sandbox; randtest: a tool missing from this minimal busybox-based
       environment; readdir: compares literal inode numbers against a
       golden file, inherently non-reproducible) -- any *other* test
-      failure still fails the build. Fix applied but not yet re-verified
-      (the disk-space-exhaustion retry that would have hit it ran before
-      the fix existed) -- retry in progress.
+      failure still fails the build. Verified.
 
 ### Host disk-space exhaustion (2026-09-30, mid-session)
 

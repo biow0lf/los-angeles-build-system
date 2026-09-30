@@ -296,12 +296,12 @@ is now self-hosted.
       routed through `$(MAKEINFO)` so they fail outright rather than
       skippably). None of the missing content (API reference docs) is
       anything the shipped library/binaries need. Verified.
-- [ ] `gettext` / `gettext-dev` (`packages/gettext.yaml`) -- forked
-      verbatim; repeated transient SSL EOF cloning gnulib's submodule
-      from GitHub (a network blip, not a recipe issue -- Wolfi's own
-      recipe already names a pipeline step "git.savannah.gnu.org is
-      flaky", acknowledging general flakiness here) -- retry in
-      progress.
+- [x] `gettext` / `gettext-dev` (`packages/gettext.yaml`) -- forked
+      verbatim, no recipe deviations needed; repeated transient SSL EOF
+      cloning gnulib's submodule from GitHub (a network blip, not a
+      recipe issue -- Wolfi's own recipe already names a pipeline step
+      "git.savannah.gnu.org is flaky", acknowledging general flakiness
+      here) -- succeeded on retry. Verified.
 - [x] `libmicrohttpd-dev` (`packages/libmicrohttpd.yaml`) -- forked
       verbatim, no deviations needed.
 - [x] `libx11-dev` (`packages/libx11.yaml`) -- forked verbatim, no

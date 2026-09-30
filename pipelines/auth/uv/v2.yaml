@@ -1,0 +1,63 @@
+name: Configure uv to fetch Chainguard Libraries dependencies.
+
+needs:
+  packages:
+    - busybox
+    - uv
+
+inputs:
+  identity:
+    description: the identity to use for Chainguard Libraries
+    default: "720909c9f5279097d847ad02a2f24ba8f59de36a/a49c7fedc33adf69"
+  group:
+    description: the group to use for Chainguard Libraries
+    default: "720909c9f5279097d847ad02a2f24ba8f59de36a"
+  allow-fallback-indexes:
+    description: |
+      use Chainguard Libraries with fallback to other Python package indexes
+      enabled, like PyPI. Only disable this toggle if necessary for Python
+      packages that are not currently available via Chainguard Libraries
+    default: "false"
+  use-underlinked-index:
+    description: |
+      Use the python-underlinkedssl index, which serves Python packages built
+      with underlinked SSL.
+    # TODO(rj.sampson@chainguard.dev): Enable by default. We don't currently
+    # as packages may not depend on libssl and may set no-depends, opting out
+    # of dependency generation that would pick it up
+    default: "false"
+
+pipeline:
+  - uses: auth/libraries
+    with:
+      group: ${{inputs.group}}
+      identity: ${{inputs.identity}}
+
+  - name: Configure uv indexes
+    runs: |
+      set -euo pipefail
+
+      index="python"
+      if [ "${{inputs.allow-fallback-indexes}}" = "true" ]; then
+        index="python-all"
+      fi
+
+      mkdir -p /etc/uv
+      touch /etc/uv/uv.toml
+
+      # The underlinked SSL index must have highest priority so that packages that
+      # are available in it are always installed over packages available in the
+      # default index.
+      if [ "${{inputs.use-underlinked-index}}" = "true" ]; then
+        cat >> /etc/uv/uv.toml <<EOF
+      [[index]]
+      url = "https://libraries.cgr.dev/python-underlinkedssl/simple/"
+
+      EOF
+      fi
+
+      cat >> /etc/uv/uv.toml <<EOF
+      [[index]]
+      url = "https://libraries.cgr.dev/$index/simple/"
+      default = true
+      EOF

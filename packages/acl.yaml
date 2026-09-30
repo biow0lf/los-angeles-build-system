@@ -1,0 +1,147 @@
+package:
+  name: acl
+  version: "2.4.0"
+  epoch: 3 # glibc: 2.43->2.44
+  description: "access control list utilities"
+  copyright:
+    - license: LGPL-2.1-or-later AND GPL-2.0-or-later
+  dependencies:
+    runtime:
+      - merged-lib
+      - wolfi-baselayout
+
+environment:
+  contents:
+    packages:
+      - attr-dev
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext-dev
+      - glibc-2.44-dev
+      - libtool
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.nongnu.org/git/acl.git
+      tag: v${{package.version}}
+      expected-commit: 3589787cd589b34bdd9265936e17190b6d3f17d1
+
+  - runs: |
+      ./autogen.sh
+
+  - runs: |
+      ./configure \
+         --prefix=/usr \
+         --libdir=/usr/lib \
+         --libexecdir=/usr/libexec
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "acl-dev"
+    description: "headers for libacl"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - acl
+        - merged-lib
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: ${{subpkg.name}}
+
+  - name: "libacl1"
+    description: "library for managing access control lists"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libacl.so.* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+          with:
+            packages: libacl1
+    dependencies:
+      runtime:
+        - merged-lib
+        - wolfi-baselayout
+
+  - name: acl-doc
+    description: acl docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+    dependencies:
+      runtime:
+        - merged-lib
+        - wolfi-baselayout
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 16
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          getfacl
+          setfacl
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          getfacl
+          setfacl
+    - uses: test/no-docs
+    - name: Functional ACL test
+      runs: |
+        # Create a test file
+        touch /tmp/testfile
+
+        # Set an ACL granting read access to nobody
+        setfacl -m u:nobody:r /tmp/testfile
+
+        # Verify the ACL was applied using getfacl
+        getfacl /tmp/testfile | grep -F "user:nobody:r--"
+
+        # Verify the file now has an ACL mask entry
+        getfacl /tmp/testfile | grep -F "mask"
+
+        # Test removing the ACL entry
+        setfacl -x u:nobody /tmp/testfile
+
+        # Verify the ACL entry was removed
+        if getfacl /tmp/testfile | grep -F "user:nobody"; then
+          echo "FAIL: ACL entry should have been removed"
+          exit 1
+        fi
+
+        # Test removing all ACLs
+        setfacl -m u:nobody:rw /tmp/testfile
+        setfacl -b /tmp/testfile
+
+        # Verify all extended ACLs were removed
+        if getfacl /tmp/testfile | grep -F "user:nobody"; then
+          echo "FAIL: All ACL entries should have been removed"
+          exit 1
+        fi
+
+        echo "SUCCESS: ACL operations work correctly"

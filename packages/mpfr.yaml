@@ -1,0 +1,67 @@
+package:
+  name: mpfr
+  version: "4.2.2"
+  epoch: 3 # glibc: 2.43->2.44
+  description: "multiple-precision floating-point library"
+  copyright:
+    - license: LGPL-3.0-or-later
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - gmp-dev
+      - libtool
+      - texinfo
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.inria.fr/mpfr/mpfr.git
+      tag: ${{package.version}}
+      expected-commit: eaa57b856d814af32f97d5e5eb129fb986235323
+
+  - runs: ./autogen.sh
+
+  - runs: |
+      ./configure \
+        --host=${{host.triplet.gnu}} \
+        --target=${{host.triplet.gnu}} \
+        --prefix=/usr \
+        --enable-shared
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - name: 'Clean up documentation'
+    runs: |
+      rm -rf ${{targets.destdir}}/usr/share/info
+
+subpackages:
+  - name: "mpfr-dev"
+    description: "mpfr headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - mpfr
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/pkgconf
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 2019
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

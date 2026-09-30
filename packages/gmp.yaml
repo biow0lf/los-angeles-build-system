@@ -1,0 +1,63 @@
+package:
+  name: gmp
+  version: 6.3.0
+  epoch: 10 # glibc: 2.43->2.44
+  description: "a library for arbitrary precision arithmetic"
+  copyright:
+    - license: LGPL-3.0-or-later OR GPL-2.0-or-later
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gcc-14-default
+      - glibc-2.44-dev
+      - m4
+      - texinfo
+      - wolfi-baselayout
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://ftp.gnu.org/gnu/gmp/gmp-${{package.version}}.tar.xz
+      expected-sha256: a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898
+
+  - runs: |
+      ./configure \
+        --host=${{host.triplet.gnu}} \
+        --target=${{host.triplet.gnu}} \
+        --prefix=/usr \
+        --enable-cxx \
+        --with-pic
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - name: 'Clean up documentation'
+    runs: |
+      rm -rf ${{targets.destdir}}/usr/share/info
+
+subpackages:
+  - name: "gmp-dev"
+    description: "gmp headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - gmp
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1186
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

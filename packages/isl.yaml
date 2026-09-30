@@ -1,0 +1,131 @@
+package:
+  name: isl
+  version: "0.28"
+  epoch: 3 # glibc: 2.43->2.44
+  description: "an integer set library for the polyhedral model"
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - gmp-dev
+      - libtool
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://repo.or.cz/isl.git
+      tag: isl-${{package.version}}
+      expected-commit: 6c2b19a0405759f4d31bf48b73492be4a2b1d813
+
+  - runs: |
+      autoreconf -vfi
+
+  - runs: |
+      ./configure \
+        --host=${{host.triplet.gnu}} \
+        --target=${{host.triplet.gnu}} \
+        --prefix=/usr \
+        --enable-shared \
+        --without-gcc-arch
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "isl-dev"
+    description: "integer set library development headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - isl
+    test:
+      environment:
+        contents:
+          packages:
+            - build-base
+            - gmp-dev
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+        - name: Test ISL compile and link from dev package
+          runs: |
+            tee test_dev.c <<'EOF'
+            #include <isl/ctx.h>
+            #include <isl/set.h>
+            #include <stdio.h>
+            int main() {
+                isl_ctx *ctx = isl_ctx_alloc();
+                if (!ctx) {
+                    fprintf(stderr, "FAIL: isl_ctx_alloc returned NULL\n");
+                    return 1;
+                }
+
+                /* Parse a basic set to verify core functionality */
+                isl_set *set = isl_set_read_from_str(ctx, "{ [i] : 0 <= i <= 10 }");
+                if (!set) {
+                    fprintf(stderr, "FAIL: isl_set_read_from_str returned NULL\n");
+                    isl_ctx_free(ctx);
+                    return 1;
+                }
+
+                isl_set_free(set);
+                isl_ctx_free(ctx);
+                printf("SUCCESS: ISL dev compile and link test passed\n");
+                return 0;
+            }
+            EOF
+
+            gcc $(pkg-config --cflags isl) test_dev.c -o test_dev $(pkg-config --libs isl)
+            ./test_dev
+
+update:
+  enabled: true
+  manual: true # originally skipped, let's be careful upgrading this package
+  release-monitor:
+    identifier: 13286
+
+test:
+  environment:
+    contents:
+      packages:
+        - isl-dev
+        - build-base
+        - gmp-dev
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test ISL library compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <isl/ctx.h>
+        #include <stdio.h>
+        int main() {
+            isl_ctx *ctx = isl_ctx_alloc();
+            if (!ctx) {
+                fprintf(stderr, "FAIL: isl_ctx_alloc returned NULL\n");
+                return 1;
+            }
+            isl_ctx_free(ctx);
+            printf("SUCCESS: ISL library is functional\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags isl) test.c -o test $(pkg-config --libs isl)
+        ./test

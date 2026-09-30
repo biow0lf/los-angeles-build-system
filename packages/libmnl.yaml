@@ -1,0 +1,96 @@
+package:
+  name: libmnl
+  version: 1.0.5
+  epoch: 8
+  description: Library for minimalistic netlink
+  copyright:
+    - license: LGPL-2.1-or-later
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.43-dev
+      - glibc-2.44
+      - libtool
+      - linux-headers
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: git://git.netfilter.org/libmnl
+      tag: libmnl-${{package.version}}
+      expected-commit: 493aacf2ec9cc61a5b30d77cd55ec248f033bc74
+
+  - runs: |
+      ./autogen.sh
+
+  - uses: patch
+    with:
+      patches: musl-fix-headers.patch
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --build=$CBUILD \
+        --host=$CHOST \
+        --prefix=/usr \
+        --enable-static
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "libmnl-dev"
+    description: "headers for libmnl"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libmnl
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1663
+
+test:
+  environment:
+    contents:
+      packages:
+        - libmnl-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test libmnl compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <libmnl/libmnl.h>
+        #include <stdio.h>
+        int main() {
+            struct mnl_socket *nl = mnl_socket_open(0);
+            if (nl) {
+                printf("libmnl: socket opened successfully\n");
+                mnl_socket_close(nl);
+            } else {
+                printf("libmnl: socket open returned NULL (expected in test env)\n");
+            }
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libmnl) test.c -o test $(pkg-config --libs libmnl)
+        ./test

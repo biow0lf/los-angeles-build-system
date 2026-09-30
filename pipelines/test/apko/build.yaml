@@ -1,0 +1,79 @@
+name: Build an apko image into an OCI archive
+
+description: |
+  Runs `apko build` for the host architecture and writes an OCI archive
+  that can be fed to `docker load` or `ctr images import` downstream.
+
+  Usage:
+    - uses: test/apko/build
+      with:
+        config: apko.yaml
+        tag: nginx:local
+        output: /tmp/nginx.tar
+
+needs:
+  packages:
+    - apko
+    - curl
+    - jq
+
+inputs:
+  config:
+    description: Path to the apko config file.
+    required: false
+    default: apko.yaml
+  tag:
+    description: Image tag written into the OCI archive (e.g. nginx:local).
+    required: true
+  output:
+    description: Output OCI archive path. If empty, a random path under TMPDIR is used.
+    required: false
+  identity:
+    description: |
+      Chainguard assumable-identity UIDP used to mint an apk.cgr.dev token in
+      CI so apko can pull private presubmit repos (enterprise-presubmit,
+      chainguard-private). Defaults to the elastic presubmit puller identity
+      the test pod's service account is allowed to assume.
+    required: false
+    default: "720909c9f5279097d847ad02a2f24ba8f59de36a/a49c7fedc33adf69"
+
+pipeline:
+  - runs: |
+      set -euo pipefail
+      out="${{inputs.output}}"
+      [ -n "$out" ] || out=$(mktemp -u --suffix=.tar -t apko-image.XXXXXX)
+
+      # Trust whatever keys the test env trusts (via melange --keyring-append),
+      # which live under /etc/apk/keys, so APKs from any presubmit repo (and
+      # @local packages signed by the local melange key) verify.
+      KEYS=""
+      for k in /etc/apk/keys/*.pub; do
+        [ -e "$k" ] && KEYS="$KEYS --keyring-append $k"
+      done
+
+      # Forward all remote repos from the test env so apko can resolve
+      # presubmit packages, production enterprise packages, and public
+      # packages (wolfi-os, extras).
+      REPOS=""
+      for repo in $(grep -oE 'https://[^[:space:]]+' /etc/apk/repositories 2>/dev/null || true); do
+        REPOS="$REPOS --repository-append $repo"
+      done
+
+      # Private repos need auth. Prefer the Makefile-staged local token
+      # (/home/build/.apk_token.txt) so dev workstations skip STS; otherwise
+      # (CI) mint one via the metadata server + Chainguard STS. Guard the STS
+      # call so a 403/failure can't abort under `set -e`.
+      if [ -f /home/build/.apk_token.txt ]; then
+        export HTTP_AUTH="basic:apk.cgr.dev:user:$(cat /home/build/.apk_token.txt)"
+      elif curl -fsS -m 5 -H "Metadata-Flavor: Google" \
+        "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=issuer.enforce.dev" \
+        -o /tmp/cgr-idtoken 2>/dev/null; then
+        token=$(curl -fsS -H "Authorization: Bearer $(cat /tmp/cgr-idtoken)" \
+          "https://issuer.enforce.dev/sts/exchange?aud=apk.cgr.dev&identity=${{inputs.identity}}" \
+          | jq -r '.token // empty') || token=""
+        rm -f /tmp/cgr-idtoken
+        [ -n "$token" ] && export HTTP_AUTH="basic:apk.cgr.dev:user:${token}"
+      fi
+
+      apko build $KEYS $REPOS --arch=$(uname -m) "${{inputs.config}}" "${{inputs.tag}}" "$out"
+      echo "$out"

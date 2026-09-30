@@ -1,0 +1,74 @@
+package:
+  name: mpc
+  version: "1.4.1"
+  epoch: 1 # glibc: 2.43->2.44
+  description: "multiple-precision C library"
+  copyright:
+    - license: LGPL-3.0-or-later
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - gmp-dev
+      - libtool
+      - mpfr-dev
+      - texinfo
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.inria.fr/mpc/mpc.git
+      tag: ${{package.version}}
+      expected-commit: 532a18ae8222f928c58f7ffd1b4f0122062172bd
+
+  - runs: autoreconf -vfi
+
+  - runs: |
+      EGREP=egrep ./configure \
+        --host=${{host.triplet.gnu}} \
+        --target=${{host.triplet.gnu}} \
+        --prefix=/usr \
+        --enable-shared
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "mpc-doc"
+    description: "mpc documentation"
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: "mpc-dev"
+    description: "multiple-precision C library headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - mpc
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1667
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

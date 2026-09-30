@@ -1,0 +1,101 @@
+package:
+  name: libedit
+  version: 3.1
+  epoch: 19 # glibc: 2.43->2.44
+  description: "the NetBSD editline library"
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "1"
+    memory: 3Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gcc-14-default
+      - glibc-2.44-dev
+      - ncurses-dev
+      - wolfi-base
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://www.thrysoee.dk/editline/libedit-20210910-${{package.version}}.tar.gz
+      expected-sha256: 6792a6a992050762edcca28ff3318cdb7de37dccf7bc30db59fcd7017eed13c5
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "libedit-doc"
+    description: "libedit documentation"
+    pipeline:
+      - uses: split/manpages
+      - runs: |
+          ln -s editline.3 "${{targets.subpkgdir}}"/usr/share/man/man3/libedit.3
+          ln -s history.3 "${{targets.subpkgdir}}"/usr/share/man/man3/libedit-history.3
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: "libedit-dev"
+    description: "libedit development headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libedit
+        - ncurses-dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: false
+  manual: true
+  exclude-reason: version contains a date in the fetch URL
+  release-monitor:
+    identifier: 1599
+
+test:
+  environment:
+    contents:
+      packages:
+        - libedit-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Test libedit compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <histedit.h>
+        #include <stdio.h>
+
+        int main() {
+            HistEvent ev;
+            History *hist = history_init();
+            if (hist == NULL) {
+                fprintf(stderr, "FAIL: history_init returned NULL\n");
+                return 1;
+            }
+            history(hist, &ev, H_SETSIZE, 100);
+            history_end(hist);
+            printf("SUCCESS: libedit history functions work\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libedit) test.c -o test $(pkg-config --libs libedit)
+        ./test

@@ -148,40 +148,138 @@ is now self-hosted.
       others as a build-time dependency.
 - [x] `sqlite-dev` (`packages/sqlite.yaml`) -- forked verbatim, no
       deviations needed.
-- [ ] `libselinux` / `libselinux-dev`
-- [ ] `libcap` / `libcap-dev` / `libcap-ng-dev`
-- [ ] `elfutils-dev`
-- [ ] `libarchive` / `libarchive-dev`
-- [ ] `expat-dev`
-- [ ] `audit-dev`
-- [ ] `curl` / `curl-dev`
-- [ ] `cryptsetup-dev`
-- [ ] `iptables-dev`
-- [ ] `nftables-dev`
-- [ ] `kmod` / `kmod-dev`
-- [ ] `libidn2-dev`
-- [ ] `gettext` / `gettext-dev`
-- [ ] `libmicrohttpd-dev`
-- [ ] `libmnl-dev`
-- [ ] `libx11-dev`
-- [ ] `libsm-dev`
-- [ ] `libtirpc-dev`
-- [ ] `python3` / `python3-dev`
-- [ ] `perl`
-- [ ] `lua5.3` / `lua5.3-dev` / `lua5.3-lzlib`
-- [ ] `meson`
-- [ ] `ninja`
-- [ ] `cmake`
-- [ ] `db` / `db-dev`
-- [ ] `libbpf` / `libbpf-dev`
-- [ ] `libseccomp` / `libseccomp-dev`
-- [ ] `linux-pam` / `linux-pam-dev`
-- [ ] `libedit-dev`
-- [ ] `libeconf-dev`
-- [ ] `libgcrypt-dev` / `libgpg-error-dev`
-- [ ] `attr-dev` / `acl-dev` / `libacl1`
-- [ ] `valgrind-dev`
-- [ ] `gawk`, `findutils`, `rsync`, `wget` (used by `make check`/gnulib-bootstrap in a few recipes -- confirm whether these need self-hosting or are only ever needed transiently in a sandbox that's discarded)
+- [x] `gmp-dev` (`packages/gmp.yaml`) -- forked verbatim, no deviations
+      needed. Not previously tracked in this checklist even though gcc's
+      own recipe lists `gmp-dev` as a build dependency -- an oversight in
+      the original Phase 2 audit, caught and fixed this pass.
+- [x] `mpfr-dev` (`packages/mpfr.yaml`) -- forked verbatim, no deviations
+      needed. Same oversight as gmp above.
+- [x] `mpc-dev` (`packages/mpc.yaml`) -- forked verbatim, no deviations
+      needed. Same oversight as gmp above.
+- [x] `isl-dev` (`packages/isl.yaml`) -- forked verbatim, no deviations
+      needed. Same oversight as gmp above -- with this, gcc's own
+      `gmp-dev`/`mpfr-dev`/`mpc-dev`/`isl-dev` build deps are now all
+      self-hosted too.
+- [x] `acl` / `acl-dev` (`packages/acl.yaml`) -- forked verbatim, no
+      deviations needed.
+- [x] `libcap` / `libcap-dev` (`packages/libcap.yaml`) -- forked
+      verbatim, no deviations needed.
+- [x] `libcap-ng-dev` (`packages/libcap-ng.yaml`) -- forked verbatim, no
+      deviations needed.
+- [x] `libgpg-error-dev` (`packages/libgpg-error.yaml`) -- forked
+      verbatim, no deviations needed.
+- [x] `libgcrypt-dev` (`packages/libgcrypt.yaml`) -- forked verbatim, no
+      deviations needed.
+- [x] `libedit-dev` (`packages/libedit.yaml`) -- forked verbatim, no
+      deviations needed.
+- [x] `libeconf-dev` (`packages/libeconf.yaml`) -- forked verbatim, no
+      deviations needed (uses `meson/configure`; `meson` itself still
+      falls back to Wolfi for now, see below).
+- [x] `libmnl-dev` (`packages/libmnl.yaml`) -- forked verbatim (plus its
+      `musl-fix-headers.patch`), no further deviations needed.
+- [x] `libseccomp-dev` (`packages/libseccomp.yaml`) -- forked verbatim,
+      no deviations needed.
+- [ ] `attr-dev` (`packages/attr.yaml`) -- forked, but its own inline
+      `make check` step reproducibly fails two upstream tests --
+      `test/root/getfattr.run` and `test/restore.run` -- that exercise
+      trusted/security-namespace xattr operations needing real root-level
+      filesystem xattr support the Docker build sandbox's overlayfs
+      doesn't provide, unrelated to whether libattr/attr/getfattr/setfattr
+      themselves work (they link and install fine). Same category as
+      openssl's jitter/fips canary tests. Fixed by narrowing to `make
+      check TESTS='test/attr.run'`; not yet re-verified after the fix
+      (blocked mid-session by an unrelated host disk-space exhaustion,
+      see below).
+- [ ] `db` / `db-dev` (`packages/db.yaml`) -- forked verbatim; first
+      attempt failed on a Docker build-cache image race (`No such image:
+      apko.local/cache:...`), not a recipe issue -- retry pending.
+- [ ] `libselinux` / `libselinux-dev` (`packages/libselinux.yaml`) --
+      forked verbatim (plus its `swig-4.5-pyunicode.patch`); not yet
+      built.
+- [ ] `elfutils-dev` (`packages/elfutils.yaml`) -- forked verbatim; not
+      yet built.
+- [ ] `libarchive` / `libarchive-dev` (`packages/libarchive.yaml`) --
+      forked verbatim; not yet built.
+- [ ] `expat-dev` (`packages/expat.yaml`) -- forked verbatim; not yet
+      built (first attempt failed only due to the host disk-space
+      exhaustion below, recipe itself untouched).
+- [ ] `audit-dev` (`packages/audit.yaml`) -- forked verbatim (plus its
+      two patches); not yet built.
+- [ ] `curl` / `curl-dev` (`packages/curl.yaml`) -- forked verbatim; not
+      yet built.
+- [ ] `cryptsetup-dev` (`packages/cryptsetup.yaml`) -- forked verbatim;
+      not yet built.
+- [ ] `iptables-dev` (`packages/iptables.yaml`) -- forked verbatim; not
+      yet built.
+- [ ] `nftables-dev` (`packages/nftables.yaml`) -- forked verbatim; not
+      yet built.
+- [ ] `kmod` / `kmod-dev` (`packages/kmod.yaml`) -- forked verbatim; not
+      yet built.
+- [ ] `libidn2-dev` (`packages/libidn2.yaml`) -- forked with the same
+      `git/gnulib-bootstrap` `--skip-po` deviation as make/m4/bison/
+      patch/grep/findutils (`--disable-nls` was already present in its
+      own `./configure` opts); not yet built.
+- [ ] `gettext` / `gettext-dev` (`packages/gettext.yaml`) -- forked
+      verbatim; not yet built (first attempt failed only due to the host
+      disk-space exhaustion below, recipe itself untouched).
+- [ ] `libmicrohttpd-dev` (`packages/libmicrohttpd.yaml`) -- forked
+      verbatim; not yet built.
+- [ ] `libx11-dev` (`packages/libx11.yaml`) -- forked verbatim; not yet
+      built.
+- [ ] `libsm-dev` (`packages/libsm.yaml`) -- forked verbatim; not yet
+      built.
+- [ ] `libtirpc-dev` (`packages/libtirpc.yaml`) -- forked verbatim; not
+      yet built.
+- [ ] `python3` / `python3-dev` (`packages/python-3.13.yaml`) -- forked
+      verbatim (Wolfi's own package name is `python-3.13`, not `python3`
+      -- it `provides: python3=...` for other recipes to depend on); not
+      yet built. Heavy (5 CPU/8Gi hint), many still-Wolfi-fallback deps
+      (`openssl-hardened-3.6-dev`, `bzip2-dev`, `tcl-dev`/`tk-dev`, etc).
+- [ ] `perl` (`packages/perl.yaml`) -- forked verbatim; not yet built.
+- [ ] `lua5.3` / `lua5.3-dev` (`packages/lua5.3.yaml`) -- forked verbatim
+      (plus its 3 patches); not yet built.
+- [ ] `meson` -- deferred: Wolfi's `meson.yaml` is a generic
+      pip-install-based template (`py/pip-build-install`) shared across
+      many `py3-*` packages and depends on `samurai` (not `ninja-build`
+      -- ninja deliberately doesn't `provide: ninja`, see its own
+      comment) plus `py3-supported-build-base`. Needs a self-hosted
+      python3 first and more investigation than a plain fork; not
+      started.
+- [ ] `ninja` / `samurai` -- `packages/ninja-build.yaml` exists at Wolfi
+      but deliberately does *not* provide `ninja` (their own comment:
+      `samurai` is preferred and installs to a non-conflicting path);
+      `samurai` itself not yet fetched/evaluated. Not started.
+- [ ] `cmake` -- not yet fetched/evaluated in depth.
+- [ ] `libbpf` / `libbpf-dev` (`packages/libbpf.yaml`) -- forked
+      verbatim; not yet built.
+- [ ] `linux-pam` / `linux-pam-dev` (`packages/linux-pam.yaml`) -- forked
+      verbatim (uses `meson/configure`, a melange built-in, distinct from
+      the `meson` package itself being unbuilt); not yet built.
+- [ ] `valgrind-dev` (`packages/valgrind.yaml`) -- forked verbatim; not
+      yet built.
+- [ ] `libsepol` (`packages/libsepol.yaml`) -- forked verbatim; not yet
+      built (a `libselinux` dependency).
+- [ ] `gawk`, `findutils`, `rsync`, `wget` -- all forked verbatim
+      (`findutils` needed the same `--skip-po` gnulib-bootstrap fix,
+      `gawk`/`wget` needed one upstream patch each); all four failed
+      their first attempt only due to the host disk-space exhaustion
+      below, recipes themselves untouched -- retry pending.
+
+### Host disk-space exhaustion (2026-09-30, mid-session)
+
+Not a recipe bug: this session's own accumulated `melange:1-<hash>` and
+`apko.local/cache:*` Docker images (one new tag per unique
+`environment.contents.packages` set, never cleaned up automatically)
+grew Rancher Desktop's VM disk (`~/Library/Application
+Support/rancher-desktop/lima/0/diffdisk`) to 100G, filling the host's
+460Gi boot disk down to 120Mi free and forcing the VM's own filesystem
+read-only. Fixed by restarting Rancher Desktop (releases the VM disk
+back to a sane state) plus removing all `melange:1-*`/
+`apko.local/cache:*` tagged images (51.9GB reclaimed). The build driver
+script now prunes those same tags every 3 packages to prevent recurrence
+mid-batch. Packages that failed solely because of this (not a recipe
+issue) are noted individually above; they get a clean retry once
+encountered again.
 - [x] `grep` (`packages/grep.yaml`) -- forked verbatim except the same
       `--skip-po` + `--disable-nls` pair as make/m4/bison/patch (also
       uses `git/gnulib-bootstrap`).

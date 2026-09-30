@@ -166,41 +166,59 @@ is now self-hosted.
       instead of depending on publish order. Verified locally (doesn't
       break the already-working case).
 - [x] `tcl` / `tcl-dev` / `tcl-doc` (`packages/tcl.yaml`) -- forked from
-      Wolfi with three deviations, discovered through direct debugging
-      of the sqlite CI failure above:
+      Wolfi with several deviations, discovered through an unusually
+      long debugging chase (three separate, stacked bugs) triggered by
+      the sqlite CI failure above:
       1. Version bumped 9.0.4 -> 9.1.0: Wolfi's live repo serves
          `tcl-9.1.0-r0` even though their own `tcl.yaml` source still
          says 9.0.4 (some in-flight/reverted state on their end) -- apk's
          solver picks the highest version across all appended repos
          regardless of repo order, so a same-name 9.0.4 build here could
          never actually win resolution against their live 9.1.0.
-      2. Epoch bumped 0->1: our own initial 9.1.0-r0 build tied exactly
-         against Wolfi's live 9.1.0-r0 -- same resolution-risk category
-         as build-base/wolfi-baselayout (apk doesn't reliably prefer our
-         repo on an exact tie). Confirmed empirically: sqlite kept
-         installing Wolfi's tcl even after ours was published, until the
-         epoch bump made ours win unambiguously.
-      3. The actual root cause, unrelated to either version number
-         above: tclsh's own compiled-in default library search path is
-         `/usr/lib/tcl<major>.<minor>` (from `--prefix` at configure
-         time), but neither Wolfi's recipe nor Tcl's own `make install`
-         actually places `init.tcl` there -- this recipe's own
-         `cp -r ../library/*` step puts it at `/usr/library` instead,
-         with nothing bridging the two. Every consumer of tclsh (sqlite's
+      2. Root cause of the actual init.tcl bug: Tcl 9.1 builds with
+         ZIPFS (confirmed via `-DZIPFS_BUILD=1` and this build's own
+         "creating libtcl9.1.0.zip from libtcl.vfs/tcl_library" step) --
+         the library scripts get bundled INTO `libtcl9.1.so` itself as
+         an embedded zip-backed virtual filesystem, so plain
+         `make install` genuinely never writes anything to
+         `/usr/lib/tcl9.1` on disk (confirmed empirically: absent from
+         the package's own tar listing). tclsh's compiled-in fallback
+         search path is still `/usr/lib/tcl<major>.<minor>`, though, and
+         whatever makes it prefer that fallback over its own embedded
+         zipfs in this sandbox means every consumer of tclsh (sqlite's
          own `./configure` included) failed with "Cannot find a usable
-         init.tcl" as a result -- reproduced identically against Wolfi's
-         live package AND our own first from-source build, ruling out
-         "Wolfi's package is just broken" as the full story. First
-         fixed with a symlink (`/usr/lib/tcl9.1 -> ../library`), which
-         worked for sqlite alone but broke combining with Wolfi's own
-         `tk` package (needed by e.g. `python-3.13`): `tk` owns
-         `/usr/lib/tcl9.1` as a real directory, and apk refuses two
-         packages disagreeing on symlink-vs-directory for the same path
-         ("conflicting file ... has no tar entry"). Switched to an
-         actual `cp -r` instead of a symlink -- both packages then
-         agree it's a plain directory. Verified against sqlite;
-         python-3.13 (the combination that originally surfaced the
-         conflict) retry in progress.
+         init.tcl". Fixed with a real `cp -r` of this recipe's existing
+         `/usr/library` copy to `/usr/lib/tcl${TCL_VERSION%.*}` (not a
+         symlink -- a symlink briefly tried here collides with Wolfi's
+         "tk" package, needed alongside tcl by e.g. python-3.13, which
+         owns that same path as a real directory; apk refuses two
+         packages disagreeing on symlink-vs-directory for one path).
+      3. Epoch bumped 0->1->2: same resolution-risk category as
+         build-base/wolfi-baselayout -- apk's solver doesn't reliably
+         prefer local `packages-out` over an *already-published* repo
+         on an exact version+epoch tie either. This bit twice: first
+         against Wolfi's live `9.1.0-r0` (0->1), then against our OWN
+         already-published `9.1.0-r1` from an earlier commit's CI run
+         (1->2) -- every local rebuild at r1 kept silently losing
+         resolution to that stale published copy, which is why repeated
+         local recipe edits (the init.tcl fix above included) appeared
+         to have zero effect for a long stretch of debugging, and
+         produced a *second*, totally unrelated-looking failure
+         ("conflicting file ... has no tar entry" from apko's own
+         `pkg/tarfs/fs.go`) that took directly reading apko's and
+         melange's source on GitHub to root-cause: it was the stale
+         published copy's symlink-typed tar entry conflicting at
+         install time, not anything wrong with the then-current local
+         recipe content. Confirmed via melange's own `--log-level=debug`
+         output, which showed it fetching tcl from `biow0lf.github.io`
+         (PUBLISHED_REPO) rather than `packages-out` despite
+         `packages-out` being listed first in `--repository-append`
+         order. Verified against sqlite once both fixes (ZIPFS copy +
+         epoch bump) landed together; python-3.13 (the combination that
+         originally surfaced the tk-conflict half of this) confirmed
+         past the tcl/tk install step cleanly too, now blocked on its
+         own unrelated missing-aux-patches issue (see python-3.13's own
+         entry below).
 - [x] `zip` / `zip-doc` (`packages/zip.yaml`) -- forked verbatim (plus
       its 6 Debian hardening/gcc-14 patches), no further deviations
       needed. Pulled in as a `tcl` build dependency.
@@ -318,10 +336,17 @@ is now self-hosted.
 - [x] `libtirpc-dev` (`packages/libtirpc.yaml`) -- forked verbatim, no
       deviations needed. Verified.
 - [ ] `python3` / `python3-dev` (`packages/python-3.13.yaml`) -- forked
-      verbatim (Wolfi's own package name is `python-3.13`, not `python3`
-      -- it `provides: python3=...` for other recipes to depend on); not
-      yet built. Heavy (5 CPU/8Gi hint), many still-Wolfi-fallback deps
+      (Wolfi's own package name is `python-3.13`, not `python3` -- it
+      `provides: python3=...` for other recipes to depend on). Heavy (5
+      CPU/8Gi hint), many still-Wolfi-fallback deps
       (`openssl-hardened-3.6-dev`, `bzip2-dev`, `tcl-dev`/`tk-dev`, etc).
+      This was the exact combination (tcl-dev + tk-dev together) that
+      originally surfaced tcl.yaml's apk-install-time conflict -- see
+      tcl's own entry above; confirmed past that once tcl was fixed.
+      Needed its own 6 upstream patches + a `version-check.py` from
+      Wolfi's `python-3.13/` aux directory, missed on the initial fork
+      (`can't open 0001-gh-146207-...patch: no such file`) -- fetched
+      into `packages/python-3.13/`. Retry in progress.
 - [x] `perl` (`packages/perl.yaml`) -- forked verbatim, no deviations
       needed. Verified.
 - [x] `lua5.3` / `lua5.3-dev` (`packages/lua5.3.yaml`) -- forked
@@ -507,6 +532,10 @@ Tracked here so they aren't forgotten once Phase 2 wraps up.
       does **not** exist anywhere in Wolfi's repo under `ag`,
       `the-silver-searcher`, or any other name found via a full tree
       search. Needs a from-scratch recipe -- not started.
+- [ ] `man-db` (the `man` command and related utilities) -- exists at
+      Wolfi as `man-db.yaml`, forked with the same `--skip-po` +
+      `--disable-nls` gnulib-bootstrap deviation as make/m4/bison/
+      patch/grep/findutils/libidn2; build in progress (next up).
 
 ## Layer 3: the unavoidable seed
 

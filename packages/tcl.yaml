@@ -6,24 +6,33 @@
 # 9.0.4 package here would never actually win resolution against their
 # live 9.1.0. Their 9.1.0-r0 is also the actual root cause we're
 # sidestepping: its tclsh looks for init.tcl under /usr/lib/tcl9.1 but
-# that directory doesn't contain it (a packaging bug on their end,
-# confirmed via "Cannot find a usable init.tcl" breaking every
-# downstream package -- sqlite included -- whose ./configure needs a
-# working tclsh). Building 9.1.0 from source ourselves produces a
-# tclsh and init.tcl from the exact same build, so they can't
-# mismatch the way Wolfi's live package's apparently do.
+# that directory doesn't contain it (confirmed via "Cannot find a
+# usable init.tcl" breaking every downstream package -- sqlite included
+# -- whose ./configure needs a working tclsh). Root cause: Tcl 9.1
+# builds with ZIPFS (library scripts get bundled INTO libtcl9.1.so
+# itself as an embedded zip filesystem), so plain "make install"
+# genuinely never writes anything to /usr/lib/tcl9.1 on disk at all --
+# see the pipeline's own comment below for the fix (a real directory
+# copy there, not a symlink -- a symlink collides with Wolfi's "tk"
+# package in combinations that need both).
 #
-# Also epoch bumped 0->1: Wolfi's live package is also "9.1.0-r0", an
-# exact version+epoch tie against our own initial epoch 0 build -- same
-# resolution-risk category as build-base/wolfi-baselayout (see
-# BOOTSTRAP.md): apk's solver doesn't reliably prefer our repo on an
-# exact tie, and empirically it kept picking Wolfi's broken one even
-# with ours published. Bumping epoch past theirs makes ours win
-# unambiguously.
+# Also epoch bumped 0->1->2: same resolution-risk category as
+# build-base/wolfi-baselayout (see BOOTSTRAP.md) -- apk's solver
+# doesn't reliably prefer local packages-out over an already-published
+# repo on an exact version+epoch tie. This bit twice: first against
+# Wolfi's live "9.1.0-r0" (epoch 0->1), then against our OWN already-
+# published "9.1.0-r1" from an earlier commit's CI run -- every local
+# rebuild at r1 kept silently losing resolution to that stale published
+# copy (still carrying the original symlink-based bug), which is why
+# repeated local recipe edits appeared to have zero effect. Confirmed
+# via melange's own --log-level=debug output, which showed it fetching
+# tcl from biow0lf.github.io (PUBLISHED_REPO) rather than packages-out
+# despite packages-out being listed first in --repository-append order.
+# Bumping epoch again makes the local rebuild win unambiguously.
 package:
   name: tcl
   version: "9.1.0"
-  epoch: 1
+  epoch: 2
   description: The Tcl scripting language
   copyright:
     - license: TCL
@@ -87,22 +96,19 @@ pipeline:
       cp -r ../library/* ${{targets.destdir}}/usr/library
       rm ${{targets.destdir}}/usr/library/license.terms
 
-      # Deviation from Wolfi's own recipe: tclsh's own compiled-in default
-      # TCL_LIBRARY (baked in from --prefix at configure time) is
-      # /usr/lib/tcl${TCL_VERSION%.*} (e.g. /usr/lib/tcl9.1), but neither
-      # this recipe's own "cp -r ../library" step above nor Tcl's own
-      # "make install" actually places init.tcl there -- confirmed by
-      # inspecting our own built package's contents, init.tcl only exists
-      # under /usr/library. Without this, every downstream consumer of
-      # tclsh (sqlite's own ./configure included) fails with "Cannot find
-      # a usable init.tcl". A symlink bridged the two locations cheaply
-      # at first, but Wolfi's own "tk" package (needed alongside tcl by
-      # e.g. python-3.13, still Wolfi-sourced since we don't self-host
-      # it yet) also owns /usr/lib/tcl${TCL_VERSION} as a real
-      # directory -- apk refuses two packages disagreeing on
-      # symlink-vs-directory for the same path ("conflicting file ...
-      # has no tar entry"). A real copy (not a symlink) avoids the type
-      # mismatch: both packages agree it's a plain directory.
+      # Deviation from Wolfi's own recipe: Tcl 9.1 builds with ZIPFS
+      # (confirmed via -DZIPFS_BUILD=1 and this build's own "creating
+      # libtcl9.1.0.zip from libtcl.vfs/tcl_library" step) -- the
+      # library scripts get bundled INTO libtcl9.1.so itself as an
+      # embedded zip-backed virtual filesystem, so plain "make install"
+      # genuinely does not write anything to /usr/lib/tcl9.1 on disk
+      # (confirmed empirically: it's absent from this package's own
+      # tar listing). tclsh's compiled-in fallback search path is still
+      # /usr/lib/tcl${TCL_VERSION%.*}, though, and whatever makes it
+      # prefer that fallback over its own embedded zipfs in this sandbox
+      # (Docker/QEMU) means every downstream consumer of tclsh (sqlite's
+      # own ./configure included) fails with "Cannot find a usable
+      # init.tcl" without a real copy there too.
       cp -r ${{targets.destdir}}/usr/library ${{targets.destdir}}/usr/lib/tcl${TCL_VERSION%.*}
 
   - uses: strip

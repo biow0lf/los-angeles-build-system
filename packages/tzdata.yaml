@@ -1,0 +1,55 @@
+package:
+  name: tzdata
+  version: "2026d"
+  epoch: 0
+  description: "Timezone data provided by IANA"
+  copyright:
+    - license: CC-PDDC
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - tzutils
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: d633fe7ed3de8e00ce7cac991376a064a1373bb1
+      repository: https://github.com/eggert/tz
+      tag: ${{package.version}}
+
+  - runs: |
+      make cc="${CC:-gcc}" CFLAGS="$CFLAGS -DHAVE_STDINT_H=1" TZDIR="/usr/share/zoneinfo"
+
+  - runs: |
+      _timezones="africa antarctica asia australasia europe northamerica southamerica etcetera backward factory"
+
+      zic -b fat -y ./yearistype -d "${{targets.destdir}}"/usr/share/zoneinfo $_timezones
+      zic -b fat -y ./yearistype -d "${{targets.destdir}}"/usr/share/zoneinfo/right -L leapseconds $_timezones
+      zic -b fat -y ./yearistype -d "${{targets.destdir}}"/usr/share/zoneinfo -p America/New_York
+
+      install -m444 -t "${{targets.destdir}}"/usr/share/zoneinfo iso3166.tab zone1970.tab zone.tab
+      install -Dm644 leap-seconds.list "${{targets.destdir}}"/usr/share/zoneinfo
+
+update:
+  enabled: true
+  github:
+    identifier: eggert/tz
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - tzutils
+  pipeline:
+    - runs: |
+        set -euo pipefail
+        echo "[INFO] Calculating many different GMT timezone offsets...this may take several minutes...."
+        for tz in $(find /usr/share/zoneinfo/ -type f); do
+          zdump -v "$tz" | grep -F "gmtoff="
+        done

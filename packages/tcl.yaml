@@ -1,0 +1,145 @@
+# Deviation from Wolfi's own recipe: version bumped from 9.0.4 to 9.1.0.
+# Wolfi's live repo currently serves tcl 9.1.0-r0 (even though their own
+# tcl.yaml source still says 9.0.4 -- some in-flight/reverted state on
+# their end), and apk's solver picks the highest available version
+# across all appended repos regardless of repo order, so a same-name
+# 9.0.4 package here would never actually win resolution against their
+# live 9.1.0. Their 9.1.0-r0 is also the actual root cause we're
+# sidestepping: its tclsh looks for init.tcl under /usr/lib/tcl9.1 but
+# that directory doesn't contain it (a packaging bug on their end,
+# confirmed via "Cannot find a usable init.tcl" breaking every
+# downstream package -- sqlite included -- whose ./configure needs a
+# working tclsh). Building 9.1.0 from source ourselves produces a
+# tclsh and init.tcl from the exact same build, so they can't
+# mismatch the way Wolfi's live package's apparently do.
+#
+# Also epoch bumped 0->1: Wolfi's live package is also "9.1.0-r0", an
+# exact version+epoch tie against our own initial epoch 0 build -- same
+# resolution-risk category as build-base/wolfi-baselayout (see
+# BOOTSTRAP.md): apk's solver doesn't reliably prefer our repo on an
+# exact tie, and empirically it kept picking Wolfi's broken one even
+# with ours published. Bumping epoch past theirs makes ours win
+# unambiguously.
+package:
+  name: tcl
+  version: "9.1.0"
+  epoch: 1
+  description: The Tcl scripting language
+  copyright:
+    - license: TCL
+  dependencies:
+    runtime:
+      - sqlite-libs
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - sqlite-dev
+      - tzdata
+      - zip
+      - zlib-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      expected-sha256: 536c45543f64d6eb11832d97ba3494aacff046fbc5040273bd55258d0e448ff1
+      uri: https://downloads.sourceforge.net/project/tcl/Tcl/${{package.version}}/tcl${{package.version}}-src.tar.gz
+
+  - uses: autoconf/configure
+    with:
+      dir: unix
+      opts: |
+        --host=${{host.triplet.gnu}} \
+        --build=${{host.triplet.gnu}} \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --mandir=/usr/share/man \
+        --localstatedir=/var \
+        --with-system-sqlite \
+        --enable-64bit
+
+  - runs: |
+      # Set LD_LIBRARY_PATH so that tclsh can find libtcl9.0.so when
+      # configuring bundled packages (e.g. thread) during the build.
+      export LD_LIBRARY_PATH="$(pwd)/unix"
+      make -C unix -j$(nproc) V=1
+
+  - runs: |
+      cd unix
+      # export LD_LIBRARY_PATH="$_builddir"
+      make INSTALL_ROOT=${{targets.destdir}} install install-private-headers
+
+      export TCL_VERSION=${{package.version}}
+
+      ln -sf tclsh${TCL_VERSION%.*} ${{targets.destdir}}/usr/bin/tclsh
+      install -Dm644 ../license.terms ${{targets.destdir}}/usr/share/licenses/tcl/LICENSE
+      chmod u+w ${{targets.destdir}}/usr/lib/libtcl${TCL_VERSION%.*}.so
+
+      # tclsh requires a number of files to be in place, copied over from the
+      # libraries directory. Otherwise core functionality will not work.
+      mkdir -p ${{targets.destdir}}/usr/library
+      cp -r ../library/* ${{targets.destdir}}/usr/library
+      rm ${{targets.destdir}}/usr/library/license.terms
+
+      # Deviation from Wolfi's own recipe: tclsh's own compiled-in default
+      # TCL_LIBRARY (baked in from --prefix at configure time) is
+      # /usr/lib/tcl${TCL_VERSION%.*} (e.g. /usr/lib/tcl9.1), but neither
+      # this recipe's own "cp -r ../library" step above nor Tcl's own
+      # "make install" actually places init.tcl there -- confirmed by
+      # inspecting our own built package's contents, init.tcl only exists
+      # under /usr/library. Without this, every downstream consumer of
+      # tclsh (sqlite's own ./configure included) fails with "Cannot find
+      # a usable init.tcl". A symlink bridges the two locations cheaply.
+      ln -s ../library ${{targets.destdir}}/usr/lib/tcl${TCL_VERSION%.*}
+
+  - uses: strip
+
+subpackages:
+  - name: tcl-doc
+    pipeline:
+      - uses: split/manpages
+    description: tcl manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: tcl-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - tcl
+        - tzdata
+    description: tcl dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 4941
+
+test:
+  pipeline:
+    - name: "Return and validate version"
+      runs: |
+        # tclsh does not respond to a --version from the command line. This is
+        # a work-around: https://stackoverflow.com/questions/9200108/get-the-version-of-tcl-from-the-command-line
+        ACTUAL_VERSION=$(echo 'puts [info patchlevel];exit 0' | tclsh)
+
+        if [ "$ACTUAL_VERSION" != ${{package.version}} ]; then
+            echo "Error: Tcl version is $ACTUAL_VERSION, expected ${{package.version}}"
+            exit 1
+        fi
+    - name: "Check tclsh can execute a basic command"
+      runs: |
+        echo 'puts "Hello, Tcl!"; exit 0' | tclsh | grep -F "Hello, Tcl!"
+    - uses: test/tw/ldd-check

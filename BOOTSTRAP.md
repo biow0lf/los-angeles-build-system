@@ -147,7 +147,51 @@ is now self-hosted.
       shape). Referenced by gcc.yaml, binutils.yaml, openssl.yaml, and
       others as a build-time dependency.
 - [x] `sqlite-dev` (`packages/sqlite.yaml`) -- forked verbatim, no
-      deviations needed.
+      deviations needed. Its own `./configure` is Tcl-based (autosetup)
+      and needs a working `tcl-dev` at build time -- this surfaced a
+      real, separate bug the hard way: CI failed with "Cannot find a
+      usable init.tcl" days after this recipe was first verified working
+      locally. Root cause and fix: see `packages/tcl.yaml`'s own comment
+      below.
+- [x] `tcl` / `tcl-dev` / `tcl-doc` (`packages/tcl.yaml`) -- forked from
+      Wolfi with three deviations, discovered through direct debugging
+      of the sqlite CI failure above:
+      1. Version bumped 9.0.4 -> 9.1.0: Wolfi's live repo serves
+         `tcl-9.1.0-r0` even though their own `tcl.yaml` source still
+         says 9.0.4 (some in-flight/reverted state on their end) -- apk's
+         solver picks the highest version across all appended repos
+         regardless of repo order, so a same-name 9.0.4 build here could
+         never actually win resolution against their live 9.1.0.
+      2. Epoch bumped 0->1: our own initial 9.1.0-r0 build tied exactly
+         against Wolfi's live 9.1.0-r0 -- same resolution-risk category
+         as build-base/wolfi-baselayout (apk doesn't reliably prefer our
+         repo on an exact tie). Confirmed empirically: sqlite kept
+         installing Wolfi's tcl even after ours was published, until the
+         epoch bump made ours win unambiguously.
+      3. The actual root cause, unrelated to either version number
+         above: tclsh's own compiled-in default library search path is
+         `/usr/lib/tcl<major>.<minor>` (from `--prefix` at configure
+         time), but neither Wolfi's recipe nor Tcl's own `make install`
+         actually places `init.tcl` there -- this recipe's own
+         `cp -r ../library/*` step puts it at `/usr/library` instead,
+         with nothing bridging the two. Every consumer of tclsh (sqlite's
+         own `./configure` included) failed with "Cannot find a usable
+         init.tcl" as a result -- reproduced identically against Wolfi's
+         live package AND our own first from-source build, ruling out
+         "Wolfi's package is just broken" as the full story. Fixed with
+         one added symlink (`/usr/lib/tcl9.1 -> ../library`) after the
+         existing install step. Verified end-to-end: rebuilding sqlite
+         against this fixed tcl-dev succeeds completely.
+- [x] `zip` / `zip-doc` (`packages/zip.yaml`) -- forked verbatim (plus
+      its 6 Debian hardening/gcc-14 patches), no further deviations
+      needed. Pulled in as a `tcl` build dependency.
+- [x] `tzdata` (`packages/tzdata.yaml`) -- forked verbatim. Its own
+      `tzutils` build dependency (provides `zic`/`zdump`) turned out to
+      be a subpackage of Wolfi's `glibc-2.44.yaml` that our own forked
+      `glibc-2.44.yaml` doesn't carry (we forked before Wolfi added it,
+      or pruned it along the way) -- rather than risk touching our
+      already-verified/published glibc recipe for this, `tzutils` is
+      left on the Wolfi fallback for now, tracked here as a known gap.
 - [x] `gmp-dev` (`packages/gmp.yaml`) -- forked verbatim, no deviations
       needed. Not previously tracked in this checklist even though gcc's
       own recipe lists `gmp-dev` as a build dependency -- an oversight in
@@ -357,6 +401,29 @@ older prebuilt Go release).
       exercise apko's general image-build capability -- this is testing
       apko itself, not a build-time dependency of our system, so left
       as-is for now.
+
+## Phase 5 -- user-facing CLI tools requested for the shipped system
+
+Not build-time dependencies of anything else in this repo -- these are
+tools the user wants available in the final image/environment itself.
+Tracked here so they aren't forgotten once Phase 2 wraps up.
+
+- [ ] `git` -- exists at Wolfi as `git.yaml`, forkable the same way as
+      every other Phase 1/2 package. Note: our own build environments
+      already install a `git` build dependency for every `git-checkout`
+      pipeline step across this whole repo (currently Wolfi's), so
+      self-hosting this one is unusually high-leverage -- it removes
+      Wolfi from nearly every recipe's build environment at once, same
+      shape as `build-base` itself.
+- [ ] `gh` (GitHub CLI) -- exists at Wolfi as `gh.yaml`, forkable
+      verbatim; not yet fetched/evaluated.
+- [ ] `mcfly` (shell history search, https://github.com/cantino/mcfly)
+      -- does **not** exist anywhere in Wolfi's repo (confirmed via a
+      full tree search, no `mcfly*.yaml` at any path) -- Wolfi doesn't
+      package it at all. Needs a from-scratch recipe written against
+      mcfly's own upstream source (it's a Rust project, so this also
+      needs a self-hosted Rust toolchain first -- not started, not
+      tracked elsewhere in this file yet).
 
 ## Layer 3: the unavoidable seed
 

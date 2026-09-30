@@ -315,9 +315,10 @@ is now self-hosted.
       -- it `provides: python3=...` for other recipes to depend on); not
       yet built. Heavy (5 CPU/8Gi hint), many still-Wolfi-fallback deps
       (`openssl-hardened-3.6-dev`, `bzip2-dev`, `tcl-dev`/`tk-dev`, etc).
-- [ ] `perl` (`packages/perl.yaml`) -- forked verbatim; not yet built.
-- [ ] `lua5.3` / `lua5.3-dev` (`packages/lua5.3.yaml`) -- forked verbatim
-      (plus its 3 patches); not yet built.
+- [x] `perl` (`packages/perl.yaml`) -- forked verbatim, no deviations
+      needed. Verified.
+- [x] `lua5.3` / `lua5.3-dev` (`packages/lua5.3.yaml`) -- forked
+      verbatim (plus its 3 patches), no deviations needed. Verified.
 - [ ] `meson` -- deferred: Wolfi's `meson.yaml` is a generic
       pip-install-based template (`py/pip-build-install`) shared across
       many `py3-*` packages and depends on `samurai` (not `ninja-build`

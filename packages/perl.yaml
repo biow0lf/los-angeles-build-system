@@ -1,0 +1,238 @@
+package:
+  name: perl
+  version: "5.44.0"
+  epoch: 1 # glibc: 2.43->2.44
+  description: "Larry Wall's Practical Extraction and Report Language"
+  copyright:
+    - license: Artistic-1.0-Perl OR GPL-1.0-or-later
+  resources:
+    cpu: "4"
+    memory: 8Gi
+  annotations:
+    toolchain: true
+    toolchain-pkgs: ${{package.name}}-dev
+  test-resources:
+    cpu: "1"
+    memory: 3Gi
+
+environment:
+  contents:
+    packages:
+      - bison
+      - build-base
+      - busybox
+      - bzip2-dev
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - wolfi-baselayout
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Perl/perl5.git
+      tag: v${{package.version}}
+      expected-commit: e634cc838fb1785dfafb5d13b52807ea16b5c52c
+
+  # Delete bundled zlib and bzip2 sources
+  - runs: |
+      rm -rf cpan/Compress-Raw-Zlib/zlib-src
+      rm -rf cpan/Compress-Raw-Bzip2/bzip2-src
+      sed -i '/\(bzip2\|zlib\)-src/d' MANIFEST
+
+  - name: 'Configure perl'
+    runs: |
+      BUILD_ZLIB=0
+      BUILD_BZIP2=0
+      BZIP2_LIB=/usr/lib
+      BZIP2_INCLUDE=/usr/include
+
+      export BUILD_ZLIB BUILD_BZIP2 BZIP2_LIB BZIP2_INCLUDE
+
+      ./Configure -des \
+         -Dcc=gcc \
+         -Dcccdlflags='-fPIC' \
+         -Dccdlflags='-rdynamic' \
+         -Dprefix=/usr \
+         -Dprivlib=/usr/share/perl5/core_perl \
+         -Darchlib=/usr/lib/perl5/core_perl \
+         -Dvendorprefix=/usr \
+         -Dvendorlib=/usr/share/perl5/vendor_perl \
+         -Dvendorarch=/usr/lib/perl5/vendor_perl \
+         -Dsiteprefix=/usr/local \
+         -Dsitelib=/usr/local/share/perl5/site_perl \
+         -Dsitearch=/usr/local/lib/perl5/site_perl \
+         -Dlocincpth=' ' \
+         -Duselargefiles \
+         -Dusethreads \
+         -Duseshrplib \
+         -Dd_semctl_semun \
+         -Dman1dir=/usr/share/man/man1 \
+         -Dman3dir=/usr/share/man/man3 \
+         -Dinstallman1dir=/usr/share/man/man1 \
+         -Dinstallman3dir=/usr/share/man/man3 \
+         -Dman1ext='1' \
+         -Dman3ext='3pm' \
+         -Dcf_by='Wolfi GNU/Linux' \
+         -Ud_csh
+
+      make depend
+      make -j$(nproc) libperl.so
+      make -j$(nproc)
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      find "${{targets.destdir}}" -name '.*' -delete
+      chmod -R +w "${{targets.destdir}}"
+
+  - uses: strip
+
+subpackages:
+  - name: miniperl
+    description: "miniperl"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          install -Dm755 miniperl "${{targets.subpkgdir}}"/usr/bin/
+    test:
+      pipeline:
+        - runs: |
+            miniperl --version
+            miniperl -le 'print q~Hello Wolfi!~'
+            miniperl --help
+
+  - name: "perl-dev"
+    description: "libperl development headers"
+    pipeline:
+      - runs: |
+          _privlib=/usr/share/perl5/core_perl
+          _archlib=/usr/lib/perl5/core_perl
+
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mkdir -p "${{targets.subpkgdir}}"/$_privlib
+          mkdir -p "${{targets.subpkgdir}}"/$_archlib
+
+          mv "${{targets.destdir}}"/$_archlib/Devel "${{targets.subpkgdir}}"/$_archlib/
+          mv "${{targets.destdir}}"/$_privlib/Encode "${{targets.subpkgdir}}"/$_privlib/
+
+          for i in h2xs perlivp enc2xs xsubpp; do
+            mv "${{targets.destdir}}"/usr/bin/$i "${{targets.subpkgdir}}"/usr/bin/
+          done
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - perl
+        - perl-utils
+    test:
+      pipeline:
+        - runs: |
+            enc2xs version
+            enc2xs help
+            perlivp --version
+            perlivp --help
+            xsubpp version
+            xsubpp help
+
+  - name: "perl-doc"
+    description: "perl documentation"
+    pipeline:
+      - uses: split/manpages
+      - runs: |
+          for file in $(find "${{targets.destdir}}" -name "*.pod"); do
+            file=${file#${{targets.destdir}}/}
+            mkdir -p "${{targets.subpkgdir}}"/${file%/*}
+            mv "${{targets.destdir}}"/$file "${{targets.subpkgdir}}"/$file
+          done
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: "perl-utils"
+    description: "various utilities included with perl"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+
+          for i in corelist cpan encguess libnetcfg h2ph instmodsh json_pp perlbug perlthanks piconv pl2pm prove ptar \
+            ptardiff ptargrep shasum splain zipdetails
+          do
+            mv "${{targets.destdir}}"/usr/bin/$i "${{targets.subpkgdir}}"/usr/bin/
+          done
+    dependencies:
+      runtime:
+        - perl
+    test:
+      pipeline:
+        - runs: |
+            set -euo pipefail
+            corelist --version
+            corelist help
+            # Must echo yes ini order to answer their prompt:
+            # CPAN.pm requires configuration, but most of it can be done automatically.
+            # If you answer 'no' below, you will enter an interactive dialog for each
+            # configuration option instead.
+            # Would you like to configure as much as possible automatically? [yes]
+            echo "yes" | cpan -v
+            # Uses a pager now, which we can't handle at this time
+            #cpan -h
+            encguess --version
+            h2ph --version
+            # Does not properly exit after running
+            #h2ph --help
+            json_pp -v
+            libnetcfg --version
+            libnetcfg --help
+            perlbug --version
+            perlbug --help
+            perlthanks --version
+            perlthanks --help
+            piconv --version
+            piconv --help
+            prove --version
+            # Uses a pager now, which we can't handle at this time
+            #ptargrep --help
+            shasum --version
+            shasum --help
+            zipdetails --version
+            zipdetails --help
+
+update:
+  enabled: true
+  # Perl uses even releases to signify stability, lets ignore odd releases
+  ignore-regex-patterns:
+    - ^\d+\.(\d*[13579])\.\d+$
+  github:
+    identifier: Perl/perl5
+    use-tag: true
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/hardening-check
+      with:
+        args: --nofortify --nostackprotector
+    - runs: |
+        perl --help
+        perl${{package.version}} --version
+        perl${{package.version}} --help
+        pod2html version
+        pod2html help
+        pod2man --help
+        streamzip --version
+        streamzip --help
+    - runs: |
+        perl --version
+    - runs: |
+        cat <<'EOF' >> /tmp/hello.pl
+        #!/usr/bin/perl
+        # Modules used
+        use strict;
+        use warnings;
+
+        # Print function
+        print("Hello Wolfi!\n");
+        EOF
+
+        perl /tmp/hello.pl
+    - uses: test/tw/ldd-check

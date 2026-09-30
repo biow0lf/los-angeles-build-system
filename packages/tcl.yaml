@@ -95,8 +95,15 @@ pipeline:
       # inspecting our own built package's contents, init.tcl only exists
       # under /usr/library. Without this, every downstream consumer of
       # tclsh (sqlite's own ./configure included) fails with "Cannot find
-      # a usable init.tcl". A symlink bridges the two locations cheaply.
-      ln -s ../library ${{targets.destdir}}/usr/lib/tcl${TCL_VERSION%.*}
+      # a usable init.tcl". A symlink bridged the two locations cheaply
+      # at first, but Wolfi's own "tk" package (needed alongside tcl by
+      # e.g. python-3.13, still Wolfi-sourced since we don't self-host
+      # it yet) also owns /usr/lib/tcl${TCL_VERSION} as a real
+      # directory -- apk refuses two packages disagreeing on
+      # symlink-vs-directory for the same path ("conflicting file ...
+      # has no tar entry"). A real copy (not a symlink) avoids the type
+      # mismatch: both packages agree it's a plain directory.
+      cp -r ${{targets.destdir}}/usr/library ${{targets.destdir}}/usr/lib/tcl${TCL_VERSION%.*}
 
   - uses: strip
 

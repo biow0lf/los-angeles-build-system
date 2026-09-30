@@ -190,10 +190,17 @@ is now self-hosted.
          own `./configure` included) failed with "Cannot find a usable
          init.tcl" as a result -- reproduced identically against Wolfi's
          live package AND our own first from-source build, ruling out
-         "Wolfi's package is just broken" as the full story. Fixed with
-         one added symlink (`/usr/lib/tcl9.1 -> ../library`) after the
-         existing install step. Verified end-to-end: rebuilding sqlite
-         against this fixed tcl-dev succeeds completely.
+         "Wolfi's package is just broken" as the full story. First
+         fixed with a symlink (`/usr/lib/tcl9.1 -> ../library`), which
+         worked for sqlite alone but broke combining with Wolfi's own
+         `tk` package (needed by e.g. `python-3.13`): `tk` owns
+         `/usr/lib/tcl9.1` as a real directory, and apk refuses two
+         packages disagreeing on symlink-vs-directory for the same path
+         ("conflicting file ... has no tar entry"). Switched to an
+         actual `cp -r` instead of a symlink -- both packages then
+         agree it's a plain directory. Verified against sqlite;
+         python-3.13 (the combination that originally surfaced the
+         conflict) retry in progress.
 - [x] `zip` / `zip-doc` (`packages/zip.yaml`) -- forked verbatim (plus
       its 6 Debian hardening/gcc-14 patches), no further deviations
       needed. Pulled in as a `tcl` build dependency.
@@ -493,6 +500,13 @@ Tracked here so they aren't forgotten once Phase 2 wraps up.
       in Wolfi's repo (confirmed via a full tree search). Needs a
       from-scratch recipe -- not started, not yet investigated what its
       own build dependencies are.
+- [ ] `aws-cli-2` (AWS CLI) -- Wolfi's own package name is `aws-cli-2`,
+      not `awscli`/`aws-cli`; forkable verbatim; not yet
+      fetched/evaluated.
+- [ ] `ag` (the Silver Searcher, fast code-search grep replacement) --
+      does **not** exist anywhere in Wolfi's repo under `ag`,
+      `the-silver-searcher`, or any other name found via a full tree
+      search. Needs a from-scratch recipe -- not started.
 
 ## Layer 3: the unavoidable seed
 

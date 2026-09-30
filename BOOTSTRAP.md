@@ -142,6 +142,12 @@ is now self-hosted.
       verbatim, no deviations needed.
 - [x] `pcre2-dev` (`packages/pcre2.yaml`) -- forked verbatim, no
       deviations needed.
+- [x] `openssf-compiler-options` (`packages/openssf-compiler-options.yaml`)
+      -- forked verbatim (a vendored-static-files package, no upstream
+      source build at all: gcc/clang hardening spec files and a
+      gcc-wrapper script, matching wolfi-baselayout's own vendored-files
+      shape). Referenced by gcc.yaml, binutils.yaml, openssl.yaml, and
+      others as a build-time dependency.
 - [ ] `sqlite-dev`
 - [ ] `libselinux` / `libselinux-dev`
 - [ ] `libcap` / `libcap-dev` / `libcap-ng-dev`

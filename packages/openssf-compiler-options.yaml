@@ -1,0 +1,146 @@
+package:
+  name: openssf-compiler-options
+  version: 20250904
+  epoch: 10
+  description: "Compiler Options Hardening Guide for C and C++"
+  url: https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html
+  copyright:
+    - license: CC-BY-4.0
+  resources:
+    cpu: "2"
+    memory: 12Gi
+
+vars:
+  # When a new clang version is added here, remember to update the
+  # package tests to depend on this new version.
+  clang-major-versions: 14 15 16 17 18 19 20 21 22
+  gcc-major-versions: 11 12 13 14 15 16
+  # Although the GCC packages install more binaries under /usr/bin/
+  # than those that are listed here, only these binaries actually
+  # honor/support spec files.
+  gcc-wrapper-bins: c++ g++ gcc gfortran
+
+environment:
+  contents:
+    packages:
+      - busybox
+
+pipeline:
+  - name: Install
+    runs: |
+      mkdir -p "${{targets.destdir}}"
+      cp -r etc usr "${{targets.destdir}}"
+      for i in ${{vars.clang-major-versions}}; do
+        ln -s clang "${{targets.destdir}}"/etc/clang-$i
+      done
+      cd ${{targets.destdir}}/usr/local/bin
+      ln -s gcc-wrapper cc
+      ln -s gcc-wrapper cpp
+      for suffix in ${{vars.gcc-major-versions}}; do
+        ln -s gcc-wrapper cpp-$suffix
+      done
+      for app in ${{vars.gcc-wrapper-bins}}; do
+        ln -s gcc-wrapper $app
+        ln -s gcc-wrapper ${{host.triplet.gnu}}-$app
+        for suffix in ${{vars.gcc-major-versions}}; do
+          ln -s gcc-wrapper $app-$suffix
+          ln -s gcc-wrapper ${{host.triplet.gnu}}-$app-$suffix
+        done
+      done
+
+test:
+  environment:
+    contents:
+      packages:
+        - clang-22
+        - gcc
+        - gcc-11
+        - gcc-12
+        - gcc-13
+        - gcc-14
+        - gcc-15
+        - gfortran
+        - gfortran-14
+        - gfortran-15
+  pipeline:
+    - uses: test/compiler/hardening-check
+      with:
+        cc: clang-22
+    - uses: test/compiler/hardening-check
+      with:
+        cc: gcc
+    - uses: test/compiler/hardening-check
+      with:
+        cc: gcc-11
+    - uses: test/compiler/hardening-check
+      with:
+        cc: gcc-12
+    - uses: test/compiler/hardening-check
+      with:
+        cc: gcc-13
+    - uses: test/compiler/hardening-check
+      with:
+        cc: gcc-14
+    - uses: test/compiler/hardening-check
+      with:
+        cc: gcc-15
+    - uses: test/compiler/fortran-hardening-check
+      with:
+        fc: gfortran
+    - uses: test/compiler/fortran-hardening-check
+      with:
+        fc: gfortran-14
+    - uses: test/compiler/fortran-hardening-check
+      with:
+        fc: gfortran-15
+    - name: Ensure gcc_s is linked
+      runs: |
+        # Use a minimal valid C program so gcc exits 0 and we can check its verbose output
+        echo 'int main(void){return 0;}' > foo.c
+        gcc -v foo.c &>stderr.log
+        grep -F "gcc_s" stderr.log
+    - name: Ensure etc specfile is used
+      runs: |
+        touch /etc/gcc_spec_file
+        gcc -v 2>&1 | grep -F "/etc/gcc_spec_file"
+        rm /etc/gcc_spec_file
+    - name: Ensure GCC_SPEC_FILE is used over "/etc/gcc_spec_file"
+      runs: |
+        touch /etc/gcc_spec_file
+        GCC_SPEC_FILE="/dev/null" gcc -v 2>&1 | grep -F "/dev/null"
+        rm /etc/gcc_spec_file
+    - name: Ensure an explicit -mbranch-protection overrides the aarch64 default
+      runs: |
+        # The spec supplies -mbranch-protection=standard only when the build
+        # names none. Appended unconditionally it outranks the build's own
+        # choice, so a kernel asking for pac-ret gets BTI pads ahead of its
+        # ftrace patch sites and arm64 ftrace fails at boot.
+        [ "$(uname -m)" = aarch64 ] || exit 0
+        echo 'void (*h)(void); void f(void){ if (h) h(); }' > bp.c
+        for cc in gcc gcc-11 gcc-12 gcc-13 gcc-14 gcc-15; do
+          $cc -### -c bp.c 2>&1 | grep -F -- "-mbranch-protection=standard"
+          for bp in pac-ret none; do
+            ! $cc -### -c -mbranch-protection=$bp bp.c 2>&1 | grep -F -- "-mbranch-protection=standard"
+          done
+        done
+    - name: Ensure gcc-wrapper is linked for all applicable binaries
+      runs: |
+        check_gcc_wrapper_link() {
+          fname="$1"
+
+          readlink "${fname}" | grep -F "gcc-wrapper"
+        }
+
+        for bin in ${{vars.gcc-wrapper-bins}}; do
+          check_gcc_wrapper_link "/usr/local/bin/${bin}"
+          check_gcc_wrapper_link "/usr/local/bin/${{host.triplet.gnu}}-${bin}"
+
+          for suffix in ${{vars.gcc-major-versions}}; do
+            check_gcc_wrapper_link "/usr/local/bin/${bin}-${suffix}"
+            check_gcc_wrapper_link "/usr/local/bin/${{host.triplet.gnu}}-${bin}-${suffix}"
+          done
+        done
+
+update:
+  enabled: false
+  exclude-reason: This is an internal package and we update it manually.

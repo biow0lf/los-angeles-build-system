@@ -375,10 +375,14 @@ encountered again.
       uses `git/gnulib-bootstrap`).
 - [x] `file` / `libmagic` / `libmagic-dev` (`packages/file.yaml`) --
       forked verbatim, no deviations needed.
-- [ ] `gnutar` -- heavier than most (325 upstream cherry-picks in Wolfi's
-      recipe, custom `./bootstrap` rather than `git/gnulib-bootstrap`,
-      git.savannah.gnu.org flakiness already flagged in Wolfi's own
-      recipe). Deferred separately from the simpler batch above.
+- [x] `gnutar` (`packages/gnutar.yaml`) -- forked verbatim, no
+      deviations needed. Heavier than most (325 upstream cherry-picks,
+      all melange-native -- no aux files needed; a custom `./bootstrap`
+      rather than `git/gnulib-bootstrap`), but built clean: all 325
+      cherry-picks applied, and the one apparent stall (gnulib's own
+      full-history clone sitting on the same log line for ~20 minutes)
+      was confirmed still actively transferring data (`docker stats`
+      showed 500+MB received), not hung. Verified.
 - [x] `xz` / `xz-dev` (`packages/xz.yaml`) -- forked verbatim, no
       deviations needed (uses `./autogen.sh --no-po4a`, its own upstream
       translation-skip flag, not `git/gnulib-bootstrap`).

@@ -216,8 +216,27 @@ ship in the final image; building from source needs a self-hosted Go
 toolchain first (its own bootstrap-seed problem, since Go bootstraps from an
 older prebuilt Go release).
 
-- [ ] Go toolchain
-- [ ] `melange` (built from https://github.com/chainguard-dev/melange)
+- [x] Go toolchain (`packages/go.yaml`) -- loosely forked from Wolfi's
+      go-1.27.yaml (named plain `go`, not `go-1.27`: we only need one
+      stream, not their multi-version scheme), keeping only the two
+      generically-useful upstream patches (always-emit-ldflags,
+      telemetry-default-off) and dropping the two Chainguard-branding-only
+      ones. Modern Go can't bootstrap from C source anymore -- building
+      any Go release needs an *already-working* Go (or gccgo) as
+      GOROOT_BOOTSTRAP. Per user decision (go.dev binary, not a gccgo
+      bootstrap), fetches one official prebuilt release (go1.26.8, direct
+      from go.dev, not Wolfi/Alpine) as a one-time seed -- exactly
+      parallel to how gcc's first self-hosted build used Wolfi's
+      build-base as its one-time seed. Every future Go release bootstraps
+      from our own previous build via `PUBLISHED_REPO`, not from go.dev
+      again. Verified locally via `make build-package PKG=go`: fetch
+      checksum-verified, `make.bash` built successfully using the seed
+      ("Building Go cmd/dist using /home/build/bootstrap-seed/go.
+      (go1.26.8 linux/amd64)"), producing go-1.27.1-r0.apk and
+      go-doc-1.27.1-r0.apk.
+- [ ] `melange` (built from https://github.com/chainguard-dev/melange) --
+      needs `bubblewrap` as a new runtime dependency and melange's own
+      `go/build` pipeline; not yet attempted.
 - [ ] `apko` (built from https://github.com/chainguard-dev/apko)
 
 ## Layer 3: the unavoidable seed

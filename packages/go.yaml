@@ -1,0 +1,202 @@
+# Self-hosted Go toolchain, needed to build melange/apko from source
+# (see BOOTSTRAP.md Phase 4). Loosely forked from Wolfi's go-1.27.yaml,
+# but deviates in a few deliberate ways:
+#
+# - Named plain "go" rather than "go-1.27": Wolfi maintains several
+#   parallel Go release streams for different customers' pinned
+#   toolchain needs. We only need one, so there's no reason to carry
+#   their multi-stream naming/versioning scheme.
+#
+# - Bootstrap seed: Wolfi's go-1.27.yaml lists "go-1.27" (itself) in its
+#   own environment.contents.packages -- modern Go can't build itself
+#   from C source anymore (that requirement was dropped around Go 1.5),
+#   so building any Go release needs an *already-working* Go binary (or
+#   gccgo) as GOROOT_BOOTSTRAP. Wolfi's own chain bootstraps each release
+#   from their own immediately-prior build, going back to some historical
+#   seed we can't see or reuse. For our first-ever Go build, we fetch one
+#   official prebuilt release directly from go.dev (upstream, not
+#   Wolfi/Alpine) as a one-time seed -- exactly parallel to how gcc's
+#   first self-hosted build used Wolfi's build-base as its one-time seed
+#   (see packages/gcc.yaml, packages/build-base.yaml). Every Go release
+#   after this one bootstraps from our own previous self-hosted build,
+#   not from go.dev again.
+#
+# - Dropped two of Wolfi's four patches: 0001 (always emit ldflags
+#   version info -- a real upstream-quality fix, kept) and 0002 (default
+#   telemetry off instead of local -- a sensible default, kept) are
+#   generic improvements and applied here too. 0003/0004 (emit a
+#   "ChainguardGoPackage" build-info field) are pure Chainguard-branding
+#   patches with no functional purpose for us, so they're skipped rather
+#   than carried along unused.
+#
+# - Dropped the FIPS-140 module zip removal step and the standalone
+#   asm/cover tool subpackages: both address concerns specific to
+#   Chainguard's own product lineup (a separate "-fips" hardened image
+#   variant; standalone tool packages for their customers) that don't
+#   apply to us building Go purely to compile melange/apko.
+package:
+  name: go
+  version: "1.27.1"
+  epoch: 0
+  description: "the Go programming language"
+  cpe:
+    vendor: golang
+    product: go
+  copyright:
+    - license: BSD-3-Clause
+  dependencies:
+    provides:
+      - go=${{package.full-version}}
+  resources:
+    cpu: "2"
+    memory: 8Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  environment:
+    GOAMD64: v2
+    GOARM64: v8.0
+  contents:
+    packages:
+      - bash
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://go.dev/dl/go1.26.8.linux-amd64.tar.gz
+      expected-sha256: d0f743b33e8d8945e6b1f432edd15785c70507121d6e2a723b21285eddf8b57b
+      extract: false
+
+  - name: Extract the bootstrap seed
+    runs: |
+      mkdir -p bootstrap-seed
+      tar -xzf go1.26.8.linux-amd64.tar.gz -C bootstrap-seed
+      rm go1.26.8.linux-amd64.tar.gz
+
+  - uses: git-checkout
+    with:
+      repository: https://github.com/golang/go
+      tag: go${{package.version}}
+      expected-commit: 862c888e612ac346c7c4d99c9392bdfd265f33b0
+
+  - runs: |
+      git -c "user.name=Melange Build" -c "user.email=melange-build@localhost" am \
+        0001-go-cmd-go-always-emit-ldflags-version-information.patch \
+        0002-go-Change-default-telemetry-setting-from-local-to-of.patch
+
+  - runs: |
+      export GOROOT_BOOTSTRAP="$PWD/bootstrap-seed/go"
+      cd src
+      ./make.bash -v
+
+  - runs: |
+      mkdir -p "${{targets.destdir}}"/usr/bin "${{targets.destdir}}"/usr/lib/go/bin "${{targets.destdir}}"/usr/share/doc/go
+
+      for bin in go gofmt; do
+        install -Dm755 bin/$bin "${{targets.destdir}}"/usr/lib/go/bin/$bin
+        ln -s /usr/lib/go/bin/$bin "${{targets.destdir}}"/usr/bin/
+      done
+
+      cp -a pkg lib "${{targets.destdir}}"/usr/lib/go/
+      cp -r doc misc "${{targets.destdir}}"/usr/share/doc/go
+      cp -a src "${{targets.destdir}}"/usr/lib/go/
+      cp -p go.env "${{targets.destdir}}"/usr/lib/go/go.env
+
+      rm -rf "${{targets.destdir}}"/usr/lib/go/pkg/obj
+      rm -rf "${{targets.destdir}}"/usr/lib/go/pkg/bootstrap
+      rm -rf "${{targets.destdir}}"/usr/lib/go/pkg/tool/*/api
+      rm -rf "${{targets.destdir}}"/usr/lib/go/pkg/*/cmd
+      rm -rf "${{targets.destdir}}"/usr/lib/go/pkg/tool/*/api
+      rm -rf "${{targets.destdir}}"/usr/lib/go/pkg/tool/*/go_bootstrap
+      rm -rf "${{targets.destdir}}"/usr/lib/go/src/cmd/dist/dist
+
+      # Remove tests from /usr/lib/go/src, not needed at runtime
+      find "${{targets.destdir}}"/usr/lib/go/src \( -type f -a -name "*_test.go" \) \
+        -exec rm -rf \{\} \+
+      find "${{targets.destdir}}"/usr/lib/go/src \( -type d -a -name "testdata" \) \
+        -exec rm -rf \{\} \+
+      find "${{targets.destdir}}"/usr/lib/go/src \( -type f -a -name "*.rc" \) \
+        -exec rm -rf \{\} \+
+      find "${{targets.destdir}}"/usr/lib/go/src \( -type f -a -name "*.bat" \) \
+        -exec rm -rf \{\} \+
+      find "${{targets.destdir}}"/usr/lib/go/src \( -type f -a -name "*.pem" \) \
+        -exec rm -rf \{\} \+
+      # Stray lockfiles
+      find "${{targets.destdir}}"/usr/lib/go/src \( -type f -a -name "go.mod" \) \
+        -exec rm -rf \{\} \+
+      find "${{targets.destdir}}"/usr/lib/go/src \( -type f -a -name "go.sum" \) \
+        -exec rm -rf \{\} \+
+      find "${{targets.destdir}}"/usr/lib/go/src \( -type f -a -name "package.json" \) \
+        -exec rm -rf \{\} \+
+
+  - uses: strip
+
+subpackages:
+  - name: "go-doc"
+    description: "go documentation"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/share
+          mv "${{targets.destdir}}"/usr/share/doc "${{targets.subpkgdir}}"/usr/share/
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: golang/go
+    strip-prefix: go
+    tag-filter-prefix: go1.27
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - git
+  pipeline:
+    - name: Test Go installation
+      runs: |
+        cat <<EOF > hello.go
+        package main
+        import "fmt"
+        func main() {
+            fmt.Println("Hello World")
+        }
+        EOF
+
+        go fmt hello.go
+        go run hello.go | grep -F "Hello World"
+        go version
+        go help
+        gofmt --help
+    - name: Test Go with cgo
+      runs: |
+        cat <<EOF > hello_cgo.go
+        package main
+        /*
+        #include <stdlib.h>
+        #include <stdio.h>
+        void hello() {
+            printf("%s\\n", "Hello from cgo!");
+            fflush(stdout);
+        }
+        */
+        import "C"
+        func main() {
+            C.hello()
+        }
+        EOF
+
+        go run hello_cgo.go | grep -F "Hello from cgo!"
+    - name: Test building a regular project
+      runs: |
+        go build -o hello hello.go
+        ./hello | grep -F "Hello World"

@@ -122,7 +122,7 @@ is now self-hosted.
 
 ## Phase 2 -- *-dev header/library packages
 
-- [~] `openssl` / `openssl-*-dev` (`packages/openssl.yaml`) -- forked
+- [x] `openssl` / `openssl-*-dev` (`packages/openssl.yaml`) -- forked
       verbatim (plus its FIPS/TLS patches and `ca.cnf`/`openssl.cnf`),
       except the "throw-away canary tests of jitter and non-validated
       fips" step is skipped: its own output is never shipped (`rm -rf`'d
@@ -133,9 +133,7 @@ is now self-hosted.
       same category as systemd's `-Dbpf-framework=false`. The *real*
       build's own `make tests` run (same suite, real ./Configure flags)
       passed cleanly, confirming the canary's jitter/fips-specific flags
-      were the actual trigger, not the test files themselves. Build
-      confirmed in progress as of this checklist update; mark solid once
-      the rebuilt package is verified.
+      were the actual trigger, not the test files themselves.
 - [x] `zlib` / `zlib-dev` (`packages/zlib.yaml`) -- forked verbatim (plus
       its `gz_write` patch), no further deviations needed.
 - [x] `ncurses` / `ncurses-dev` (`packages/ncurses.yaml`) -- forked

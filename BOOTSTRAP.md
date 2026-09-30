@@ -467,6 +467,24 @@ Tracked here so they aren't forgotten once Phase 2 wraps up.
       mcfly's own upstream source (it's a Rust project, so this also
       needs a self-hosted Rust toolchain first -- not started, not
       tracked elsewhere in this file yet).
+- [ ] `bat` (syntax-highlighting `cat` replacement) -- exists at Wolfi
+      as `bat.yaml`, forkable verbatim; a Rust project, same Rust
+      toolchain dependency as `mcfly` above; not yet fetched/evaluated.
+- [ ] `wayland` (display-server protocol library) -- exists at Wolfi as
+      `wayland.yaml`, forkable verbatim; not yet fetched/evaluated.
+- [ ] `midnight-commander` (Midnight Commander) -- note: Wolfi's own
+      `mc.yaml` is a different tool entirely (the MinIO Client, an S3
+      object storage CLI) -- the actual file manager lives at
+      `midnight-commander.yaml`. Forkable verbatim; not yet
+      fetched/evaluated.
+- [ ] `labwc` (wlroots-based Wayland window manager) -- does **not**
+      exist anywhere in Wolfi's repo (confirmed via a full tree search).
+      Needs a from-scratch recipe; depends on `wayland` (above) plus
+      wlroots, which Wolfi also doesn't package -- not started.
+- [ ] `noctalia` (Wayland desktop shell) -- does **not** exist anywhere
+      in Wolfi's repo (confirmed via a full tree search). Needs a
+      from-scratch recipe -- not started, not yet investigated what its
+      own build dependencies are.
 
 ## Layer 3: the unavoidable seed
 

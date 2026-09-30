@@ -146,7 +146,8 @@ is now self-hosted.
       gcc-wrapper script, matching wolfi-baselayout's own vendored-files
       shape). Referenced by gcc.yaml, binutils.yaml, openssl.yaml, and
       others as a build-time dependency.
-- [ ] `sqlite-dev`
+- [x] `sqlite-dev` (`packages/sqlite.yaml`) -- forked verbatim, no
+      deviations needed.
 - [ ] `libselinux` / `libselinux-dev`
 - [ ] `libcap` / `libcap-dev` / `libcap-ng-dev`
 - [ ] `elfutils-dev`
@@ -190,8 +191,9 @@ is now self-hosted.
       recipe, custom `./bootstrap` rather than `git/gnulib-bootstrap`,
       git.savannah.gnu.org flakiness already flagged in Wolfi's own
       recipe). Deferred separately from the simpler batch above.
-- [ ] `xz` / `xz-dev` -- recipe forked (`packages/xz.yaml`), not yet
-      build-verified.
+- [x] `xz` / `xz-dev` (`packages/xz.yaml`) -- forked verbatim, no
+      deviations needed (uses `./autogen.sh --no-po4a`, its own upstream
+      translation-skip flag, not `git/gnulib-bootstrap`).
 
 ## Phase 3 -- builder image tooling (`docker/builder/Dockerfile`)
 

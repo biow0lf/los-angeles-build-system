@@ -1,0 +1,161 @@
+package:
+  name: sqlite
+  version: "3.53.4"
+  epoch: 2 # glibc: 2.43->2.44
+  description: "C library which implements an SQL database engine"
+  copyright:
+    - license: blessing
+  resources:
+    cpu: "2"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - readline-dev
+      - tcl-dev
+
+# ref: https://www.sqlite.org/download.html
+# For version 3.X.Y the filename encoding is 3XX0Y00.
+# 3.40.1 => 3400100 => https://www.sqlite.org/2022/sqlite-autoconf-3400100.tar.gz
+var-transforms:
+  - from: ${{package.version}}
+    # transform 3.47.0 to 3470000 and 3.47.2 to 3470200 and similarly
+    match: ^(\d+)\.(\d+)\.(\d+)$
+    # replace here is appending 0 minor version and then appending two more zeros after patch version.
+    replace: ${1}${2}0${3}00
+    to: sqlite-download-version
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://www.sqlite.org/2026/sqlite-src-${{vars.sqlite-download-version}}.zip
+      expected-sha256: d18fa15aec74d8c17e1463f861095adc01b5ad190256acb4f91d22f0368d232b
+      extract: false
+
+  - name: Extract ZIP & move it to the normal place
+    runs: |
+      unzip sqlite-src-${{vars.sqlite-download-version}}.zip -d ../
+      mv ../sqlite-src-${{vars.sqlite-download-version}}/* .
+
+  - name: Configure
+    runs: |
+      _amalgamation="-DSQLITE_ENABLE_FTS4 \
+        -DSQLITE_ENABLE_FTS3_PARENTHESIS \
+        -DSQLITE_ENABLE_FTS3 \
+        -DSQLITE_ENABLE_FTS5 \
+        -DSQLITE_ENABLE_COLUMN_METADATA \
+        -DSQLITE_SECURE_DELETE \
+        -DSQLITE_ENABLE_UNLOCK_NOTIFY \
+        -DSQLITE_ENABLE_RTREE \
+        -DSQLITE_ENABLE_GEOPOLY \
+        -DSQLITE_USE_URI \
+        -DSQLITE_ENABLE_DBSTAT_VTAB \
+        -DSQLITE_MAX_VARIABLE_NUMBER=250000 \
+        -DSQLITE_ENABLE_SESSION \
+        -DSQLITE_ENABLE_PREUPDATE_HOOK"
+      export CFLAGS="$CFLAGS $_amalgamation"
+
+      ./configure \
+         --host=${{host.triplet.gnu}} \
+         --prefix=/usr \
+         --soname=legacy \
+         --enable-threadsafe \
+         --enable-readline \
+         --enable-static \
+         --enable-load-extension \
+         --enable-fts3
+
+      make "-j$(nproc)" V=1
+      make tclextension-install
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "sqlite-dev"
+    description: "sqlite headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - sqlite
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: "sqlite-doc"
+    description: "sqlite documentation"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: "sqlite-libs"
+    description: "sqlite library"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr
+          mv "${{targets.destdir}}"/usr/lib "${{targets.subpkgdir}}"/usr/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 4877
+
+test:
+  environment:
+    contents:
+      packages:
+        - tcl
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: "version check"
+      runs: |
+        sqlite3 --version
+        sqlite3 help
+    - name: "basic test"
+      runs: |
+        sqlite3 /tmp/test.db "CREATE TABLE test (id INT, name TEXT); INSERT INTO test VALUES (1, 'hello'); SELECT * FROM test;"
+        for i in $(seq 2 100); do
+          sqlite3 /tmp/test.db "INSERT INTO test VALUES ($i, '$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 13)');"
+        done
+        sqlite3 /tmp/test.db "SELECT * FROM test;"
+    - name: "more sqlite tests"
+      runs: |
+        sqlite3 -header -csv /tmp/test.db "SELECT * FROM test LIMIT 5;"
+        sqlite3 /tmp/test.db "SELECT * FROM test WHERE id > 50 LIMIT 5;"
+        sqlite3 /tmp/test.db ".schema"
+        sqlite3 /tmp/test.db "SELECT COUNT(*) FROM test;"
+    - name: "Jamon's Test"
+      runs: |
+        cat << EOF | tclsh
+        puts [info tclversion]
+        package require sqlite3
+
+        # Open sqlite.db file
+        sqlite3 db sqlite.db
+
+        # Create users table
+        db eval {CREATE TABLE IF NOT EXISTS users (firstname TEXT, lastname TEXT);}
+
+        # Show schema
+        puts "Database schema:"
+        puts [db eval {SELECT sql FROM sqlite_master WHERE type='table';}]
+
+        # Close database
+        db close
+        EOF

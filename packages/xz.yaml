@@ -1,0 +1,146 @@
+package:
+  name: xz
+  version: "5.8.4"
+  epoch: 0 # glibc: 2.43->2.44
+  description: "Library and CLI tools for XZ and LZMA compressed files"
+  copyright:
+    - license: GPL-3.0-or-later
+  resources:
+    cpu: "3"
+    memory: 7Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext-dev
+      - glibc-2.44-dev
+      - libtool
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/tukaani-project/xz
+      tag: v${{package.version}}
+      expected-commit: d3e650e63c110e830fd5391e7f8b45df0b91d3da
+
+  - name: Generate
+    runs: |
+      ./autogen.sh --no-po4a
+
+  - name: Configure
+    runs: |
+      ./configure \
+         --host=${{host.triplet.gnu}} \
+         --target=${{host.triplet.gnu}} \
+         --prefix=/usr \
+         --datadir=/usr/share
+
+  - uses: autoconf/make
+
+  - name: Run upstream test suite
+    runs: make check
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "xz-dev"
+    description: "xz headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - xz
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: "xz-doc"
+    description: "xz documentation"
+    pipeline:
+      - uses: split/manpages
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/share/doc
+          mv ${{targets.destdir}}/usr/share/doc/xz ${{targets.subpkgdir}}/usr/share/doc/xz
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          lzma
+          lzfgrep
+          xzcat
+          lzmore
+          lzmadec
+          lzgrep
+          xzless
+          xzgrep
+          xzegrep
+          unlzma
+          lzdiff
+          xzcmp
+          lzless
+          xzfgrep
+          lzcat
+          xzmore
+          lzcmp
+          unxz
+          xzdec
+          xzdiff
+          lzmainfo
+          lzegrep
+          xz
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          lzcat
+          lzcmp
+          lzdiff
+          lzegrep
+          lzfgrep
+          lzgrep
+          lzless
+          lzma
+          lzmadec
+          lzmainfo
+          lzmore
+          unlzma
+          unxz
+          xz
+          xzcat
+          xzcmp
+          xzdec
+          xzdiff
+          xzegrep
+          xzfgrep
+          xzgrep
+          xzless
+          xzmore
+    - name: Basic xz compression and decompression test
+      runs: |
+        echo "Hello, Wolfi!" > data.txt
+        cp data.txt data.bak
+        xz -z data.txt
+        xz -t data.txt.xz
+        xz -d data.txt.xz
+        cmp data.txt data.bak
+    - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: tukaani-project/xz
+    strip-prefix: v

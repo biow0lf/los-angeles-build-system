@@ -234,10 +234,31 @@ older prebuilt Go release).
       ("Building Go cmd/dist using /home/build/bootstrap-seed/go.
       (go1.26.8 linux/amd64)"), producing go-1.27.1-r0.apk and
       go-doc-1.27.1-r0.apk.
-- [ ] `melange` (built from https://github.com/chainguard-dev/melange) --
-      needs `bubblewrap` as a new runtime dependency and melange's own
-      `go/build` pipeline; not yet attempted.
-- [ ] `apko` (built from https://github.com/chainguard-dev/apko)
+- [x] `bubblewrap` (`packages/bubblewrap.yaml`) -- forked verbatim from
+      Wolfi; new runtime dependency of `melange` (unprivileged sandboxing
+      used by melange's own build pipeline). Needed one missing custom
+      test pipeline, `pipelines/test/tw/shell-syntax-check.yaml`, fetched
+      from Wolfi. Still pulls `libcap-dev`/`meson` from Wolfi's fallback
+      repo (not yet self-hosted themselves -- Phase 2 work).
+- [x] `melange` (`packages/melange.yaml`, built from
+      https://github.com/chainguard-dev/melange) -- forked from Wolfi with
+      one deviation: `go-package: go-1.27` -> `go-package: go` throughout,
+      matching our single-stream Go naming. Needed `pipelines/bump.yaml`
+      (Wolfi's custom omnibump-based dependency-bump pipeline, used here
+      to bump a transitive grpc module for a CVE) fetched from Wolfi;
+      confirmed `go/build` is a genuine melange-native built-in pipeline
+      (searched Wolfi's entire `pipelines/` tree, no such file exists
+      there). Built successfully with our own self-hosted `go` as
+      GOROOT -- no gccgo, no external Go binary beyond `go.yaml`'s own
+      one-time seed.
+- [x] `apko` (`packages/apko.yaml`, built from
+      https://github.com/chainguard-dev/apko) -- same `go-package: go`
+      deviation as melange. Built successfully with our own self-hosted
+      `go`. Note: apko's own test step builds a throw-away image using
+      `https://apk.cgr.dev/chainguard` (a live Chainguard repo) to
+      exercise apko's general image-build capability -- this is testing
+      apko itself, not a build-time dependency of our system, so left
+      as-is for now.
 
 ## Layer 3: the unavoidable seed
 

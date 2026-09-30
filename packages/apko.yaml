@@ -1,0 +1,75 @@
+# Deviation from Wolfi's own recipe: go-package changed from "go-1.27"
+# to plain "go" throughout, matching our own single-stream Go package
+# name (see packages/go.yaml's own comment for why we don't carry
+# Wolfi's multi-stream naming).
+package:
+  name: apko
+  version: "1.4.5"
+  epoch: 0 # CVE-2026-78662
+  description: Build OCI images using APK directly without Dockerfile
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - ca-certificates-bundle
+  resources:
+    cpu: "1"
+    memory: 7Gi
+
+environment:
+  contents:
+    packages:
+      - go
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/chainguard-dev/apko
+      tag: v${{package.version}}
+      expected-commit: 739e7ce3f675ffb232e16849b51ff93657f1570c
+
+  - uses: go/build
+    with:
+      go-package: go
+      output: apko
+      packages: .
+      ldflags: |
+        -buildid= \
+        -X sigs.k8s.io/release-utils/version.gitVersion=$(git describe --dirty --tags --always) \
+        -X sigs.k8s.io/release-utils/version.gitCommit=$(git rev-parse HEAD) \
+        -X sigs.k8s.io/release-utils/version.gitTreeState=$(shell git diff --quiet >/dev/null 2>&1 || echo "dirty" || echo "clean") \
+        -X sigs.k8s.io/release-utils/version.buildDate=$(date -u -d "@$SOURCE_DATE_EPOCH" +'%Y-%m-%dT%H:%M:%SZ')
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: apko
+        version: ${{package.version}}
+    - uses: test/tw/help-check
+      with:
+        bins: apko
+    - runs: |
+        cat <<'EOF' >> /tmp/wolfi-base.yaml
+        contents:
+          repositories:
+            - https://apk.cgr.dev/chainguard
+          packages:
+            - wolfi-base
+
+        cmd: /bin/sh -l
+
+        archs:
+        - x86_64
+        - aarch64
+        EOF
+
+        apko build  /tmp/wolfi-base.yaml test test.tar
+
+update:
+  enabled: true
+  github:
+    identifier: chainguard-dev/apko
+    strip-prefix: v
+    use-tag: true

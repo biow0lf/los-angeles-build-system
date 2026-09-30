@@ -1,0 +1,72 @@
+# Deviation from Wolfi's own recipe: go-package changed from "go-1.27"
+# to plain "go" throughout, matching our own single-stream Go package
+# name (see packages/go.yaml's own comment for why we don't carry
+# Wolfi's multi-stream naming).
+package:
+  name: melange
+  version: "0.61.1"
+  epoch: 0 # CVE-2026-84445
+  description: build APKs from source code
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - bubblewrap
+      - ca-certificates-bundle
+  resources:
+    cpu: "2"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: d062cf25ce373bf8045d79b9897878ab207d8d36
+      repository: https://github.com/chainguard-dev/melange
+      tag: v${{package.version}}
+
+  - uses: bump
+    with:
+      deps: |-
+        google.golang.org/grpc@v1.83.2
+
+  - uses: go/build
+    with:
+      output: melange
+      packages: .
+      ldflags: |
+        -buildid= \
+        -X sigs.k8s.io/release-utils/version.gitVersion=$(git describe --dirty --tags --always) \
+        -X sigs.k8s.io/release-utils/version.gitCommit=$(git rev-parse HEAD) \
+        -X sigs.k8s.io/release-utils/version.gitTreeState=$(shell git diff --quiet >/dev/null 2>&1 || echo "dirty" || echo "clean") \
+        -X sigs.k8s.io/release-utils/version.buildDate=$(date -u -d@${SOURCE_DATE_EPOCH} +'%Y-%m-%dT%H:%M:%SZ')
+      go-package: go
+
+update:
+  enabled: true
+  github:
+    identifier: chainguard-dev/melange
+    strip-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: melange
+    - uses: test/tw/help-check
+      with:
+        bins: melange
+    - runs: |
+        # Generate a signing key pair to exercise melange's keygen subcommand
+        melange keygen /tmp/melange-test.rsa
+        test -f /tmp/melange-test.rsa
+        test -f /tmp/melange-test.rsa.pub
+
+environment:
+  contents:
+    packages:
+      - go

@@ -1,0 +1,140 @@
+package:
+  name: expat
+  version: "2.8.5"
+  epoch: 0 # glibc: 2.43->2.44
+  cpe:
+    vendor: libexpat_project
+    product: libexpat
+  description: "XML SAX Parser library written in C"
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake
+      - glibc-2.44-dev
+      - samurai
+
+var-transforms:
+  - from: ${{package.version}}
+    match: \.
+    replace: _
+    to: mangled-version
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libexpat/libexpat
+      tag: R_${{vars.mangled-version}}
+      expected-commit: 4b3f0b06f39fb5529cead381694f8929901bc273
+
+  - runs: |
+      cmake -B build -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DCMAKE_BUILD_TYPE=Release \
+        expat
+      cmake --build build
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: strip
+
+subpackages:
+  - name: "expat-dev"
+    description: "expat headers"
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: "libexpat1"
+    description: "libexpat shared library"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr
+          mv "${{targets.destdir}}"/usr/lib "${{targets.subpkgdir}}"/usr/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: expat-doc
+    description: expat docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/emptypackage
+
+update:
+  enabled: true
+  github:
+    identifier: libexpat/libexpat
+    strip-prefix: R_
+    tag-filter-prefix: R_
+  version-separator: "_"
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - expat-dev
+        - posix-libc-utils
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: xmlwf
+    - uses: test/tw/help-check
+      with:
+        bins: xmlwf
+    - name: "Compile and run simple XML parsing test"
+      runs: |
+        cat > test.c << EOF
+        #include <expat.h>
+        #include <stdio.h>
+        #include <string.h>
+
+        static void XMLCALL
+        start_element(void *userData, const XML_Char *name, const XML_Char **atts) {
+          printf("Element: %s\n", name);
+        }
+
+        int main() {
+          XML_Parser parser = XML_ParserCreate(NULL);
+          XML_SetElementHandler(parser, start_element, NULL);
+
+          const char *xml = "<root><child>Test</child></root>";
+          if (XML_Parse(parser, xml, strlen(xml), 1) == XML_STATUS_ERROR) {
+            printf("Error: %s\n", XML_ErrorString(XML_GetErrorCode(parser)));
+            return 1;
+          }
+
+          XML_ParserFree(parser);
+          return 0;
+        }
+        EOF
+
+        gcc -o test test.c -lexpat
+        ./test
+    - uses: test/tw/ldd-check
+    - name: "Verify XML parsing functionality"
+      runs: |
+        cat > test.xml << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <root>
+          <child>Test Content</child>
+        </root>
+        EOF
+
+        xmlwf test.xml
+    - uses: test/no-docs

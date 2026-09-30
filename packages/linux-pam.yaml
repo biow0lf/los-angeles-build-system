@@ -1,0 +1,214 @@
+# Deviation from Wolfi's own recipe: none needed in the YAML itself --
+# this recipe's own post-install "for pam_conf in *.pamd" step needs
+# the *.pamd/pam-faillock.conf files from Wolfi's own linux-pam/ aux
+# directory (missed on the initial fork; fetched into packages/linux-pam/
+# to fix a "mv: can't rename '*.pamd': No such file or directory" build
+# failure -- the glob matched nothing without them).
+package:
+  name: linux-pam
+  version: "1.7.3"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Linux PAM (Pluggable Authentication Modules for Linux)
+  copyright:
+    - license: BSD-3-Clause
+  checks:
+    disabled:
+      - setuidgid
+  dependencies:
+    runtime:
+      - merged-usrsbin
+      - wolfi-baselayout
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - flex-dev
+      - gettext-dev
+      - glibc-2.44-dev
+      - libselinux-dev
+      - libtool
+      - meson
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/linux-pam/linux-pam
+      expected-commit: 28fce1fd55b003fec90f34e5bc785e9439b216f2
+      tag: v${{package.version}}
+
+  - uses: meson/configure
+    with:
+      opts: |
+        -Dsysconfdir=/etc \
+            -Dmandir=/usr/share/man \
+            -Dinfodir=/usr/share/info \
+            -Dlocalstatedir=/var \
+            -Dsbindir=/usr/bin \
+            -Dvendordir=
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - runs: |
+      # install our pam.d files
+      mkdir -p ${{targets.destdir}}/etc/pam.d
+      for pam_conf in *.pamd; do
+        mv "${pam_conf}" ${{targets.destdir}}/etc/pam.d/"${pam_conf%.pamd}"
+      done
+
+      # make "unix_chkpwd" shadow group and enable g+s
+      chgrp shadow ${{targets.destdir}}/usr/bin/unix_chkpwd \
+        && chmod g+s ${{targets.destdir}}/usr/bin/unix_chkpwd
+
+      # Don't ship /var/run
+      rm -r ${{targets.destdir}}/var/run
+
+      # Copy tmpfile template
+      mkdir -p ${{targets.destdir}}/usr/lib/tmpfiles.d/
+      mv pam-faillock.conf ${{targets.destdir}}/usr/lib/tmpfiles.d/
+
+subpackages:
+  - name: linux-pam-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - gettext-dev
+        - linux-pam
+        - merged-usrsbin
+        - wolfi-baselayout
+    description: linux-pam dev
+    test:
+      environment:
+        contents:
+          packages:
+            - build-base
+            - pkgconf
+            - linux-pam-dev
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+        - uses: test/tw/header-check
+        - name: Test libpam compile and link
+          runs: |
+            set -euo pipefail
+
+            tee test_pam.c <<'EOF'
+            #include <security/pam_appl.h>
+            #include <stdio.h>
+
+            static int test_conv(int num_msg, const struct pam_message **msg,
+                                 struct pam_response **resp, void *appdata_ptr) {
+                return PAM_CONV_ERR;
+            }
+
+            int main() {
+                pam_handle_t *pamh = NULL;
+                struct pam_conv conv = { test_conv, NULL };
+
+                /* Verify pam_start is callable - we expect it to fail
+                   since we have no real PAM service configured, but
+                   the function should be resolvable */
+                int ret = pam_start("test", "nobody", &conv, &pamh);
+                printf("pam_start returned: %d\n", ret);
+
+                if (pamh) {
+                    pam_end(pamh, ret);
+                }
+
+                /* Success means the library linked and functions are callable */
+                printf("libpam link test passed\n");
+                return 0;
+            }
+            EOF
+
+            gcc $(pkg-config --cflags pam) test_pam.c -o test_pam $(pkg-config --libs pam)
+            ./test_pam
+
+update:
+  enabled: true
+  github:
+    identifier: linux-pam/linux-pam
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - util-linux
+        - shadow
+  pipeline:
+    - name: Test PAM authentication with su
+      runs: |
+        set -euo pipefail
+        # Suppress expired passwd warning
+        # su should work with PAM properly configured
+        su -c 'echo PAM authentication works' root
+    - name: Test pam_namespace_helper
+      runs: |
+        set -euo pipefail
+        pam_namespace_helper --version
+        pam_namespace_helper --help
+    - name: Test PAM binaries exist and are functional
+      runs: |
+        set -euo pipefail
+
+        # Verify unix_chkpwd binary exists and is executable
+        stat /usr/bin/unix_chkpwd
+        test -x /usr/bin/unix_chkpwd
+
+        # Verify faillock binary and test basic operation
+        stat /usr/bin/faillock
+        test -x /usr/bin/faillock
+        # List faillock records for root (should succeed even if empty)
+        faillock --user root
+
+        # Verify mkhomedir_helper binary exists and is executable
+        stat /usr/bin/mkhomedir_helper
+        test -x /usr/bin/mkhomedir_helper
+    - name: Verify PAM configuration files
+      runs: |
+        set -euo pipefail
+        # Verify PAM configuration directory exists
+        stat /etc/pam.d
+
+        # Verify PAM modules are installed
+        ls /usr/lib/security/pam_unix.so
+        ls /usr/lib/security/pam_deny.so
+        ls /usr/lib/security/pam_permit.so
+
+        # Verify tmpfiles configuration
+        stat /usr/lib/tmpfiles.d/pam-faillock.conf
+
+        # Verify default configuration files are provided at the usual location.
+        conf_files=$(find /etc/security -type f -name '*.conf' -print)
+        if [ -z "$conf_files" ]; then
+          echo 'FAIL: default configuration files not found'
+          exit 1
+        fi
+
+        # Verify default configuration files don't contain deviant directives.
+        fails=0
+        for conf in $conf_files; do
+          if grep -q -v -e '^[[:space:]]*$' -e '^[[:space:]]*#' "$conf"; then
+            echo "FAIL: configuration file '$conf' contains non-default directive"
+            fails=$(( fails + 1 ))
+          fi
+        done
+        [ "$fails" -eq 0 ] || exit 1
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs

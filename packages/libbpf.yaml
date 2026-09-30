@@ -1,0 +1,126 @@
+package:
+  name: libbpf
+  version: "1.7.0"
+  epoch: 4 # glibc: 2.43->2.44
+  description: "A library for interacting with the Linux kernel's Berkeley Packet Filter (BPF) facility from user space"
+  copyright:
+    - license: GPL-2.0-only
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - elfutils-dev
+      - glibc-2.44-dev
+      - linux-headers
+      - wolfi-base
+      - zlib-dev
+      - zstd-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libbpf/libbpf
+      tag: v${{package.version}}
+      expected-commit: f5dcbae736e5d7f83a35718e01be1a8e3010fa39
+
+  - uses: autoconf/make
+    with:
+      dir: src
+
+  - uses: autoconf/make-install
+    with:
+      dir: src
+      opts: LIBDIR="/usr/lib/"
+
+  - uses: strip
+
+subpackages:
+  - name: libbpf-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libbpf
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: libbpf/libbpf
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - libbpf-dev
+        - linux-headers
+        - clang-${{vars.llvm-version}}
+  pipeline:
+    - name: "Check libbpf.h header"
+      runs: |
+        test -f /usr/include/bpf/libbpf.h
+    - uses: test/tw/ldd-check
+    - name: "Check libelf.so library"
+      runs: |
+        test -f /usr/lib64/libbpf.so
+    - name: "Compile BPF program and user space program"
+      runs: |
+        cat > bpf_prog.c <<'EOF'
+        #include <linux/bpf.h>
+        #include <bpf/bpf_helpers.h>
+
+        SEC("tracepoint/syscalls/sys_enter_write")
+        int bpf_prog(void *ctx) {
+          char msg[] = "Hello, BPF World!";
+          bpf_trace_printk(msg, sizeof(msg));
+          return 0;
+        }
+
+        char LICENSE[] SEC("license") = "GPL";
+        EOF
+
+        cat > user_prog.c <<'EOF'
+        #include <stdio.h>
+        #include <unistd.h>
+        #include <bpf/libbpf.h>
+        #include <bpf/bpf.h>
+
+        int main() {
+          struct bpf_object *obj;
+
+          obj = bpf_object__open_file("bpf_prog.o", NULL);
+          if (libbpf_get_error(obj)) {
+            fprintf(stderr, "Failed to open BPF object\n");
+            return 1;
+          }
+
+          printf("BPF object opened successfully\n");
+          printf("libbpf version: %s\n", libbpf_version_string());
+          bpf_object__close(obj);
+          return 0;
+        }
+        EOF
+
+        # Compile BPF program
+        clang -O2 -target bpf -c bpf_prog.c -o bpf_prog.o
+
+        # Compile user space program
+        gcc -o user_prog user_prog.c -lbpf
+
+        # Run the program to check if it can open the BPF object
+        ./user_prog
+
+vars:
+  llvm-version: 22

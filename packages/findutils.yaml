@@ -1,0 +1,129 @@
+# Deviation from Wolfi's own recipe: added bootstrap-args: --skip-po to
+# the git/gnulib-bootstrap step, same reasoning as make/m4/bison/patch/grep
+# (avoids a slow/unreliable wget hang against translationproject.org).
+# --disable-nls was already present in this recipe's own ./configure
+# invocation, so no further change needed there.
+package:
+  name: findutils
+  version: "4.11.0"
+  epoch: 2 # glibc: 2.43->2.44
+  description: "GNU find utilities"
+  copyright:
+    - license: GPL-3.0-or-later
+  resources:
+    cpu: "2"
+    memory: 6Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext-dev
+      - glibc-2.44-dev
+      - gperf
+      - libselinux-dev
+      - python3
+      - texinfo
+      - wget # for gnulib translations
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/findutils.git
+      tag: v${{package.version}}
+      expected-commit: 66fc81d477f9e0e3dadeb80800c967d901f43ca7
+
+  - uses: git/gnulib-bootstrap
+    with:
+      bootstrap-args: --skip-po
+
+  - runs: |
+      env FORCE_UNSAFE_CONFIGURE=1 ./configure \
+         --prefix=/usr \
+         --libdir=/lib \
+         --libexecdir=/usr/libexec \
+         --sysconfdir=/etc \
+         --mandir=/usr/share/man \
+         --infodir=/usr/share/info \
+         --localstatedir=/var/lib/locatedb \
+         --disable-nls
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "findutils-doc"
+    description: "documentation for GNU coreutils"
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: "locate"
+    description: "locate and updatedb from findutils"
+    dependencies:
+      runtime:
+        - findutils=${{package.full-version}}
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/libexec
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+
+          mv "${{targets.destdir}}"/usr/libexec/frcode "${{targets.subpkgdir}}"/usr/libexec/
+
+          for i in locate updatedb; do
+            mv "${{targets.destdir}}"/usr/bin/$i "${{targets.subpkgdir}}"/usr/bin/
+          done
+    test:
+      pipeline:
+        - uses: test/tw/ver-check
+          with:
+            bins: |
+              locate
+              updatedb
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              locate
+              updatedb
+        - name: check updatedb runs successfully
+          runs: |
+            updatedb
+            # locate will set an error code if no results are found
+            locate locate
+            if locate XXXnonexistentXXX ; then
+              echo "FAIL: locate should return an error if the string is not found"
+              exit 1
+            fi
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 812
+
+test:
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          find
+          xargs
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          find
+          xargs

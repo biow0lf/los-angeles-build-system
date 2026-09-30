@@ -223,30 +223,33 @@ is now self-hosted.
       `musl-fix-headers.patch`), no further deviations needed.
 - [x] `libseccomp-dev` (`packages/libseccomp.yaml`) -- forked verbatim,
       no deviations needed.
-- [ ] `attr-dev` (`packages/attr.yaml`) -- forked, but its own inline
-      `make check` step reproducibly fails two upstream tests --
+- [x] `attr-dev` (`packages/attr.yaml`) -- forked, but its own inline
+      `make check` step reproducibly failed two upstream tests --
       `test/root/getfattr.run` and `test/restore.run` -- that exercise
       trusted/security-namespace xattr operations needing real root-level
       filesystem xattr support the Docker build sandbox's overlayfs
       doesn't provide, unrelated to whether libattr/attr/getfattr/setfattr
       themselves work (they link and install fine). Same category as
       openssl's jitter/fips canary tests. Fixed by narrowing to `make
-      check TESTS='test/attr.run'`; not yet re-verified after the fix
-      (blocked mid-session by an unrelated host disk-space exhaustion,
-      see below).
-- [ ] `db` / `db-dev` (`packages/db.yaml`) -- forked verbatim; first
-      attempt failed on a Docker build-cache image race (`No such image:
-      apko.local/cache:...`), not a recipe issue -- retry pending.
+      check TESTS='test/attr.run'`; verified.
+- [ ] `db` / `db-dev` (`packages/db.yaml`) -- forked verbatim except the
+      `git-checkout` tag: upstream `berkeleydb/libdb` deleted the
+      `v5.3.37` tag (moved to a date-based tagging scheme) -- the commit
+      itself is still reachable and confirmed (via its own merge-commit
+      message) to be exactly the 5.3.37 release, so `tag:` now names
+      that commit SHA directly (GitHub serves arbitrary reachable commit
+      SHAs over the git protocol). First attempt (before this fix) also
+      hit a separate, likely-transient Docker build-cache image race
+      (`No such image: apko.local/cache:...`) -- retry in progress.
 - [ ] `libselinux` / `libselinux-dev` (`packages/libselinux.yaml`) --
       forked verbatim (plus its `swig-4.5-pyunicode.patch`); not yet
       built.
 - [ ] `elfutils-dev` (`packages/elfutils.yaml`) -- forked verbatim; not
       yet built.
-- [ ] `libarchive` / `libarchive-dev` (`packages/libarchive.yaml`) --
-      forked verbatim; not yet built.
-- [ ] `expat-dev` (`packages/expat.yaml`) -- forked verbatim; not yet
-      built (first attempt failed only due to the host disk-space
-      exhaustion below, recipe itself untouched).
+- [x] `libarchive` / `libarchive-dev` (`packages/libarchive.yaml`) --
+      forked verbatim, no deviations needed.
+- [x] `expat-dev` (`packages/expat.yaml`) -- forked verbatim, no
+      deviations needed.
 - [ ] `audit-dev` (`packages/audit.yaml`) -- forked verbatim (plus its
       two patches); not yet built.
 - [ ] `curl` / `curl-dev` (`packages/curl.yaml`) -- forked verbatim; not
@@ -259,15 +262,28 @@ is now self-hosted.
       yet built.
 - [ ] `kmod` / `kmod-dev` (`packages/kmod.yaml`) -- forked verbatim; not
       yet built.
-- [ ] `libidn2-dev` (`packages/libidn2.yaml`) -- forked with the same
-      `git/gnulib-bootstrap` `--skip-po` deviation as make/m4/bison/
-      patch/grep/findutils (`--disable-nls` was already present in its
-      own `./configure` opts); not yet built.
+- [x] `libidn2-dev` (`packages/libidn2.yaml`) -- forked with several
+      deviations, all discovered the hard way (building from a git
+      checkout rather than a release tarball): `--skip-po` on
+      `git/gnulib-bootstrap` (same as make/m4/bison/patch/grep/
+      findutils; `--disable-nls` was already present in `./configure`
+      opts); `environment.environment.MAKEINFO=true` (libidn2.texi
+      `@include`s doc/texi/idn2_*.texi snippets a release tarball ships
+      pre-generated but a checkout doesn't -- this bites both `make` and
+      `make install`, hence setting it environment-wide rather than on
+      one step); and a step touching 19 empty doc/man/idn2_*.3 stub
+      files before install (same root cause, but man3 pages aren't
+      routed through `$(MAKEINFO)` so they fail outright rather than
+      skippably). None of the missing content (API reference docs) is
+      anything the shipped library/binaries need. Verified.
 - [ ] `gettext` / `gettext-dev` (`packages/gettext.yaml`) -- forked
-      verbatim; not yet built (first attempt failed only due to the host
-      disk-space exhaustion below, recipe itself untouched).
-- [ ] `libmicrohttpd-dev` (`packages/libmicrohttpd.yaml`) -- forked
-      verbatim; not yet built.
+      verbatim; repeated transient SSL EOF cloning gnulib's submodule
+      from GitHub (a network blip, not a recipe issue -- Wolfi's own
+      recipe already names a pipeline step "git.savannah.gnu.org is
+      flaky", acknowledging general flakiness here) -- retry in
+      progress.
+- [x] `libmicrohttpd-dev` (`packages/libmicrohttpd.yaml`) -- forked
+      verbatim, no deviations needed.
 - [ ] `libx11-dev` (`packages/libx11.yaml`) -- forked verbatim; not yet
       built.
 - [ ] `libsm-dev` (`packages/libsm.yaml`) -- forked verbatim; not yet
@@ -294,20 +310,32 @@ is now self-hosted.
       `samurai` is preferred and installs to a non-conflicting path);
       `samurai` itself not yet fetched/evaluated. Not started.
 - [ ] `cmake` -- not yet fetched/evaluated in depth.
-- [ ] `libbpf` / `libbpf-dev` (`packages/libbpf.yaml`) -- forked
-      verbatim; not yet built.
-- [ ] `linux-pam` / `linux-pam-dev` (`packages/linux-pam.yaml`) -- forked
+- [x] `libbpf` / `libbpf-dev` (`packages/libbpf.yaml`) -- forked
+      verbatim, no deviations needed.
+- [x] `linux-pam` / `linux-pam-dev` (`packages/linux-pam.yaml`) -- forked
       verbatim (uses `meson/configure`, a melange built-in, distinct from
-      the `meson` package itself being unbuilt); not yet built.
-- [ ] `valgrind-dev` (`packages/valgrind.yaml`) -- forked verbatim; not
-      yet built.
+      the `meson` package itself being unbuilt), but its own post-install
+      `for pam_conf in *.pamd` step needed the `*.pamd`/
+      `pam-faillock.conf` files from Wolfi's own `linux-pam/` aux
+      directory -- missed on the initial fork (`mv: can't rename
+      '*.pamd': No such file or directory`, the glob matched nothing
+      without them). Fetched into `packages/linux-pam/`. Verified.
+- [x] `valgrind-dev` (`packages/valgrind.yaml`) -- forked verbatim, no
+      deviations needed.
 - [ ] `libsepol` (`packages/libsepol.yaml`) -- forked verbatim; not yet
       built (a `libselinux` dependency).
-- [ ] `gawk`, `findutils`, `rsync`, `wget` -- all forked verbatim
-      (`findutils` needed the same `--skip-po` gnulib-bootstrap fix,
-      `gawk`/`wget` needed one upstream patch each); all four failed
-      their first attempt only due to the host disk-space exhaustion
-      below, recipes themselves untouched -- retry pending.
+- [x] `findutils`, `rsync`, `wget` -- all forked verbatim (`findutils`
+      needed the same `--skip-po` gnulib-bootstrap fix, `wget` needed
+      one upstream patch); verified.
+- [ ] `gawk` (`packages/gawk.yaml`) -- forked with one upstream patch,
+      plus tolerating 3 known environment-specific `make check` failures
+      (pma: needs `personality()` blocked under this Docker/Rosetta
+      sandbox; randtest: a tool missing from this minimal busybox-based
+      environment; readdir: compares literal inode numbers against a
+      golden file, inherently non-reproducible) -- any *other* test
+      failure still fails the build. Fix applied but not yet re-verified
+      (the disk-space-exhaustion retry that would have hit it ran before
+      the fix existed) -- retry in progress.
 
 ### Host disk-space exhaustion (2026-09-30, mid-session)
 

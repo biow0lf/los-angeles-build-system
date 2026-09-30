@@ -1,0 +1,176 @@
+# Deviation from Wolfi's own recipe: added bootstrap-args: --skip-po to
+# the git/gnulib-bootstrap step, same reasoning as make/m4/bison/patch/
+# grep/findutils (avoids a slow/unreliable wget hang against
+# translationproject.org). --disable-nls was already present in this
+# recipe's own ./configure opts, so no further change needed there.
+#
+# Also: added environment.environment.MAKEINFO=true (applies to every
+# pipeline step's shell, not just one make invocation) -- building
+# libidn2.info from a git checkout (rather than a release tarball)
+# fails: libidn2.texi @includes several doc/texi/idn2_*.texi snippet
+# files that a release tarball ships pre-generated but a plain git
+# checkout doesn't (no tool in this recipe's own pipeline regenerates
+# them). This bites BOTH "make" and "make install" (the latter also
+# depends on the .info target), which is why a one-off override on just
+# the build step wasn't enough. Since these are just API doc snippets,
+# not anything the shipped library/binaries need, overriding MAKEINFO to
+# a no-op skips texinfo doc generation entirely rather than trying to
+# reproduce upstream's own doc-snippet generation step.
+#
+# Also: added a step before "autoconf/make-install" that touches the 19
+# doc/man/idn2_*.3 files "make install" expects. Same root cause as the
+# .info file above (a release tarball ships these pre-generated, a git
+# checkout doesn't), but MAKEINFO=true doesn't reach this one -- man3
+# pages aren't routed through $(MAKEINFO), so "install-man3" just fails
+# outright on missing files rather than skippably no-op'ing. Touching
+# empty stubs is enough to satisfy "install"; the actual content (C API
+# reference docs) isn't anything the shipped library/binaries need.
+package:
+  name: libidn2
+  version: "2.3.8"
+  epoch: 9 # glibc: 2.43->2.44
+  description: Encode/Decode library for internationalized domain names
+  copyright:
+    - license: GPL-2.0-or-later AND LGPL-3.0-or-later
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  environment:
+    MAKEINFO: "true"
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - coreutils
+      - gengetopt
+      - gettext-dev
+      - glibc-2.44-dev
+      - gperf
+      - help2man
+      - libtool
+      - libunistring-dev
+      - patch
+      - python-3.13
+      - texinfo
+      - wget
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.com/libidn/libidn2
+      tag: v${{package.version}}
+      expected-commit: 9bc3ac79e2ae81ade245a0e308bf13c981efaa83
+
+  - uses: git/gnulib-bootstrap
+    with:
+      bootstrap-args: --skip-po
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --host=${{host.triplet.gnu}} \
+        --build=${{host.triplet.gnu}} \
+        --disable-nls
+
+  - uses: autoconf/make
+
+  - runs: |
+      mkdir -p doc/man
+      touch doc/man/idn2_to_unicode_8z4z.3 \
+        doc/man/idn2_to_unicode_4z4z.3 \
+        doc/man/idn2_to_unicode_44i.3 \
+        doc/man/idn2_to_unicode_8z8z.3 \
+        doc/man/idn2_to_unicode_8zlz.3 \
+        doc/man/idn2_to_unicode_lzlz.3 \
+        doc/man/idn2_lookup_u8.3 \
+        doc/man/idn2_lookup_ul.3 \
+        doc/man/idn2_to_ascii_4i.3 \
+        doc/man/idn2_to_ascii_4i2.3 \
+        doc/man/idn2_to_ascii_4z.3 \
+        doc/man/idn2_to_ascii_8z.3 \
+        doc/man/idn2_to_ascii_lz.3 \
+        doc/man/idn2_register_u8.3 \
+        doc/man/idn2_register_ul.3 \
+        doc/man/idn2_strerror.3 \
+        doc/man/idn2_strerror_name.3 \
+        doc/man/idn2_check_version.3 \
+        doc/man/idn2_free.3
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: idn2-utils
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr
+          mv ${{targets.destdir}}/usr/bin ${{targets.subpkgdir}}/usr/
+    description: libidn2  (CLI utilities)
+    test:
+      pipeline:
+        - runs: |
+            idn2 --version
+            idn2 --help
+        - name: Encode internationalized domain name to ACE form
+          runs: |
+            # Encode a Unicode domain name to its ACE (punycode) form
+            # LANG=C.UTF-8 is required: the test environment has no UTF-8 locale
+            # configured by default, causing idn2 to fail with "could not convert
+            # string to UTF-8". C.UTF-8 is a built-in glibc locale that needs no
+            # extra packages.
+            export LANG=C.UTF-8
+            result=$(echo "münchen.de" | idn2)
+            echo "Encoded: $result"
+            [ "$result" = "xn--mnchen-3ya.de" ] || { echo "FAIL: expected xn--mnchen-3ya.de, got $result"; exit 1; }
+        - name: Decode ACE form back to Unicode
+          runs: |
+            # Decode an ACE (punycode) domain name back to Unicode
+            export LANG=C.UTF-8
+            result=$(echo "xn--mnchen-3ya.de" | idn2 --decode)
+            echo "Decoded: $result"
+            [ "$result" = "münchen.de" ] || { echo "FAIL: expected münchen.de, got $result"; exit 1; }
+
+  - name: libidn2-static
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+    description: libidn2 static
+
+  - name: libidn2-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libidn2
+    description: libidn2 dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libidn2-doc
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    description: libidn2 manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

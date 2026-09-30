@@ -1,0 +1,92 @@
+package:
+  name: rsync
+  version: "3.5.1"
+  epoch: 0 # go/wolfi-rsc/rsync
+  description: A file transfer program to keep remote files in sync
+  copyright:
+    - license: GPL-3.0-or-later
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - acl-dev
+      - attr-dev
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gawk
+      - glibc-2.44-dev
+      - lz4-dev
+      - perl
+      - popt-dev
+      - xxhash-dev
+      - zlib-dev
+      - zstd-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/RsyncProject/rsync
+      tag: v${{package.version}}
+      expected-commit: 04355d27b7386d7de0e6bd5e79c556223210f700
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --enable-acl-support \
+        --enable-xattr-support \
+        --without-included-popt \
+        --without-included-zlib \
+        --disable-md2man \
+        --disable-openssl \
+        --disable-idn \
+        --with-rrsync
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    use-tag: true
+    identifier: RsyncProject/rsync
+    tag-filter-prefix: v
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - python3
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        rsync --version
+        rsync --version | grep ${{package.version}}
+        rsync --version | grep 'IPv6,'
+        rsync --help
+        rrsync -help
+    - name: Functional - sync local directories
+      runs: |
+        mkdir -p /tmp/rsync-src /tmp/rsync-dst
+        echo "hello rsync" > /tmp/rsync-src/testfile.txt
+        rsync -a /tmp/rsync-src/ /tmp/rsync-dst/
+        test -f /tmp/rsync-dst/testfile.txt
+        grep "hello rsync" /tmp/rsync-dst/testfile.txt
+    - name: Functional - sync with checksum verification
+      runs: |
+        mkdir -p /tmp/rsync-check-src /tmp/rsync-check-dst
+        echo "checksum test content" > /tmp/rsync-check-src/data.txt
+        rsync -ac /tmp/rsync-check-src/ /tmp/rsync-check-dst/
+        grep "checksum test content" /tmp/rsync-check-dst/data.txt
+    - name: Functional - dry-run and itemize-changes
+      runs: |
+        mkdir -p /tmp/rsync-dry-src /tmp/rsync-dry-dst
+        echo "dry run file" > /tmp/rsync-dry-src/file.txt
+        rsync -ain /tmp/rsync-dry-src/ /tmp/rsync-dry-dst/ | grep "file.txt"

@@ -1,0 +1,105 @@
+package:
+  name: libmicrohttpd
+  version: "1.0.10"
+  epoch: 1 # glibc: 2.43->2.44
+  description: small C library that is supposed to make it easy to run an HTTP server as part of another application
+  copyright:
+    - license: LGPL-2.1-or-later
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - gnutls-dev
+      - libtool
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.gnunet.org/libmicrohttpd.git
+      tag: v${{package.version}}
+      expected-commit: 7922bbd7a9561fc3f8ebd6f5cecdc288dcd4457f
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-thread-names \
+        --enable-largefile \
+        --enable-curl \
+        --enable-https \
+        --enable-messages
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libmicrohttpd-static
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+    description: libmicrohttpd static
+
+  - name: libmicrohttpd-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libmicrohttpd
+    description: libmicrohttpd dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libmicrohttpd-doc
+    pipeline:
+      - uses: split/manpages
+    description: libmicrohttpd manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - libmicrohttpd-dev
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation and basic API
+      runs: |
+        tee test.c <<'EOF'
+        #include <microhttpd.h>
+        #include <stdio.h>
+        int main() {
+            const char *version = MHD_get_version();
+            printf("libmicrohttpd version: %s\n", version);
+            return version == NULL ? 1 : 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libmicrohttpd) test.c -o test $(pkg-config --libs libmicrohttpd)
+        ./test

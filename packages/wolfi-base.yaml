@@ -1,0 +1,49 @@
+package:
+  name: wolfi-base
+  version: 1
+  epoch: 7
+  description: "Wolfi base metapackage"
+  copyright:
+    - license: MIT
+  dependencies:
+    runtime:
+      - apk-tools
+      - busybox
+      - wolfi-keys
+
+environment:
+  contents:
+    packages:
+      - busybox
+
+pipeline:
+  - name: Install
+    runs: |
+      mkdir -p "${{targets.destdir}}"
+
+test:
+  pipeline:
+    - name: "Commands exist"
+      runs: |
+        for x in "which" "type" "command -v"; do
+          for y in apk sh ; do
+            if ! $x $y; then
+              echo "ERROR: $y missing"
+              exit 1
+            fi
+          done
+        done
+    - name: "Commands do not exist"
+      runs: |
+        for x in "which" "type" "command -v"; do
+          for y in curl git wget ; do
+            if $x $y; then
+              echo "ERROR: $y found but should not be installed"
+              exit 1
+            fi
+          done
+        done
+
+update:
+  enabled: false
+  exclude-reason: "Wolfi Base is a static metapackage. it is an empty package that is used to install the base system and does not change over time."

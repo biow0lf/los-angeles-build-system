@@ -1,0 +1,74 @@
+package:
+  name: help2man
+  version: "1.49.3"
+  epoch: 8
+  description: "Create simple man pages from --help output"
+  copyright:
+    - license: GPL-3.0-or-later
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext
+      - perl
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://salsa.debian.org/bod/help2man
+      tag: v${{package.version}}
+      expected-commit: 0503f547e06b5d3fd91533aae86b560e104140d7
+
+  # help2man doesn't use automake in general, but it needs a few files from it.  See its debian/rules.
+  - runs: |
+      cp -a /usr/share/automake-*/install-sh build-aux/
+      cp -a /usr/share/automake-*/missing build-aux/
+      cp -a /usr/share/automake-*/mkinstalldirs build-aux/
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "help2man-doc"
+    description: "help2man documentation"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1309
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        help2man --version
+        help2man --help
+    - name: Generate man page from a real command
+      runs: |
+        help2man /usr/bin/help2man -o /tmp/help2man.1
+        # Verify the output is a valid man page (starts with .TH header)
+        grep -q "^\.TH" /tmp/help2man.1
+        # Verify it contains expected sections
+        grep -q "NAME" /tmp/help2man.1
+        grep -q "SYNOPSIS" /tmp/help2man.1

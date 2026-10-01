@@ -1,0 +1,119 @@
+package:
+  name: zstd
+  version: "1.5.7"
+  epoch: 10 # no cmake-bootstrap
+  description: "the Zstandard compression algorithm"
+  copyright:
+    - license: BSD-2-Clause AND GPL-2.0-only
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+var-transforms:
+  - from: ${{package.version}}
+    match: ^(\d+)\..*$
+    replace: ${1}
+    to: soversion
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake
+      - glibc-2.44-dev
+      - grep
+      - samurai
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: f8745da6ff1ad1e7bab384bd1f9d742439278e99
+      repository: https://github.com/facebook/zstd
+      tag: v${{package.version}}
+
+  - uses: cmake/configure
+    with:
+      opts: |
+        -S build/cmake
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: "zstd-doc"
+    description: "zstd documentation"
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: "zstd-static"
+    description: "zstd static libraries"
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: "zstd-dev"
+    description: "zstd development headers"
+    dependencies:
+      provides:
+        - zstd-cmake=${{package.full-version}}
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+        - uses: test/tw/devpackage
+
+  - name: libzstd${{vars.soversion}}
+    description: "libzstd runtime libraries"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/*.so.* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: facebook/zstd
+    strip-prefix: v
+    tag-filter: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          unzstd
+          zstd
+          zstdcat
+          zstdmt
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          unzstd
+          zstd
+          zstdcat
+          zstdless
+          zstdmt
+    - name: Test compress and decompress
+      runs: |
+        echo "zstd functional test data" > /tmp/zstd-input.txt
+        zstd /tmp/zstd-input.txt -o /tmp/zstd-input.txt.zst
+        zstd -d /tmp/zstd-input.txt.zst -o /tmp/zstd-output.txt
+        grep -F "zstd functional test data" /tmp/zstd-output.txt

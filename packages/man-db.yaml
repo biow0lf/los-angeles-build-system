@@ -1,0 +1,124 @@
+# Generated from https://git.alpinelinux.org/aports/plain/community/man-db/APKBUILD
+#
+# Deviation from Wolfi's own recipe: added bootstrap-args: --skip-po to
+# the git/gnulib-bootstrap step, same reasoning as make/m4/bison/patch/
+# grep/findutils/libidn2 (avoids a slow/unreliable wget hang against
+# translationproject.org), plus --disable-nls on ./configure (needed
+# together with --skip-po, same established pattern).
+package:
+  name: man-db
+  version: "2.13.1"
+  epoch: 55 # glibc: 2.43->2.44
+  description: The man command and related utilities for examining on-line help files
+  copyright:
+    - license: GPL-3.0
+  dependencies:
+    runtime:
+      - groff
+      - merged-lib
+      - merged-usrsbin
+      - wolfi-baselayout
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - flex
+      - gdbm-dev
+      - gettext-dev
+      - glibc-2.44-dev
+      - groff
+      - libpipeline-dev
+      - libseccomp-dev
+      - libtool
+      - pkgconf-dev
+      - python3
+      - wget # for gnulib translations
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.com/man-db/man-db
+      tag: ${{package.version}}
+      expected-commit: 349ce503a3594b91ad08229f83a0015fe4595ddc
+
+  - uses: git/gnulib-bootstrap
+    with:
+      bootstrap-args: --skip-po
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --sbindir=/usr/bin --disable-setuid \
+        --disable-nls \
+        --with-systemdsystemunitdir=/usr/lib/systemd/system
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: man-db-doc
+    pipeline:
+      - uses: split/manpages
+    description: man-db manpages
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1882
+
+# Test the man command, by installing the man-db-doc manpages, and running man on many of them,
+# rendering them to stdout in dvi format (dumped to /dev/null), but ensuring that every
+# invocation at least exits 0.
+test:
+  environment:
+    contents:
+      packages:
+        - man-db-doc
+  pipeline:
+    - name: Ensure that setuid bits are not set
+      runs: |
+        set -x
+        for bin in "/bin/man" "/bin/mandb" "/usr/bin/man" "/usr/bin/mandb"; do
+          if [ -u "$bin" ]; then exit 1; fi
+        done
+    - runs: |
+        find /usr/share/man/ -type f -name "*.[0-9]" | xargs -i man -Tdvi -l {} >/dev/null
+        apropos --version
+        apropos --help
+        catman --version
+        catman --help
+        lexgrog --version
+        lexgrog --help
+        man --version
+        man --help
+        man-recode --version
+        man-recode --help
+        mandb --version
+        mandb --help
+        manpath --version
+        manpath --help
+        whatis --version
+        whatis --help
+        accessdb --version
+        accessdb --help
+    - uses: test/tw/ldd-check

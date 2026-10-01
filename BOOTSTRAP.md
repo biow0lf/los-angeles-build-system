@@ -164,7 +164,10 @@ is now self-hosted.
       (ours once published, or Wolfi's currently-broken one until then)
       with the same init.tcl symlink -- so sqlite's CI job self-heals
       instead of depending on publish order. Verified locally (doesn't
-      break the already-working case).
+      break the already-working case), and later confirmed live: the
+      same publish-order gap recurred on the push that landed man-db
+      (see python-3.13's entry above for why) and resolved itself on
+      the next run without touching this recipe again.
 - [x] `tcl` / `tcl-dev` / `tcl-doc` (`packages/tcl.yaml`) -- forked from
       Wolfi with several deviations, discovered through an unusually
       long debugging chase (three separate, stacked bugs) triggered by
@@ -335,7 +338,7 @@ is now self-hosted.
       deviations needed. Verified.
 - [x] `libtirpc-dev` (`packages/libtirpc.yaml`) -- forked verbatim, no
       deviations needed. Verified.
-- [ ] `python3` / `python3-dev` (`packages/python-3.13.yaml`) -- forked
+- [x] `python3` / `python3-dev` (`packages/python-3.13.yaml`) -- forked
       (Wolfi's own package name is `python-3.13`, not `python3` -- it
       `provides: python3=...` for other recipes to depend on). Heavy (5
       CPU/8Gi hint), many still-Wolfi-fallback deps
@@ -346,7 +349,16 @@ is now self-hosted.
       Needed its own 6 upstream patches + a `version-check.py` from
       Wolfi's `python-3.13/` aux directory, missed on the initial fork
       (`can't open 0001-gh-146207-...patch: no such file`) -- fetched
-      into `packages/python-3.13/`. Retry in progress.
+      into `packages/python-3.13/`. Verified locally, then again on CI:
+      a push that landed tcl's epoch-2 fix and python-3.13 in the same
+      commit still failed CI once, because the matrix's `build` jobs
+      run fully in parallel with no `needs:` between individual
+      packages -- `python-3.13`'s and `sqlite`'s jobs resolved tcl
+      against whatever was already published (stale r1) rather than
+      the r2 fix building concurrently in a sibling job of the *same*
+      run. Not a recipe bug: resolved itself the next run once r2 was
+      actually published, confirming the structural gap rather than
+      anything wrong with either recipe.
 - [x] `perl` (`packages/perl.yaml`) -- forked verbatim, no deviations
       needed. Verified.
 - [x] `lua5.3` / `lua5.3-dev` (`packages/lua5.3.yaml`) -- forked
@@ -419,6 +431,36 @@ encountered again.
 - [x] `xz` / `xz-dev` (`packages/xz.yaml`) -- forked verbatim, no
       deviations needed (uses `./autogen.sh --no-po4a`, its own upstream
       translation-skip flag, not `git/gnulib-bootstrap`).
+- [x] `wolfi-base` (`packages/wolfi-base.yaml`) -- forked verbatim from
+      Wolfi's own trivial metapackage (`apk-tools`, `busybox`,
+      `wolfi-keys` at runtime; an empty-pipeline, vendored-files shape
+      like `wolfi-baselayout`/`build-base`). Listed in
+      `environment.contents.packages` by `zstd.yaml` below. `wolfi-keys`
+      itself stays on the Wolfi fallback for now (not yet self-hosted).
+- [x] `gnulib` (`packages/gnulib.yaml`) -- forked verbatim, no
+      deviations needed. A snapshot-of-upstream-git package (installs
+      `gnulib-tool` plus the full repo checkout to
+      `/usr/share/gnulib/repo`), distinct from the `git/gnulib-bootstrap`
+      *pipeline* used by make/m4/bison/etc, which vendors its own copy
+      per-build rather than depending on this package.
+- [x] `scdoc` / `scdoc-doc` (`packages/scdoc.yaml`) -- forked verbatim,
+      no deviations needed.
+- [x] `libpng` / `libpng-dev` / `libpng-doc` / `libpng-static` /
+      `libpng-utils` (`packages/libpng.yaml`) -- forked verbatim, no
+      deviations needed (its own `make check` passed cleanly).
+- [x] `swig` (`packages/swig.yaml`) -- forked verbatim, no deviations
+      needed. Still pulls `guile` from Wolfi's fallback (not yet
+      self-hosted). Satisfies `libselinux.yaml`'s own swig build
+      dependency (see that entry above) from our own repo now.
+- [x] `help2man` / `help2man-doc` (`packages/help2man.yaml`) -- forked
+      verbatim, no deviations needed. Fully self-hosted end to end:
+      its own build deps (`perl`, `gettext`, `automake`, `texinfo`) were
+      all already self-hosted before this one.
+- [x] `zstd` / `zstd-dev` / `zstd-doc` / `zstd-static` / `libzstd1`
+      (`packages/zstd.yaml`) -- forked verbatim, no deviations needed.
+      Still pulls `cmake` and `samurai` from Wolfi's fallback (neither
+      self-hosted yet, see the `meson`/`ninja`/`samurai`/`cmake` entries
+      above).
 
 ## Phase 3 -- builder image tooling (`docker/builder/Dockerfile`)
 
@@ -532,10 +574,10 @@ Tracked here so they aren't forgotten once Phase 2 wraps up.
       does **not** exist anywhere in Wolfi's repo under `ag`,
       `the-silver-searcher`, or any other name found via a full tree
       search. Needs a from-scratch recipe -- not started.
-- [ ] `man-db` (the `man` command and related utilities) -- exists at
-      Wolfi as `man-db.yaml`, forked with the same `--skip-po` +
-      `--disable-nls` gnulib-bootstrap deviation as make/m4/bison/
-      patch/grep/findutils/libidn2; build in progress (next up).
+- [x] `man-db` / `man-db-doc` (the `man` command and related utilities)
+      -- exists at Wolfi as `man-db.yaml`, forked with the same
+      `--skip-po` + `--disable-nls` gnulib-bootstrap deviation as
+      make/m4/bison/patch/grep/findutils/libidn2. Verified.
 
 ## Layer 3: the unavoidable seed
 

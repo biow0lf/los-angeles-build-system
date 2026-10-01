@@ -137,31 +137,32 @@ jobs:
           path: work/boot.log
           retention-days: 14
 
-  # Publishes the repo to GitHub Pages so `apk add`/`apk upgrade` on a
-  # booted Los Angeles Linux system (the mutable runtime model) has
-  # something real to point at -- only from main, never from a PR, and
-  # only once the packages built above are confirmed to actually produce
-  # a bootable image (needs: boot-test, not just index) -- a package that
-  # indexes fine but breaks the final image should never reach the public
-  # repo.
+  # Publishes the repo to our own Linode Object Storage bucket (public-read)
+  # so `apk add`/`apk upgrade` on a booted Los Angeles Linux system (the
+  # mutable runtime model) has something real to point at -- only from
+  # main, never from a PR, and only once the packages built above are
+  # confirmed to actually produce a bootable image (needs: boot-test, not
+  # just index) -- a package that indexes fine but breaks the final image
+  # should never reach the public repo. `--delete` mirrors this workflow's
+  # own rebuild-everything philosophy (see the top of this file): the
+  # bucket always reflects exactly this run's packages-out, never a stale
+  # leftover from a package since removed from packages/.
   publish:
     needs: boot-test
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: packages-out
           path: packages-out/
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: packages-out
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish to Linode Object Storage
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.LINODE_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.LINODE_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: gb-lon-1
+        run: |
+          aws s3 sync packages-out/ s3://los-angeles-production/ \
+            --endpoint-url https://gb-lon-1.linodeobjects.com \
+            --acl public-read \
+            --delete

@@ -21,11 +21,19 @@ BOOTSTRAP_KEY := https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
 # build-packages.yml's CI matrix builds each package in its own isolated
 # checkout -- packages-out (below) only accumulates within a single working
 # directory, so it can't help one matrix leg see another leg's output, or a
-# leg on one CI run see a previous run's. The published repo (a public-read
-# Linode Object Storage bucket, synced by that same workflow's publish job
-# on every successful main build) is what makes a self-hosted build-time
-# dependency actually reach CI, not just local dev.
-PUBLISHED_REPO := https://los-angeles-production.gb-lon-1.linodeobjects.com
+# leg on one CI run see a previous run's. The published repo is what makes
+# a self-hosted build-time dependency actually reach CI, not just local
+# dev.
+#
+# Temporarily back on GitHub Pages (not yet the Cloudflare R2 bucket the
+# publish job now also uploads to, below): R2 only has an empty seed object
+# at x86_64/APKINDEX.tar.gz right now, and melange eagerly fetches every
+# --repository-append'd index up front regardless of whether a build
+# actually needs anything from it -- pointing this at an empty/invalid
+# index breaks every single build ("unable to create gzip reader for
+# repository index: EOF"), not just ones that need R2 content. The next
+# commit after this run publishes real content to R2 flips this over.
+PUBLISHED_REPO := https://biow0lf.github.io/los-angeles-build-system
 
 # Every target below runs the same builder image; docker.sock and privileged
 # access are opted into only by the specific targets that need them, so

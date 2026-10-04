@@ -137,16 +137,30 @@ jobs:
           path: work/boot.log
           retention-days: 14
 
-  # Publishes the repo to our own Linode Object Storage bucket (public-read)
-  # so `apk add`/`apk upgrade` on a booted Los Angeles Linux system (the
-  # mutable runtime model) has something real to point at -- only from
-  # main, never from a PR, and only once the packages built above are
-  # confirmed to actually produce a bootable image (needs: boot-test, not
-  # just index) -- a package that indexes fine but breaks the final image
-  # should never reach the public repo. `--delete` mirrors this workflow's
-  # own rebuild-everything philosophy (see the top of this file): the
-  # bucket always reflects exactly this run's packages-out, never a stale
-  # leftover from a package since removed from packages/.
+  # Publishes the repo to our own Cloudflare R2 bucket (public-read via its
+  # r2.dev dev subdomain) so `apk add`/`apk upgrade` on a booted Los
+  # Angeles Linux system (the mutable runtime model) has something real to
+  # point at -- only from main, never from a PR, and only once the packages
+  # built above are confirmed to actually produce a bootable image (needs:
+  # boot-test, not just index) -- a package that indexes fine but breaks
+  # the final image should never reach the public repo. `--delete` mirrors
+  # this workflow's own rebuild-everything philosophy (see the top of this
+  # file): the bucket always reflects exactly this run's packages-out,
+  # never a stale leftover from a package since removed from packages/.
+  #
+  # R2 has no per-object ACLs (unlike Linode/AWS S3) -- public access is a
+  # bucket-level setting already in place, so no --acl flag here. Region is
+  # the literal string "auto", not a real AWS region -- R2's own S3 API
+  # convention.
+  #
+  # Makefile's PUBLISHED_REPO and apko/los-angeles-linux.yaml's
+  # runtime_repositories still point at GitHub Pages, not this bucket, for
+  # now: R2 only had an empty seed object before this job ever ran, and
+  # melange eagerly fetches every --repository-append'd index up front
+  # regardless of need, so pointing build-time resolution at an empty/
+  # invalid index breaks every single package build. This run is what
+  # seeds R2 with real content for the first time; a follow-up commit
+  # flips the read side over once this publish succeeds.
   publish:
     needs: boot-test
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -156,13 +170,12 @@ jobs:
         with:
           name: packages-out
           path: packages-out/
-      - name: Publish to Linode Object Storage
+      - name: Publish to Cloudflare R2
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.LINODE_S3_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.LINODE_S3_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: gb-lon-1
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
         run: |
-          aws s3 sync packages-out/ s3://los-angeles-production/ \
-            --endpoint-url https://gb-lon-1.linodeobjects.com \
-            --acl public-read \
+          aws s3 sync packages-out/ s3://los-angeles-linux/ \
+            --endpoint-url https://3cbfa894108429db9520d0e70906bcf0.r2.cloudflarestorage.com \
             --delete

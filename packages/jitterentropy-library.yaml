@@ -1,0 +1,93 @@
+package:
+  name: jitterentropy-library
+  version: "3.7.0"
+  epoch: 2 # move manpages to -doc subpackage
+  description: Jitterentropy Library
+  copyright:
+    - license: BSD-3-Clause OR GPL-2.0
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - glibc-2.44-dev
+
+var-transforms:
+  - from: ${{package.version}}
+    match: ^(\d+).*
+    replace: $1
+    to: major-version
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/smuellerDD/jitterentropy-library
+      expected-commit: e783cf1c450bce4d72f95c9f9c84546a6094976a
+      tag: v${{package.version}}
+
+  - runs: |
+      # jitterentropy must *not* be compiled with optimizations
+      export CFLAGS="$CFLAGS -O0"
+      export CPPFLAGS=""
+      export CXXFLAGS="$CXXFLAGS -O0"
+      # install into /usr
+      sed 's|/usr/local|/usr|' -i Makefile
+      make
+      make install install-static DESTDIR="${{targets.destdir}}"
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    pipeline:
+      - uses: split/dev
+      - uses: split/static
+    description: ${{package.name}} development headers and static library
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/tw/ldd-check
+          with:
+            packages: jitterentropy-library-dev
+
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/manpages
+    description: ${{package.name}} manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - jitterentropy-library-dev
+  pipeline:
+    - name: Library presence check
+      runs: |
+        test "$(readlink /usr/lib/libjitterentropy.so.${{vars.major-version}})" = "libjitterentropy.so.${{package.version}}"
+    - uses: test/tw/ldd-check
+    - name: Check library functionality
+      runs: |
+        cat <<EOF > test.c
+        #include <jitterentropy.h>
+        #include <stdio.h>
+        int main() {
+            if (jent_entropy_init() != 0) {
+                return 1;
+            }
+            return 0;
+        }
+        EOF
+        gcc test.c -o test -L/usr/lib -ljitterentropy
+        ./test
+
+update:
+  enabled: true
+  github:
+    identifier: smuellerDD/jitterentropy-library
+    strip-prefix: v
+    use-tag: true

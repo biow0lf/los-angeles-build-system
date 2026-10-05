@@ -1,0 +1,113 @@
+package:
+  name: jansson
+  version: "2.15.1"
+  epoch: 1 # glibc: 2.43->2.44
+  description: lightweight JSON library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/akheron/jansson.git
+      tag: v${{package.version}}
+      expected-commit: dbb5fb3636e155fccfce4cd215de752779bd6971
+
+  - runs: |
+      autoreconf -vfi
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: jansson-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - jansson
+    description: jansson dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: akheron/jansson
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - jansson-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test jansson library compilation and usage
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <jansson.h>
+        #include <stdlib.h>
+        #include <string.h>
+
+        int main() {
+            /* Create a JSON object */
+            json_t *obj = json_object();
+            if (!obj) return 1;
+
+            /* Set a key-value pair */
+            json_object_set_new(obj, "key", json_string("value"));
+
+            /* Serialize to string */
+            char *s = json_dumps(obj, 0);
+            if (!s) return 1;
+
+            /* Verify the output contains expected content */
+            if (strstr(s, "key") == NULL || strstr(s, "value") == NULL) return 1;
+
+            /* Parse JSON string back */
+            json_error_t error;
+            json_t *parsed = json_loads(s, 0, &error);
+            if (!parsed) return 1;
+
+            /* Verify parsed value */
+            json_t *val = json_object_get(parsed, "key");
+            if (!val || strcmp(json_string_value(val), "value") != 0) return 1;
+
+            /* Cleanup */
+            json_decref(parsed);
+            json_decref(obj);
+            free(s);
+
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags jansson) test.c -o test $(pkg-config --libs jansson)
+        ./test

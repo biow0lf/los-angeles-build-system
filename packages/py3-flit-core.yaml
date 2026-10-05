@@ -1,0 +1,95 @@
+package:
+  name: py3-flit-core
+  version: "4.1.0"
+  epoch: 0 # remove py3.14 from range, use standalone py3.14-flit-core instead
+  # Deviation from Wolfi's own recipe: temporarily trimmed to the
+  # python-3.10/3.11 streams only (see packages/py3-supported-python.yaml's
+  # own comment for the full rationale -- breaking a circular dependency
+  # with the tk/harfbuzz/meson chain). Widen back once 3.12/3.13/3.14 are
+  # self-hosted.
+  description: "simple packaging tool for simple packages (core)"
+  copyright:
+    - license: BSD-3-Clause
+  dependencies:
+    provider-priority: 0
+
+vars:
+  pypi-package: flit-core
+
+data:
+  - name: py-versions
+    items:
+      3.10: "310"
+      3.11: "311"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - py3-supported-python
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pypa/flit
+      tag: ${{package.version}}
+      expected-commit: 75b1c909d587c1ff5e0fd5f3df1046f74ee249d4
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - ${{package.name}}
+    pipeline:
+      - runs: |
+          cd flit_core
+          rm -Rf dist/
+          python${{range.key}} -m flit_core.wheel
+          python${{range.key}} bootstrap_install.py \
+              --install-root=${{targets.subpkgdir}} \
+              dist/flit_core-${{package.version}}-py3-none-any.whl
+          mkdir -p /home/build/.wheels/${{range.key}}/
+          cp dist/flit_core-${{package.version}}-py3-none-any.whl \
+              /home/build/.wheels/${{range.key}}/
+          python${{range.key}} -m compileall --invalidation-mode=unchecked-hash -r100 \
+              ${{targets.subpkgdir}}
+          rm -rf "${{targets.subpkgdir}}"/usr/lib/python3*/site-packages/flit_core/tests
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/virtualpackage
+          with:
+            virtual-pkg-name: ${{package.name}}
+
+  - name: py3-wheels-${{vars.pypi-package}}
+    pipeline:
+      - uses: py/collect-wheels
+    test:
+      pipeline:
+        - name: Verify wheel files are present
+          runs: |
+            find /usr/share/wheels -name "*.whl" | grep -F ".whl" || { echo "No wheel files found"; exit 1; }
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+
+update:
+  enabled: true
+  github:
+    identifier: pypa/flit
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/byproductpackage

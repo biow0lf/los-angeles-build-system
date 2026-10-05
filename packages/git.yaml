@@ -1,8 +1,9 @@
 package:
   name: git
-  version: "2.56.0"
-  epoch: 0 # rust: 1.98->1.99
+  version: 2.56.0
+  epoch: 1 # add url
   description: "distributed version control system"
+  url: https://git-scm.com/
   copyright:
     # The git-svn subpackage ships git's bundled CPAN fallbacks
     # (perl/FromCPAN/Error.pm and Mail/Address.pm), which are "the same terms

@@ -1,0 +1,88 @@
+package:
+  name: gdbm
+  version: "1.26"
+  epoch: 6 # glibc: 2.43->2.44
+  description: "GNU dbm is a set of database routines which use extensible hashing"
+  copyright:
+    - license: GPL-3.0-or-later
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - flex
+      - gettext-dev
+      - glibc-2.44-dev
+      - libtool
+      - rsync # for translations
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/gdbm.git
+      tag: v${{package.version}}
+      expected-commit: 8ca8f03ab6cc125139a395ec2d522aebb15f8060
+
+  - runs: ./bootstrap
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --enable-libgdbm-compat
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "gdbm-dev"
+    description: "gdbm headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - gdbm
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: gdbm-doc
+    description: gdbm docs
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  git:
+    tag-filter-prefix: v
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          gdbm_dump
+          gdbm_load
+          gdbmtool
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          gdbm_dump
+          gdbm_load
+          gdbmtool
+    - uses: test/no-docs

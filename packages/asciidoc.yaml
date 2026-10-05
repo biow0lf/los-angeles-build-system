@@ -1,0 +1,92 @@
+package:
+  name: asciidoc
+  version: 10.2.1
+  epoch: 8 # go/wolfi-rsc/asciidoc
+  description: "Text based documentation"
+  copyright:
+    - license: GPL-2.0-or-later
+  resources:
+    cpu: "2"
+    memory: 2Gi
+
+vars:
+  python-version: 3.13
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - ca-certificates-bundle
+      - docbook-xml
+      - git
+      - libxml2-utils
+      - libxslt
+      - py${{vars.python-version}}-pip
+      - python3-as-${{vars.python-version}}
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/asciidoc-py/asciidoc-py
+      tag: ${{package.version}}
+      expected-commit: 21e33efe96ba9a51d99d1150691dae750afd6ed1
+
+  - runs: |
+      autoreconf -fi
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --mandir=/usr/share/man \
+        --infodir=/usr/share/info
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+update:
+  enabled: true
+  github:
+    identifier: asciidoc-py/asciidoc-py
+
+test:
+  environment:
+    contents:
+      packages:
+        - check-shbang
+        - docbook-xml
+        - libxslt
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          a2x
+          asciidoc
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          a2x
+          asciidoc
+    - runs: |
+        check-shbang python${{vars.python-version}} /usr/bin/a2x /usr/bin/asciidoc
+    - name: Test AsciiDoc to HTML conversion
+      runs: |
+        # Create a minimal AsciiDoc document
+        cat > /tmp/test.adoc <<'EOF'
+        = Test Document
+
+        Hello World from AsciiDoc.
+        EOF
+
+        # Convert to HTML
+        asciidoc /tmp/test.adoc
+
+        # Verify the HTML output was created and contains expected content
+        stat /tmp/test.html
+        grep -F "Hello World from AsciiDoc" /tmp/test.html
+        grep -F "Test Document" /tmp/test.html

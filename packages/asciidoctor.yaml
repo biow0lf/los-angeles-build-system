@@ -1,0 +1,85 @@
+package:
+  name: asciidoctor
+  version: "2.0.26"
+  epoch: 4 # go/wolfi-rsc/asciidoctor
+  description: A fast, open source text processor and publishing toolchain, written in Ruby, for converting AsciiDoc content to HTML 5, DocBook 5, and other formats.
+  copyright:
+    - paths:
+        - "*"
+      attestation:
+      license: MIT
+  dependencies:
+    runtime:
+      - ruby-3.4
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - ca-certificates-bundle
+      - ruby-3.4
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/asciidoctor/asciidoctor
+      tag: v${{package.version}}
+      expected-commit: 0b99b39c9df884d4aec13bba45f03cdbab505769
+
+  - uses: ruby/build
+    with:
+      gem: ${{package.name}}
+
+  - uses: ruby/install
+    with:
+      gem: ${{package.name}}
+      version: ${{package.version}}
+
+  - uses: ruby/clean
+
+update:
+  enabled: true
+  github:
+    identifier: asciidoctor/asciidoctor
+    strip-prefix: v
+    use-tag: true
+    tag-filter: v2
+
+test:
+  pipeline:
+    - uses: test/tw/gem-check
+    - uses: test/tw/ver-check
+      with:
+        bins: asciidoctor
+    - uses: test/tw/help-check
+      with:
+        bins: asciidoctor
+    - name: Test AsciiDoc to HTML conversion
+      runs: |
+        # Create a test AsciiDoc document
+        cat > /tmp/test.adoc <<'EOF'
+        = Hello World
+
+        This is a test document.
+
+        * Item one
+        * Item two
+        EOF
+
+        # Convert AsciiDoc to HTML
+        asciidoctor /tmp/test.adoc -o /tmp/test.html
+
+        # Verify the HTML output file was created
+        stat /tmp/test.html
+
+        # Verify the output contains expected HTML content
+        grep -F "Hello World" /tmp/test.html
+        grep -F "This is a test document." /tmp/test.html
+        grep -F "Item one" /tmp/test.html
+        grep -F "Item two" /tmp/test.html
+
+        echo "SUCCESS: AsciiDoc to HTML conversion works correctly"

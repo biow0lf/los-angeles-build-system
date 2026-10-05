@@ -1,0 +1,110 @@
+package:
+  name: tree
+  version: "2.3.2"
+  epoch: 4 # glibc: 2.43->2.44
+  description: A recursive directory indented listing of files
+  copyright:
+    - license: GPL-2.0-or-later
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 1a41b51bea1cec4109eb9f726370449b384b4576
+      repository: https://gitlab.com/OldManProgrammer/unix-tree
+      tag: ${{package.version}}
+
+  - uses: autoconf/make
+
+  - runs: |
+      make PREFIX="${{targets.destdir}}/usr" \
+        MANDIR="${{targets.destdir}}/usr/share/man" \
+        install
+
+  - uses: strip
+
+subpackages:
+  - name: tree-doc
+    pipeline:
+      - uses: split/manpages
+    description: tree manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  git: {}
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: tree
+        version: ${{package.version}}
+    - uses: test/tw/help-check
+      with:
+        bins: tree
+    - name: Test directory listing
+      runs: |
+        set -euo pipefail
+
+        # Create a test directory structure
+        mkdir -p /tmp/testdir/subdir1/subsubdir
+        mkdir -p /tmp/testdir/subdir2
+        touch /tmp/testdir/file1.txt
+        touch /tmp/testdir/subdir1/file2.txt
+        touch /tmp/testdir/subdir1/subsubdir/file3.txt
+        touch /tmp/testdir/subdir2/file4.txt
+
+        # Verify tree lists directories and files
+        output=$(tree /tmp/testdir)
+        echo "$output" | grep -F "subdir1"
+        echo "$output" | grep -F "subdir2"
+        echo "$output" | grep -F "subsubdir"
+        echo "$output" | grep -F "file1.txt"
+        echo "$output" | grep -F "file2.txt"
+        echo "$output" | grep -F "file3.txt"
+        echo "$output" | grep -F "file4.txt"
+    - name: Test feature flags
+      runs: |
+        set -euo pipefail
+
+        # Create test structure
+        mkdir -p /tmp/flagtest/dir1/nested
+        mkdir -p /tmp/flagtest/dir2
+        touch /tmp/flagtest/file_a.txt
+        touch /tmp/flagtest/dir1/file_b.txt
+        touch /tmp/flagtest/dir1/nested/file_c.txt
+
+        # Test -d flag (directories only, no files)
+        dir_output=$(tree -d /tmp/flagtest)
+        echo "$dir_output" | grep -F "dir1"
+        echo "$dir_output" | grep -F "nested"
+        if echo "$dir_output" | grep -F "file_a.txt"; then
+          echo "FAIL: -d flag should not list files"
+          exit 1
+        fi
+
+        # Test -L flag (limit depth to 1)
+        depth_output=$(tree -L 1 /tmp/flagtest)
+        echo "$depth_output" | grep -F "dir1"
+        echo "$depth_output" | grep -F "dir2"
+        echo "$depth_output" | grep -F "file_a.txt"
+        if echo "$depth_output" | grep -F "nested"; then
+          echo "FAIL: -L 1 should not show nested directories"
+          exit 1
+        fi

@@ -50,7 +50,7 @@ jobs:
   # workflow_dispatch run, or the rare new-branch case where
   # github.event.before is the all-zero SHA.
   discover:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       packages: ${{ steps.list.outputs.packages }}
       removed: ${{ steps.list.outputs.removed }}
@@ -114,7 +114,7 @@ jobs:
 
   build:
     needs: discover
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -159,7 +159,7 @@ jobs:
   # tcl.yaml also removes tcl-dev/tcl-doc), not just a same-named file.
   index:
     needs: [discover, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -239,7 +239,7 @@ jobs:
   # (keys/melange.rsa.pub), it doesn't sign anything itself.
   boot-test:
     needs: index
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -286,7 +286,7 @@ jobs:
   publish:
     needs: boot-test
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v8
         with:

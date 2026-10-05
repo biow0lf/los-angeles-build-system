@@ -1,0 +1,113 @@
+name: Rebuild all packages (verify only)
+
+# Manual safety valve for build-packages.yml's incremental-build gap:
+# melange has no cross-package dependency graph, so a push that only
+# touches, say, glibc.yaml only rebuilds glibc there -- nothing tells CI
+# that every consumer needs rebuilding against it too. Run this workflow
+# by hand after any foundational package bump, or after a change to
+# Makefile/pipelines/**/docker/builder/** (none of which trigger
+# build-packages.yml at all anymore -- see that file's own top comment)
+# to confirm nothing broke, before trusting main.
+#
+# Deliberately never publishes: this is a verification tool, not a
+# deployment path. Publishing stays exclusively the push-triggered
+# workflow's job.
+#
+# Job bodies here intentionally duplicate build-packages.yml's build/
+# boot-test shape rather than factoring them into a shared reusable
+# workflow -- a small, accepted maintenance tradeoff for keeping both
+# files simple and independently readable.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.list.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        run: |
+          pkgs=$(for f in packages/*.yaml; do basename "$f" .yaml; done | jq -R -s -c 'split("\n")[:-1]')
+          echo "packages=$pkgs" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.discover.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write signing key
+        run: |
+          mkdir -p keys
+          echo "${{ secrets.MELANGE_SIGNING_KEY_B64 }}" | base64 -d > keys/melange.rsa
+
+      - name: Build ${{ matrix.package }}
+        run: make build-package PKG=${{ matrix.package }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apks-${{ matrix.package }}
+          path: packages-out/x86_64/*.apk
+          retention-days: 14
+
+  # No baseline-merge needed here, unlike build-packages.yml's index job:
+  # this run's own build already covers every package, so its own output
+  # is already the complete set.
+  index:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write signing key
+        run: |
+          mkdir -p keys
+          echo "${{ secrets.MELANGE_SIGNING_KEY_B64 }}" | base64 -d > keys/melange.rsa
+
+      - name: Download all built packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apks-*
+          path: packages-out/x86_64
+          merge-multiple: true
+
+      - name: Rebuild signed index
+        run: make build-index
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-out
+          path: packages-out/
+          retention-days: 14
+
+  boot-test:
+    needs: index
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download built packages
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-out
+          path: packages-out/
+
+      - name: Build disk image
+        run: make build-image
+
+      - name: Boot smoke test (QEMU)
+        run: make test-boot
+
+      - name: Upload boot log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-log
+          path: work/boot.log
+          retention-days: 14

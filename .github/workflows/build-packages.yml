@@ -1,11 +1,23 @@
 name: Build packages
 
-# Rebuilds every package on every change under packages/ or pipelines/,
-# rather than diffing for just the changed ones: melange has no
-# build-time dependency graph across packages (see the plan's Risks
-# section), so a diff-based trigger would miss stale build-time consumers
-# of a changed package (e.g. a glibc bump). Rebuilding everything is
-# simpler and strictly more correct.
+# Builds only new/modified packages/<name>.yaml (+ its aux dir), not
+# every package on every push. This reintroduces a known gap: melange
+# has no cross-package dependency graph, so bumping a foundational
+# package (glibc, gcc, build-base, openssl, ...) only rebuilds that one
+# package here -- nothing tells CI that every consumer needs rebuilding
+# against it too. Accepted deliberately rather than paying a ~1.5h full
+# rebuild on every push, regardless of size -- see
+# rebuild-all-packages.yml (workflow_dispatch only, no publish) as the
+# manual safety valve: run it after any foundational/shared-infra change
+# (a package most others depend on, or Makefile/pipelines/**/
+# docker/builder/** themselves) to verify nothing broke before trusting
+# main. See BOOTSTRAP.md for more on this tradeoff.
+#
+# Trigger is packages/** only now -- Makefile, pipelines/**,
+# docker/builder/**, apko/**, image/** and test/** changes no longer
+# auto-trigger this workflow at all (they used to, specifically so a
+# broken apko config got caught by boot-test before landing on main).
+# Verify those manually via rebuild-all-packages.yml instead.
 #
 # Each package gets its own matrix job (rather than one job looping over
 # all of them) so a slow, heavy package -- glibc's full upstream testsuite
@@ -13,26 +25,14 @@ name: Build packages
 # total wall-clock is the slowest single package, not the sum of all of
 # them.
 #
-# apko/**, Makefile, docker/builder/**, image/** and test/** are also in
-# the trigger: those can't change what a package *contains*, but they can
-# break whether the packages this workflow just built actually assemble
-# into a bootable image (see the boot-test job below) -- a change to
-# apko/generate-lockfile.sh, say, gets no CI signal at all otherwise.
-#
 # boot-test (below) downloads this workflow's own packages-out artifact
-# rather than rebuilding from source a second time. A separate workflow
-# that reran `make build-package` for every package on the same trigger
-# paths (this repo's actual first cut at this) double-builds everything
-# on any push that touches both a package and the image pipeline in the
-# same commit -- twice the compute and wall-clock for zero extra
-# coverage, since the boot test only cares that the packages built here
-# assemble and boot, not that they can be rebuilt a second time.
+# rather than rebuilding from source a second time.
 on:
   push:
     branches: [main]
-    paths: ["packages/**", "pipelines/**", "apko/**", "Makefile", "docker/builder/**", "image/**", "test/**"]
+    paths: ["packages/**"]
   pull_request:
-    paths: ["packages/**", "pipelines/**", "apko/**", "Makefile", "docker/builder/**", "image/**", "test/**"]
+    paths: ["packages/**"]
   workflow_dispatch: {}
 
 concurrency:
@@ -40,16 +40,77 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Computes which packages actually need building (added/modified
+  # packages/<name>.yaml or packages/<name>/* this push), and which were
+  # removed entirely (deleted packages/<name>.yaml -- triggers pruning
+  # from the published repo in the index job below, see that job's own
+  # comment). Falls back to "every current package, nothing removed" --
+  # the same full list this repo always used before incremental builds --
+  # whenever there's no reliable base commit to diff against: a
+  # workflow_dispatch run, or the rare new-branch case where
+  # github.event.before is the all-zero SHA.
   discover:
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.list.outputs.packages }}
+      removed: ${{ steps.list.outputs.removed }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - id: list
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
-          pkgs=$(for f in packages/*.yaml; do basename "$f" .yaml; done | jq -R -s -c 'split("\n")[:-1]')
-          echo "packages=$pkgs" >> "$GITHUB_OUTPUT"
+          all_pkgs() {
+            for f in packages/*.yaml; do basename "$f" .yaml; done | sort -u
+          }
+
+          # echo always adds a trailing newline, which split("\n")[:-1]
+          # relies on to drop a trailing empty element -- but echo of a
+          # genuinely empty var ALSO adds that one newline, which would
+          # otherwise come out as [""] instead of []. Special-case it.
+          to_json_array() {
+            if [ -z "$1" ]; then
+              echo '[]'
+            else
+              printf '%s\n' "$1" | jq -R -s -c 'split("\n")[:-1]'
+            fi
+          }
+
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "No base commit to diff against -- building every package."
+            pkgs_json=$(to_json_array "$(all_pkgs)")
+            echo "packages=$pkgs_json" >> "$GITHUB_OUTPUT"
+            echo "removed=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git diff --no-renames --name-status "$BASE_SHA" "${{ github.sha }}" -- packages/ > /tmp/pkg-diff.txt
+
+          # The `|| true` on each grep matters: with set -e -o pipefail, a
+          # grep that matches nothing (a perfectly normal case here, e.g.
+          # a push with no deletions) exits 1 and would otherwise abort
+          # this whole script before it ever reaches the echo below.
+          added_modified=$( (awk '$1 ~ /^[AM]/ {print $2}' /tmp/pkg-diff.txt \
+            | grep -E '^packages/[^/]+\.yaml$|^packages/[^/]+/' \
+            | sed -E 's#^packages/([^/]+)\.yaml$#\1#; s#^packages/([^/]+)/.*#\1#' \
+            | sort -u) || true)
+          # Defensive: only build names that actually have a
+          # packages/<name>.yaml today (excludes incidental paths like
+          # packages/.empty-source-dir/ from ever being "built").
+          added_modified_valid=$(comm -12 <(echo "$added_modified") <(all_pkgs))
+
+          removed=$( (awk '$1 == "D" {print $2}' /tmp/pkg-diff.txt \
+            | grep -E '^packages/[^/]+\.yaml$' \
+            | sed -E 's#^packages/([^/]+)\.yaml$#\1#' \
+            | sort -u) || true)
+
+          pkgs_json=$(to_json_array "$added_modified_valid")
+          removed_json=$(to_json_array "$removed")
+          echo "packages=$pkgs_json" >> "$GITHUB_OUTPUT"
+          echo "removed=$removed_json" >> "$GITHUB_OUTPUT"
 
   build:
     needs: discover
@@ -75,12 +136,29 @@ jobs:
           path: packages-out/x86_64/*.apk
           retention-days: 14
 
-  # Merges every matrix leg's .apk files and regenerates one signed
-  # APKINDEX over all of them (each leg's own mini-index, produced as a
-  # side effect of `make build-package`, is discarded -- irrelevant once
-  # merged).
+  # Merges every matrix leg's .apk files with the *currently published*
+  # repo (downloaded fresh from R2 below), then regenerates one signed
+  # APKINDEX over the combined set -- each leg's own mini-index, produced
+  # as a side effect of `make build-package`, is discarded -- irrelevant
+  # once merged.
+  #
+  # The baseline-merge step is what makes incremental builds safe to
+  # publish at all: this run's own build only ever covers the handful of
+  # packages that actually changed, but boot-test needs a full rootfs,
+  # and publish needs to mirror the complete correct repo state, not just
+  # today's diff. Downloading the whole published repo and overlaying
+  # this run's fresh output on top (new/modified wins via cp -n
+  # no-clobber) makes packages-out complete again -- except any package
+  # named in needs.discover.outputs.removed, deliberately excluded from
+  # the merge so it drops out of the index (and, via publish's --delete,
+  # out of the bucket) on this exact push, not some future cleanup.
+  #
+  # Matching origins (not filenames) against the removed list, via each
+  # baseline record's own `o:` field in APKINDEX, is what correctly
+  # removes every subpackage a removed recipe produced (e.g. removing
+  # tcl.yaml also removes tcl-dev/tcl-doc), not just a same-named file.
   index:
-    needs: build
+    needs: [discover, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,12 +168,60 @@ jobs:
           mkdir -p keys
           echo "${{ secrets.MELANGE_SIGNING_KEY_B64 }}" | base64 -d > keys/melange.rsa
 
-      - name: Download all built packages
+      # No if-no-artifacts-found input exists on the pattern-based form of
+      # this action (confirmed via actionlint) -- relying on its default
+      # behavior tolerating zero matches (a push that only deletes a
+      # package, so discover's packages output -- and this run's own
+      # build matrix -- is legitimately empty). Flagged to confirm on the
+      # first real zero-package-built run.
+      - name: Download this run's built packages
         uses: actions/download-artifact@v4
         with:
           pattern: apks-*
           path: packages-out/x86_64
           merge-multiple: true
+
+      - name: Merge in the currently-published repo, excluding removed packages
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          REMOVED_JSON: ${{ needs.discover.outputs.removed }}
+        run: |
+          mkdir -p packages-out/x86_64 baseline/x86_64
+          aws s3 sync s3://los-angeles-linux/x86_64/ baseline/x86_64/ \
+            --endpoint-url https://3cbfa894108429db9520d0e70906bcf0.r2.cloudflarestorage.com
+
+          if [ ! -f baseline/x86_64/APKINDEX.tar.gz ]; then
+            echo "No published index yet (first-ever publish) -- nothing to merge in."
+            exit 0
+          fi
+          tar -xzOf baseline/x86_64/APKINDEX.tar.gz APKINDEX > /tmp/baseline-APKINDEX
+
+          # One line per baseline record: "<exact .apk filename> <origin>".
+          # Confirmed this record format (P:/V:/o: fields) directly
+          # against this repo's own real APKINDEX.tar.gz during planning.
+          awk -v RS='' -F'\n' '
+            { P=""; V=""; O="";
+              for (i=1;i<=NF;i++) {
+                if ($i ~ /^P:/) P=substr($i,3);
+                if ($i ~ /^V:/) V=substr($i,3);
+                if ($i ~ /^o:/) O=substr($i,3);
+              }
+              if (P!="" && V!="") print P"-"V".apk", O;
+            }' /tmp/baseline-APKINDEX > /tmp/baseline-origins.txt
+
+          removed_names=$(echo "$REMOVED_JSON" | jq -r '.[]')
+
+          while read -r fname origin; do
+            [ -z "$fname" ] && continue
+            if [ -n "$removed_names" ] && grep -qxF "$origin" <<< "$removed_names"; then
+              continue
+            fi
+            # -n: no-clobber -- this run's own fresh build of the same
+            # package (if any) already landed here first and wins.
+            cp -n "baseline/x86_64/$fname" "packages-out/x86_64/$fname" 2>/dev/null || true
+          done < /tmp/baseline-origins.txt
 
       - name: Rebuild signed index
         run: make build-index
@@ -143,24 +269,20 @@ jobs:
   # point at -- only from main, never from a PR, and only once the packages
   # built above are confirmed to actually produce a bootable image (needs:
   # boot-test, not just index) -- a package that indexes fine but breaks
-  # the final image should never reach the public repo. `--delete` mirrors
-  # this workflow's own rebuild-everything philosophy (see the top of this
-  # file): the bucket always reflects exactly this run's packages-out,
-  # never a stale leftover from a package since removed from packages/.
+  # the final image should never reach the public repo.
+  #
+  # --delete is safe to use unconditionally even though this run's own
+  # build may have only touched one or two packages: index (above) always
+  # merges this run's output with a fresh download of the currently
+  # published repo, minus anything in needs.discover.outputs.removed, so
+  # packages-out here is the complete, accurate target state either way --
+  # --delete just prunes exactly the packages that were deliberately
+  # removed from packages/ this push, nothing else.
   #
   # R2 has no per-object ACLs (unlike Linode/AWS S3) -- public access is a
   # bucket-level setting already in place, so no --acl flag here. Region is
   # the literal string "auto", not a real AWS region -- R2's own S3 API
   # convention.
-  #
-  # Makefile's PUBLISHED_REPO and apko/los-angeles-linux.yaml's
-  # runtime_repositories still point at GitHub Pages, not this bucket, for
-  # now: R2 only had an empty seed object before this job ever ran, and
-  # melange eagerly fetches every --repository-append'd index up front
-  # regardless of need, so pointing build-time resolution at an empty/
-  # invalid index breaks every single package build. This run is what
-  # seeds R2 with real content for the first time; a follow-up commit
-  # flips the read side over once this publish succeeds.
   publish:
     needs: boot-test
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'

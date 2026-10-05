@@ -1,0 +1,129 @@
+package:
+  name: libxcb
+  version: 1.17.0
+  epoch: 16 # glibc: 2.43->2.44
+  description: X11 client-side library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  python-version: "3.13"
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libpthread-stubs
+      - libtool
+      - libxau-dev
+      - libxdmcp-dev
+      - libxslt
+      - pkgconf-dev
+      - py${{vars.python-version}}-xcbgen
+      - python-${{vars.python-version}}
+      - util-macros-dev
+      - xcb-proto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxcb.git
+      tag: libxcb-${{package.version}}
+      expected-commit: 622152ee42a310876f10602601206954b8d0613e
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --enable-xkb \
+        --enable-xinput \
+        --disable-xprint
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxcb-static
+    description: libxcb static library
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: libxcb-doc
+    pipeline:
+      - uses: split/manpages
+    description: libxcb manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: libxcb-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libxcb
+        - libxau-dev
+        - xcb-proto
+        - libxdmcp-dev
+    description: libxcb dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+test:
+  environment:
+    contents:
+      packages:
+        - libxcb-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Test libxcb compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <xcb/xcb.h>
+        #include <stdio.h>
+
+        int main() {
+            /* Test that xcb API is callable */
+            xcb_connection_t *conn = xcb_connect(NULL, NULL);
+            int err = xcb_connection_has_error(conn);
+            printf("xcb_connect returned, has_error=%d\n", err);
+
+            /* Disconnect (safe even if connection has error) */
+            xcb_disconnect(conn);
+
+            printf("libxcb compile and link test passed\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xcb) test.c -o test $(pkg-config --libs xcb)
+        ./test
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1767

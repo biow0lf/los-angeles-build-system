@@ -1,0 +1,105 @@
+package:
+  name: cmake
+  version: "4.4.3"
+  epoch: 2 # glibc: 2.43->2.44
+  description: "CMake is an open-source, cross-platform family of tools designed to build, test and package software"
+  dependencies:
+    provider-priority: 10
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "14"
+    memory: 9Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - bzip2-dev
+      - ca-certificates-bundle
+      - curl-dev
+      - expat-dev
+      - glibc-2.44-dev
+      - jsoncpp-dev
+      - libarchive-dev
+      - libuv-dev
+      - ncurses-dev
+      - nghttp2-dev
+      - openssl-hardened-${{vars.openssl-version}}-dev
+      - rhash-dev
+      - samurai
+      - wolfi-base
+      - xz-dev
+      - zlib-dev
+
+vars:
+  openssl-version: "4.0"
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: af7ecc8c294d153b0120813776e1fa11c5bfe4a1
+      repository: https://gitlab.kitware.com/cmake/cmake
+      tag: v${{package.version}}
+
+  # Depending on system libraries for everything we have, as if any of
+  # them use cmake they are built with cmake-bootstrap instead. Apart
+  # from cppdap, as we don't package it standalone.
+  - runs: |
+      ./bootstrap \
+        --prefix=/usr \
+        --mandir=/share/man \
+        --datadir=/share/cmake \
+        --docdir=/share/doc/cmake \
+        --system-libs \
+        --no-system-cppdap \
+        --generator=Ninja \
+        --parallel=$(nproc)
+
+  - runs: |
+      ninja
+
+  - runs: |
+      DESTDIR="${{targets.destdir}}" ninja install
+
+  - uses: strip
+
+update:
+  enabled: true
+  manual: true # be careful upgrading cmake as it is a core package
+  git:
+    strip-prefix: v
+    tag-filter-contains: v4.
+
+test:
+  environment:
+    contents:
+      packages:
+        - make
+        - gcc
+        - autoconf
+        - automake
+        - build-base
+  pipeline:
+    - uses: test/tw/ldd-check
+    - working-directory: wolfi-tests
+      runs: |
+        cmake --version
+        ccmake --version
+        ccmake --help
+        cmake --help
+        cpack --version
+        cpack --help
+        ctest --version
+        ctest --help
+    - working-directory: wolfi-tests
+      runs: |
+        mkdir -p build
+        cd build
+        cmake ..
+        make
+        ./hello_wolfi

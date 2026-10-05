@@ -1,0 +1,63 @@
+package:
+  name: xtrans
+  version: "1.6.0"
+  epoch: 4 # go/wolfi-rsc/xtrans
+  description: X transport library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - pkgconf-dev
+      - util-macros
+      - util-macros-dev
+      - xmlto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxtrans
+      tag: xtrans-${{package.version}}
+      expected-commit: cf05ba4a10c90da2c63805a5375e983b174e28b0
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    description: Development files for ${{package.name}}
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 13440
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/xml-syntax-check
+      with:
+        path: /usr/share/doc/xtrans

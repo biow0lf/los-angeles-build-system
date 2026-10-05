@@ -1,0 +1,68 @@
+package:
+  name: xorgproto
+  version: "2026.1"
+  epoch: 0
+  description: Combined X.Org X11 protocol headers
+  copyright:
+    - license: BSD-2-Clause AND MIT AND X11
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - meson
+      - util-macros
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/proto/xorgproto
+      tag: xorgproto-${{package.version}}
+      expected-commit: 6d3907b6d5dc4aa7d7ee6ee5d7d8714e7466630b
+
+  - uses: meson/configure
+    with:
+      # Building the xf86miscproto requires legacy support
+      opts: |
+        -Dlegacy=true
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 17190
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+  pipeline:
+    - uses: test/pkgconf
+    - name: Verify X11 protocol headers are compilable
+      runs: |
+        set -euo pipefail
+
+        # Test that key X11 protocol headers can be compiled
+        tee test.c <<'EOF'
+        #include <X11/X.h>
+        #include <X11/Xproto.h>
+        #include <X11/Xfuncproto.h>
+        #include <X11/extensions/XI2proto.h>
+        int main() {
+            /* Verify some protocol constants are defined */
+            int req = X_CreateWindow;
+            int evt = KeyPress;
+            return (req > 0 && evt >= 0) ? 0 : 1;
+        }
+        EOF
+
+        gcc test.c -o test
+        ./test

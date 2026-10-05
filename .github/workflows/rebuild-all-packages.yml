@@ -26,7 +26,7 @@ jobs:
     outputs:
       packages: ${{ steps.list.outputs.packages }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: list
         run: |
           pkgs=$(for f in packages/*.yaml; do basename "$f" .yaml; done | jq -R -s -c 'split("\n")[:-1]')
@@ -40,7 +40,7 @@ jobs:
       matrix:
         package: ${{ fromJson(needs.discover.outputs.packages) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Write signing key
         run: |
@@ -50,7 +50,7 @@ jobs:
       - name: Build ${{ matrix.package }}
         run: make build-package PKG=${{ matrix.package }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: apks-${{ matrix.package }}
           path: packages-out/x86_64/*.apk
@@ -63,7 +63,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Write signing key
         run: |
@@ -71,7 +71,7 @@ jobs:
           echo "${{ secrets.MELANGE_SIGNING_KEY_B64 }}" | base64 -d > keys/melange.rsa
 
       - name: Download all built packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: apks-*
           path: packages-out/x86_64
@@ -80,7 +80,7 @@ jobs:
       - name: Rebuild signed index
         run: make build-index
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packages-out
           path: packages-out/
@@ -90,10 +90,10 @@ jobs:
     needs: index
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download built packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: packages-out
           path: packages-out/
@@ -106,7 +106,7 @@ jobs:
 
       - name: Upload boot log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: boot-log
           path: work/boot.log

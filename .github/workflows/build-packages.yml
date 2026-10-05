@@ -55,7 +55,7 @@ jobs:
       packages: ${{ steps.list.outputs.packages }}
       removed: ${{ steps.list.outputs.removed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -120,7 +120,7 @@ jobs:
       matrix:
         package: ${{ fromJson(needs.discover.outputs.packages) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Write signing key
         run: |
@@ -130,7 +130,7 @@ jobs:
       - name: Build ${{ matrix.package }}
         run: make build-package PKG=${{ matrix.package }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: apks-${{ matrix.package }}
           path: packages-out/x86_64/*.apk
@@ -161,7 +161,7 @@ jobs:
     needs: [discover, build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Write signing key
         run: |
@@ -175,7 +175,7 @@ jobs:
       # build matrix -- is legitimately empty). Flagged to confirm on the
       # first real zero-package-built run.
       - name: Download this run's built packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: apks-*
           path: packages-out/x86_64
@@ -226,7 +226,7 @@ jobs:
       - name: Rebuild signed index
         run: make build-index
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packages-out
           path: packages-out/
@@ -241,10 +241,10 @@ jobs:
     needs: index
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download built packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: packages-out
           path: packages-out/
@@ -257,7 +257,7 @@ jobs:
 
       - name: Upload boot log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: boot-log
           path: work/boot.log
@@ -288,7 +288,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: packages-out
           path: packages-out/

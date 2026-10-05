@@ -16,7 +16,7 @@ jobs:
   build-and-boot-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Write signing key
         run: |
@@ -40,7 +40,7 @@ jobs:
       - name: Compress image
         run: zstd -T0 -19 work/la-linux.img -o work/la-linux.img.zst
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: la-linux-nightly-x86_64
           path: |

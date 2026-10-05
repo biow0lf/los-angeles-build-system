@@ -1,0 +1,33 @@
+package:
+  name: krb5-conf
+  version: "1.0"
+  epoch: 10 # default pkinit_dh_min_bits to P-384
+  description: Shared krb5.conf for both MIT krb5 and heimdal
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - busybox
+
+pipeline:
+  - runs: |
+      mkdir -p ${{targets.destdir}}/etc
+      mv krb5.conf ${{targets.destdir}}/etc/
+
+update:
+  enabled: false
+  exclude-reason: "This package contains a static configuration file, no updates are needed."
+
+test:
+  pipeline:
+    - runs: |
+        grep -F "[logging]" /etc/krb5.conf
+        grep -F "[libdefaults]" /etc/krb5.conf
+        grep -F "pkinit_dh_min_bits = P-384" /etc/krb5.conf
+        grep -F "[realms]" /etc/krb5.conf
+        grep -F "[domain_realm]" /etc/krb5.conf

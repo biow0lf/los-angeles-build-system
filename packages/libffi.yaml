@@ -1,0 +1,175 @@
+package:
+  name: libffi
+  version: "3.8.0"
+  epoch: 1 # glibc: 2.43->2.44
+  description: "portable foreign function interface library"
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libffi/libffi.git
+      tag: v${{package.version}}
+      expected-commit: 12ffd1f9dc56fcea79d2f742f424301ae668d663
+
+  - uses: autoconf/configure
+    with:
+      opts: >
+        --disable-builddir --enable-portable-binary --enable-pax_emutramp --disable-exec-static-tramp
+
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "libffi-dev"
+    description: "libffi headers"
+    pipeline:
+      - uses: split/dev
+      - runs: |
+          cp -a "${{targets.contextdir}}" save-for-pic-dev
+    dependencies:
+      runtime:
+        - libffi
+    test:
+      environment:
+        contents:
+          packages:
+            - build-base
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - name: Basic closure test
+          runs: |
+            echo '#include <stdio.h>' > test_closure.c
+            echo '#include <ffi.h>' >> test_closure.c
+            echo 'void puts_binding(ffi_cif *cif, unsigned int *ret, void* args[], FILE *stream) { *ret = fputs(*(char **)args[0], stream); }' >> test_closure.c
+            echo 'int main() { ffi_cif cif; ffi_type *args[1]; ffi_closure *closure; int (*bound_puts)(char *); int rc; closure = ffi_closure_alloc(sizeof(ffi_closure), &bound_puts); if (closure) { args[0] = &ffi_type_pointer; if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, 1, &ffi_type_uint, args) == FFI_OK) { if (ffi_prep_closure_loc(closure, &cif, puts_binding, stdout, bound_puts) == FFI_OK) { rc = bound_puts("Hello World!"); } } ffi_closure_free(closure); } return 0; }' >> test_closure.c
+            gcc -Wno-incompatible-pointer-types -o test_closure test_closure.c -lffi
+            ./test_closure | grep -F "Hello World"
+
+  - name: "libffi-pic-dev"
+    pipeline:
+      - runs: |
+          rm -rf "${{targets.contextdir}}"
+          cp -a save-for-pic-dev "${{targets.contextdir}}"
+          # Lifted from Debian - provide an -fPIC option for linking.
+          # Install to usr/lib rather than usr/lib64: usr/lib64 is a symlink
+          # owned by wolfi-baselayout (part of the /usr merge), so packages
+          # must not create it as a real directory.  Same approach used by gcc
+          # and glibc/ld-linux in this repo.
+          mkdir -p "${{targets.contextdir}}/usr/lib"
+          mv "${{targets.contextdir}}/usr/lib64/"* "${{targets.contextdir}}/usr/lib"
+          rmdir "${{targets.contextdir}}/usr/lib64"
+          cp -p .libs/libffi_convenience.a \
+            "${{targets.contextdir}}/usr/lib/libffi.a"
+    test:
+      environment:
+        contents:
+          packages:
+            - build-base
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - name: Verify static PIC library links into a shared object
+          runs: |
+            # Link /usr/lib/libffi.a into a shared object.  This requires the
+            # .a to be compiled with -fPIC; if it is not, gcc fails with:
+            #   relocation ... can not be used when making a shared object;
+            #   recompile with -fPIC
+            # This directly validates the purpose of libffi-pic-dev.
+            cat > /tmp/test_ffi.c <<'EOF'
+            #include <ffi.h>
+            void cb(ffi_cif *cif, void *ret, void **args, void *data) {
+              *(ffi_arg *)ret = 0;
+            }
+            EOF
+            if ! gcc -fPIC -shared -o /tmp/libtest.so /tmp/test_ffi.c /usr/lib/libffi.a; then
+              echo "FAIL: gcc compilation failed" >&2
+              exit 1
+            fi
+            echo "PASS: gcc compilation succeeded"
+            if [ ! -s /tmp/libtest.so ]; then
+              echo "FAIL: /tmp/libtest.so is missing or empty" >&2
+              exit 1
+            fi
+            echo "PASS: /tmp/libtest.so is non-zero size"
+
+  - name: "libffi-doc"
+    description: "libffi docs"
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: libffi/libffi
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - libffi-dev
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Functional FFI call test
+      runs: |
+        cat > /tmp/test_ffi_call.c << 'EOF'
+        #include <ffi.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <string.h>
+
+        /* Use libffi to call strlen() via the FFI interface */
+        int main(void) {
+          ffi_cif cif;
+          ffi_type *args[1];
+          void *values[1];
+          ffi_arg result;
+          char *str = "Hello, libffi!";
+
+          args[0] = &ffi_type_pointer;
+          values[0] = &str;
+
+          if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, 1,
+                           &ffi_type_ulong, args) != FFI_OK) {
+            fprintf(stderr, "ffi_prep_cif failed\n");
+            return 1;
+          }
+
+          ffi_call(&cif, FFI_FN(strlen), &result, values);
+
+          if ((size_t)result != strlen(str)) {
+            fprintf(stderr, "FFI call returned %zu, expected %zu\n",
+                    (size_t)result, strlen(str));
+            return 1;
+          }
+
+          printf("FFI call succeeded: strlen(\"%s\") = %zu\n",
+                 str, (size_t)result);
+          return 0;
+        }
+        EOF
+        gcc -o /tmp/test_ffi_call /tmp/test_ffi_call.c -lffi
+        /tmp/test_ffi_call | grep -F "FFI call succeeded"

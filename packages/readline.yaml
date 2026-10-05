@@ -1,0 +1,79 @@
+package:
+  name: readline
+  version: "8.3"
+  epoch: 3 # glibc: 2.43->2.44
+  description: "GNU readline library"
+  copyright:
+    - license: GPL-3.0-or-later
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - ncurses-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/readline.git
+      tag: readline-${{package.version}}
+      expected-commit: 447b8290b3e2e2d117dc8e9cdb83b0dc6448a638
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --with-shared-termcap-library
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "readline-doc"
+    pipeline:
+      - uses: split/manpages
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/share/doc
+          mv ${{targets.destdir}}/usr/share/doc/readline ${{targets.subpkgdir}}/usr/share/doc/readline
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: "readline-dev"
+    description: "GNU readline headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - readline
+    test:
+      environment:
+        contents:
+          packages:
+            - gcc
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/pkgconf
+        - name: ncurses/tinfo linking regression check
+          runs: |
+            echo "int main() {}" > demo.c
+            # If readline is underlinked this will failed with
+            # a number of missing symbols errors
+            gcc -o demo demo.c -Wl,--no-as-needed -lreadline
+
+update:
+  enabled: true
+  git:
+    tag-filter-prefix: readline-
+    strip-prefix: readline-
+  ignore-regex-patterns:
+    - ^readline-.*-.* # alphas, betas, and RCs
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

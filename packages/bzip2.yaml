@@ -1,0 +1,145 @@
+package:
+  name: bzip2
+  version: 1.0.8
+  epoch: 24 # glibc: 2.43->2.44
+  description: "a library implementing the bzip2 compression algorithms"
+  copyright:
+    - license: MPL-2.0 AND MIT
+  resources:
+    cpu: "2"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - make
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://sourceware.org/git/bzip2.git
+      tag: bzip2-${{package.version}}
+      expected-commit: 6a8690fc8d26c815e798c588f796eabe9d684cf0
+
+  - uses: patch
+    with:
+      patches: bzip2-1.0.2-progress.patch
+
+  - uses: patch
+    with:
+      patches: bzip2-1.0.3-no-test.patch
+
+  - uses: patch
+    with:
+      patches: bzip2-1.0.4-makefile-CFLAGS.patch
+
+  - uses: patch
+    with:
+      patches: bzip2-1.0.4-man-links.patch
+
+  - uses: patch
+    with:
+      patches: saneso.patch
+
+  - runs: |
+      sed -i \
+        -e 's:\$(PREFIX)/man:\$(PREFIX)/share/man:g' \
+        -e 's:ln -s -f $(PREFIX)/bin/:ln -s :' \
+        Makefile
+
+      sed -i \
+        -e "s:1\.0\.4:${{package.version}}:" \
+        bzip2.1 bzip2.txt Makefile-libbz2_so manual.*
+
+  - runs: |
+      make -f Makefile-libbz2_so all
+      make all
+
+  - runs: |
+      make PREFIX="${{targets.destdir}}/usr" install
+
+  - uses: strip
+
+subpackages:
+  - name: "libbz2-1"
+    description: bzip2 shared library
+    pipeline:
+      - runs: |
+          install -D libbz2.so.${{package.version}} "${{targets.subpkgdir}}"/usr/lib/libbz2.so.${{package.version}}
+          ln -s libbz2.so.${{package.version}} "${{targets.subpkgdir}}"/usr/lib/libbz2.so.1
+          ln -s libbz2.so.1 "${{targets.subpkgdir}}/usr/lib/libbz2.so.1.0"
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: "bzip2-dev"
+    description: "bzip2 headers"
+    pipeline:
+      - uses: split/dev
+      - runs: |
+          ln -s libbz2.so.1 "${{targets.subpkgdir}}"/usr/lib/libbz2.so
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/tw/ldd-check
+
+  - name: bzip2-doc
+    description: bzip2 docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 237
+
+test:
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: bzip2
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          bunzip2
+          bzcat
+          bzip2
+          bzless
+          bzmore
+    - name: Test pipe-based compression and decompression
+      runs: |
+        set -euo pipefail
+        echo "bzip2 pipe test data" | bzip2 | bunzip2 | grep -qF "bzip2 pipe test data"
+    - name: Test file-based compression and decompression
+      runs: |
+        set -euo pipefail
+
+        # Create test file with known content
+        echo "bzip2 file compression test content" > /tmp/testfile.txt
+
+        # Compress the file (creates /tmp/testfile.txt.bz2 and removes original)
+        bzip2 /tmp/testfile.txt
+        [ -f /tmp/testfile.txt.bz2 ] || { echo "FAIL: compressed file not created"; exit 1; }
+        [ ! -f /tmp/testfile.txt ] || { echo "FAIL: original file should be removed after compression"; exit 1; }
+
+        # Decompress the file (creates /tmp/testfile.txt and removes .bz2)
+        bunzip2 /tmp/testfile.txt.bz2
+        [ -f /tmp/testfile.txt ] || { echo "FAIL: decompressed file not created"; exit 1; }
+        [ ! -f /tmp/testfile.txt.bz2 ] || { echo "FAIL: compressed file should be removed after decompression"; exit 1; }
+
+        # Verify content matches original
+        grep -qF "bzip2 file compression test content" /tmp/testfile.txt
+
+        # Test bzcat reads compressed file to stdout without removing it
+        bzip2 /tmp/testfile.txt
+        bzcat /tmp/testfile.txt.bz2 | grep -qF "bzip2 file compression test content"
+        [ -f /tmp/testfile.txt.bz2 ] || { echo "FAIL: bzcat should not remove the compressed file"; exit 1; }
+    - uses: test/no-docs

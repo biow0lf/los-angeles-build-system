@@ -1,0 +1,64 @@
+package:
+  name: mpdecimal
+  version: "4.0.1"
+  epoch: 4 # glibc: 2.43->2.44
+  description: "complete implementation of the general decimal arithmetic specification"
+  copyright:
+    - license: BSD-2-Clause
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://www.bytereef.org/software/mpdecimal/releases/mpdecimal-${{package.version}}.tar.gz
+      expected-sha256: 96d33abb4bb0070c7be0fed4246cd38416188325f820468214471938545b1ac8
+
+  - name: Configure
+    runs: |
+      ./configure \
+         --host=${{host.triplet.gnu}} \
+         --target=${{host.triplet.gnu}} \
+         --prefix=/usr
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "mpdecimal-dev"
+    description: "mpdecimal headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - mpdecimal
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: mpdecimal-doc
+    description: mpdecimal docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 11578
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

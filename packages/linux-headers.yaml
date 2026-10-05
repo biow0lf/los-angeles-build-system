@@ -1,0 +1,75 @@
+package:
+  name: linux-headers
+  version: "7.2.9"
+  epoch: 0 # remove redundant set -euo pipefail from test
+  description: "the Linux kernel headers (cross compilation)"
+  copyright:
+    - license: GPL-2.0-only WITH Linux-syscall-note
+  resources:
+    cpu: "2"
+    memory: 7Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - scanelf
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/gregkh/linux
+      tag: v${{package.version}}
+      expected-commit: 5fce161649b4d779d1b76d9fcd52dc77779774b8
+
+  - runs: |
+      make mrproper
+
+  - runs: |
+      make headers
+      find usr/include -name '.*' -delete
+      rm usr/include/Makefile
+
+      # Copy to cross-sysroot
+      mkdir -p ${{targets.destdir}}/usr/include
+      cp -rv usr/include/* ${{targets.destdir}}/usr/include/
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - "rc"
+  github:
+    identifier: gregkh/linux
+    strip-prefix: v
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - header-check
+  pipeline:
+    - uses: test/tw/header-check
+      with:
+        files: "linux/types.h linux/ioctl.h linux/fs.h"
+    - name: Compile test with kernel headers
+      runs: |
+        # Verify kernel headers are usable by compiling a C program
+        tee test.c <<'EOF'
+        #include <linux/types.h>
+        #include <linux/ioctl.h>
+        int main() {
+            __u32 x = 0;
+            return (int)x;
+        }
+        EOF
+
+        gcc test.c -o test
+        ./test

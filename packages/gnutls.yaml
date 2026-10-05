@@ -1,0 +1,190 @@
+package:
+  name: gnutls
+  version: "3.8.13"
+  epoch: 1 # go/wolfi-rsc/gnutls
+  description: TLS protocol implementation
+  copyright:
+    - license: LGPL-2.1-or-later
+  dependencies:
+    runtime:
+      # Pin to nettle 3.x until gnutls supports nettle 4.0
+      # See: http://www.mail-archive.com/gnutls-devel@lists.gnutls.org/msg03102.html
+      - nettle~3
+  resources:
+    cpu: "3"
+    memory: 9Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext-dev
+      # Deviation from Wolfi's own recipe: same stale glibc-2.43-dev
+      # pin as packages/libmnl.yaml (see that file's own comment) --
+      # we only maintain the 2.44 stream.
+      - glibc-2.44
+      - glibc-2.44-dev
+      - gperf
+      - gtk-doc
+      - libev-dev
+      - libkcapi-dev
+      - libtasn1-dev
+      - libunistring-dev
+      - linux-headers
+      # Pin to nettle 3.x until gnutls supports nettle 4.0
+      - nettle-dev~3
+      - p11-kit-dev
+      - patch
+      - pkgconf-dev
+      - python3
+      - texinfo
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.com/gnutls/gnutls
+      tag: ${{package.version}}
+      expected-commit: b390d80208ed60f1b33ad899475951a8efb40ccd
+
+  - name: Disable wget dependency, since we skip translation downloads
+    runs: |
+      sed -Ei '/^wget[[:space:]]+-$/d' bootstrap.conf
+
+  - uses: git/gnulib-bootstrap
+    with:
+      bootstrap-args: --skip-po
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --enable-ktls \
+        --disable-openssl-compatibility \
+        --disable-rpath \
+        --disable-static \
+        --disable-guile \
+        --disable-valgrind-tests \
+        LIBS="-lgmp"
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  # Fix underlinking problem with GNUTLS depending on P11-KIT.
+  - runs: |
+      echo 'Requires: p11-kit-1' >> "${{targets.destdir}}"/usr/lib/pkgconfig/gnutls.pc
+
+  - uses: strip
+
+subpackages:
+  - name: gnutls-doc
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    description: gnutls manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: gnutls-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - gnutls
+        # Pin to nettle 3.x until gnutls supports nettle 4.0
+        - nettle-dev~3
+        - p11-kit-dev
+        - libtasn1-dev
+    description: gnutls dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: gnutls-utils
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr
+          mv ${{targets.destdir}}/usr/bin ${{targets.subpkgdir}}/usr/
+    description: Command line tools for TLS protocol
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - runs: |
+            certtool --version
+            certtool --help
+            gnutls-cli --version
+            gnutls-cli --help
+            gnutls-cli-debug --version
+            gnutls-cli-debug --help
+            gnutls-serv --version
+            gnutls-serv --help
+            ocsptool --version
+            ocsptool --help
+            p11tool --version
+            p11tool --help
+            psktool --version
+            psktool --help
+
+  - name: gnutls-c++
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib/lib*xx.so.* ${{targets.subpkgdir}}/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    description: The C++ interface to GnuTLS
+
+update:
+  enabled: true
+  git: {}
+
+test:
+  environment:
+    contents:
+      packages:
+        - gnutls-dev
+        - build-base
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test GnuTLS library compilation and linking
+      runs: |-
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <gnutls/gnutls.h>
+        #include <stdio.h>
+
+        int main() {
+            int ret = gnutls_global_init();
+            if (ret < 0) {
+                fprintf(stderr, "gnutls_global_init failed: %s\n", gnutls_strerror(ret));
+                return 1;
+            }
+
+            /* Verify we can query the library version */
+            const char *version = gnutls_check_version(NULL);
+            if (version == NULL) {
+                fprintf(stderr, "gnutls_check_version returned NULL\n");
+                gnutls_global_deinit();
+                return 1;
+            }
+            printf("GnuTLS version: %s\n", version);
+
+            gnutls_global_deinit();
+            printf("GnuTLS library test passed\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags gnutls) test.c -o test $(pkg-config --libs gnutls)
+        ./test

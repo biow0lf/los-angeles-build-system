@@ -1,0 +1,178 @@
+package:
+  name: guile
+  version: "3.0.11"
+  epoch: 7 # glibc: 2.43->2.44
+  description: portable, embeddable Scheme implementation written in C
+  copyright:
+    - license: LGPL-3.0-or-later AND GPL-3.0-or-later
+  resources:
+    cpu: "50"
+    memory: 8Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - flex
+      - gc-dev
+      - gettext-dev
+      - glibc-2.44-dev
+      - glibc-iconv
+      - gmp-dev
+      - gperf
+      - libffi-dev
+      - libtool
+      - libunistring-dev
+      - ncurses-dev
+      - pkgconf-dev
+      - posix-libc-utils
+      - readline-dev
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://codeberg.org/guile/guile
+      tag: v${{package.version}}
+      expected-commit: f7e1255dbdcb755b4c8e7e0331384e4668ceb78f
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-error-on-warning \
+        --disable-static
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+    if: ${{build.arch}} != 'x86_64' && ${{build.arch}} != 'x86' && ${{build.arch}} != 'mips64'
+
+subpackages:
+  - name: guile-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - guile
+        - gc-dev
+    description: guile dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: guile-doc
+    pipeline:
+      - uses: split/manpages
+    description: guile manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: guile-info
+    pipeline:
+      - uses: split/infodir
+    description: guile info
+    test:
+      pipeline:
+        - uses: test/tw/contains-files
+          with:
+            dir: /usr/share/info
+            name: "guile.info*"
+        - name: Verify info files exist
+          runs: |
+            set -euo pipefail
+            test -f /usr/share/info/guile.info || { echo "FAIL: guile.info not found"; exit 1; }
+            echo "SUCCESS: guile info files present"
+
+  - name: guile-readline
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib/guile/3.0/ccache/ice-9
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib/guile/3.0/extensions
+          mkdir -p "${{targets.subpkgdir}}"/usr/share/guile/3.0/ice-9
+
+          mv ${{targets.destdir}}/usr/lib/guile/3.0/ccache/ice-9/readline.go ${{targets.subpkgdir}}/usr/lib/guile/3.0/ccache/ice-9/
+          mv ${{targets.destdir}}/usr/lib/guile/3.0/extensions/guile-readline.so ${{targets.subpkgdir}}/usr/lib/guile/3.0/extensions/
+          mv ${{targets.destdir}}/usr/lib/guile/3.0/extensions/guile-readline.so.0 ${{targets.subpkgdir}}/usr/lib/guile/3.0/extensions/
+          mv ${{targets.destdir}}/usr/lib/guile/3.0/extensions/guile-readline.so.0.0.0 ${{targets.subpkgdir}}/usr/lib/guile/3.0/extensions/
+          mv ${{targets.destdir}}/usr/share/guile/3.0/ice-9/readline.scm ${{targets.subpkgdir}}/usr/share/guile/3.0/ice-9/
+    description: guile readline
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  git:
+    tag-filter-prefix: v
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - guile-dev
+        - build-base
+        - gc-dev
+        - gmp-dev
+        - libffi-dev
+        - libunistring-dev
+  pipeline:
+    - name: Test guile interpreter with Scheme code
+      runs: |
+        set -euo pipefail
+
+        # Test basic arithmetic evaluation
+        result=$(guile -c '(display (+ 2 3))(newline)')
+        echo "$result" | grep -F "5" || { echo "FAIL: expected 5, got $result"; exit 1; }
+
+        # Test string operations
+        result=$(guile -c '(display (string-append "hello" " " "world"))(newline)')
+        echo "$result" | grep -F "hello world" || { echo "FAIL: string-append failed"; exit 1; }
+
+        # Test list operations
+        result=$(guile -c '(display (length (list 1 2 3 4 5)))(newline)')
+        echo "$result" | grep -F "5" || { echo "FAIL: list length failed"; exit 1; }
+
+        echo "SUCCESS: guile interpreter functional tests passed"
+    - name: Test guile module loading
+      runs: |
+        set -euo pipefail
+
+        # Test loading ice-9 regex module
+        result=$(guile -c '(use-modules (ice-9 regex)) (display (string-match "hello" "hello world"))(newline)')
+        # string-match returns a match object, which displays as #("hello world" (0 . 5))
+        echo "$result" | grep -F "hello" || { echo "FAIL: regex module test failed"; exit 1; }
+
+        # Test loading ice-9 format module
+        result=$(guile -c '(use-modules (ice-9 format)) (display (format #f "~a plus ~a is ~a" 2 3 5))(newline)')
+        echo "$result" | grep -F "2 plus 3 is 5" || { echo "FAIL: format module test failed"; exit 1; }
+
+        echo "SUCCESS: guile module loading tests passed"
+    - name: Test guile-snarf with C input
+      runs: |
+        set -euo pipefail
+
+        # Create a small C file with SCM_DEFINE for guile-snarf to process
+        tee /tmp/test-snarf.c <<'EOF'
+        #include <libguile.h>
+        SCM_DEFINE(scm_my_func, "my-func", 0, 0, 0, (), "A test function.")
+        {
+          return SCM_BOOL_T;
+        }
+        EOF
+
+        # Run guile-snarf on the file - it should produce snippet output
+        guile-snarf /tmp/test-snarf.c $(pkg-config --cflags guile-3.0) > /tmp/snarf-output.txt 2>&1
+
+        # Verify guile-snarf produced output containing the function registration
+        test -s /tmp/snarf-output.txt || { echo "FAIL: guile-snarf produced no output"; exit 1; }
+
+        echo "SUCCESS: guile-snarf functional test passed"
+    - uses: test/tw/ldd-check

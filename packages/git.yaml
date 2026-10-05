@@ -1,0 +1,369 @@
+package:
+  name: git
+  version: "2.56.0"
+  epoch: 0 # rust: 1.98->1.99
+  description: "distributed version control system"
+  copyright:
+    # The git-svn subpackage ships git's bundled CPAN fallbacks
+    # (perl/FromCPAN/Error.pm and Mail/Address.pm), which are "the same terms
+    # as Perl itself". Git.pm unconditionally imports Error, so git-svn cannot
+    # drop it.
+    - license: GPL-2.0-or-later AND ( Artistic-1.0-Perl OR GPL-1.0-or-later )
+  dependencies:
+    provider-priority: 10
+  resources:
+    cpu: "4"
+    memory: 6Gi
+  test-resources:
+    cpu: "2"
+    memory: 2Gi
+
+vars:
+  openssl-version: "4.0"
+  rust-version: 1.99
+
+environment:
+  contents:
+    packages:
+      - asciidoc
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cargo-auditable
+      - curl-dev
+      - docbook-xml
+      - expat-dev
+      - glibc-2.44-dev
+      - openssl-${{vars.openssl-version}}-dev # FTBFS with openssl-hardened-dev: imap-send.c uses removed OpenSSL 1.x APIs (SSL_library_init, SSL_load_error_strings, SSL_get_peer_certificate)
+      - patch
+      - pcre2-dev
+      - perl
+      - rust-${{vars.rust-version}}
+      - wolfi-base
+      - xmlto
+      - xz
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://kernel.googlesource.com/pub/scm/git/git.git
+      tag: v${{package.version}}
+      expected-commit: a018953688f1b10bddf91bff8747068f5f4746a4
+
+  - runs: |
+      cat >> config.mak <<-EOF
+      NO_GETTEXT=YesPlease
+      NO_SVN_TESTS=YesPlease
+      NO_REGEX=YesPlease
+      NO_SYS_POLL_H=1
+      ICONV_OMITS_BOM=Yes
+      INSTALL_SYMLINKS=1
+      USE_LIBPCRE2=YesPlease
+      NO_TCLTK=YesPlease
+      # Dropping NO_PERL below would otherwise start installing gitweb, which
+      # NO_PERL used to suppress as a side effect. We do not ship it.
+      NO_GITWEB=YesPlease
+      EOF
+
+  - runs: |
+      make prefix=/usr \
+        DESTDIR="${{targets.destdir}}" \
+        INSTALLDIRS=vendor \
+        install install-doc -j$(nproc)
+
+  - name: install subtree
+    runs: |
+      make -C contrib/subtree \
+        prefix=/usr \
+        DESTDIR="${{targets.destdir}}" \
+        INSTALLDIRS=vendor \
+        git-subtree install install-doc
+
+  - name: restore stubs for the Perl commands we do not ship
+    runs: |
+      # Dropping NO_PERL is what makes git-svn buildable, but it also turns
+      # every other SCRIPT_PERL target into a real Perl script. We only ship
+      # git-svn, so put upstream's "unimplemented" stub back for the rest.
+      # This keeps the git and git-email packages free of a Perl runtime
+      # dependency and preserves their current behaviour: a fatal message on
+      # stderr and exit 128. git-svn itself is stubbed by its subpackage,
+      # which has to copy the real script out first.
+      stub=$(mktemp)
+      printf '%s\n' \
+        '#!/bin/sh' \
+        '' \
+        'echo >&2 "fatal: git was built without support for $(basename $0) (not packaged)."' \
+        'exit 128' > "$stub"
+
+      # git-cvsserver is installed into bindir, with libexec/git-core holding
+      # only a symlink to it (INSTALL_SYMLINKS=1). Stub the real file and
+      # leave the symlink alone, otherwise it is replaced by a regular file.
+      # The perl fsmonitor-watchman.sample hook under share/git-core/templates
+      # is deliberately left alone too: melange's scanner does not look there,
+      # so it generates no perl dependency, and it has shipped that way all
+      # along.
+      for path in \
+        usr/libexec/git-core/git-archimport \
+        usr/libexec/git-core/git-cvsexportcommit \
+        usr/libexec/git-core/git-cvsimport \
+        usr/libexec/git-core/git-instaweb \
+        usr/libexec/git-core/git-send-email \
+        usr/bin/git-cvsserver; do
+        install -Dm755 "$stub" "${{targets.destdir}}/$path"
+      done
+
+      rm -f "$stub"
+
+  - runs: |
+      mkdir -p "${{targets.destdir}}"/var/git
+
+  - uses: strip
+
+subpackages:
+  - name: "git-daemon"
+    description: "Git protocol daemon"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/libexec/git-core
+
+          for i in git-daemon git-http-backend git-shell; do
+            mv "${{targets.destdir}}"/usr/libexec/git-core/$i "${{targets.subpkgdir}}"/usr/libexec/git-core/
+          done
+
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/git-shell "${{targets.subpkgdir}}"/usr/bin/
+    test:
+      pipeline:
+        - name: "verify some binaries are present"
+          runs: |
+            stat /usr/bin/git-shell
+            stat /usr/libexec/git-core/git-daemon
+            stat /usr/libexec/git-core/git-http-backend
+
+  - name: "git-email"
+    description: "Git tools for email"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/libexec/git-core
+
+          for i in git-send-email git-imap-send; do
+            mv "${{targets.destdir}}"/usr/libexec/git-core/$i "${{targets.subpkgdir}}"/usr/libexec/git-core/
+          done
+    test:
+      pipeline:
+        - name: "verify some binaries are present"
+          runs: |
+            stat /usr/libexec/git-core/git-imap-send
+            stat /usr/libexec/git-core/git-send-email
+
+  - name: "git-p4"
+    description: "Git tools for working with Perforce depots"
+    dependencies:
+      runtime:
+        - git-daemon
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/libexec/git-core/mergetools
+
+          mv  "${{targets.destdir}}"/usr/libexec/git-core/*p4* "${{targets.subpkgdir}}"/usr/libexec/git-core/
+          mv  "${{targets.destdir}}"/usr/libexec/git-core/mergetools/*p4* \
+            "${{targets.subpkgdir}}"/usr/libexec/git-core/mergetools/
+    test:
+      pipeline:
+        - name: "verify some binaries are present"
+          runs: |
+            stat /usr/libexec/git-core/git-p4
+
+  - name: "git-svn"
+    description: "Git tools for working with Subversion repositories"
+    dependencies:
+      # This subpackage ships the real /usr/libexec/git-core/git-svn, a path
+      # the main git package also owns as a stub. `replaces` is what lets apk
+      # resolve that overlap in our favour when git-svn is installed.
+      replaces:
+        - git
+      runtime:
+        - git=${{package.full-version}}
+        - perl
+        # Git.pm's prompt() does a bare `require Term::ReadKey` when reading a
+        # password, with no fallback, so git-svn dies on an authenticated
+        # remote without it.
+        - perl-term-readkey
+        - subversion-perl
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/libexec/git-core
+
+          # Copy rather than move: the main git package keeps a stub at this
+          # path so `git svn` still fails with a useful message when this
+          # subpackage is not installed.
+          cp "${{targets.destdir}}"/usr/libexec/git-core/git-svn \
+            "${{targets.subpkgdir}}"/usr/libexec/git-core/git-svn
+
+          # Git.pm and the Git::SVN::* modules git-svn loads, plus the bundled
+          # Error.pm/Mail::Address CPAN fallbacks. git bakes this directory
+          # into the script's @INC, so it is not on perl's default search path
+          # and cannot collide with the perl package.
+          mkdir -p "${{targets.subpkgdir}}"/usr/share
+          mv "${{targets.destdir}}"/usr/share/perl5 \
+            "${{targets.subpkgdir}}"/usr/share/perl5
+
+          # Now that the real script is safely in the subpackage, leave the
+          # main git package a stub pointing at us.
+          printf '%s\n' \
+            '#!/bin/sh' \
+            '' \
+            'echo >&2 "fatal: git-svn is not installed. Install the git-svn package."' \
+            'exit 128' > "${{targets.destdir}}"/usr/libexec/git-core/git-svn
+          chmod 0755 "${{targets.destdir}}"/usr/libexec/git-core/git-svn
+    test:
+      environment:
+        contents:
+          packages:
+            - subversion
+        environment:
+          HOME: /tmp
+      pipeline:
+        - name: git svn clones a Subversion repository
+          runs: |
+            git config --global user.name "Wolfi"
+            git config --global user.email "wolf@wolfi.dev"
+
+            svnadmin create /tmp/svnrepo
+            svn checkout "file:///tmp/svnrepo" /tmp/svnwc
+            echo "hello from subversion" > /tmp/svnwc/hello.txt
+            svn add /tmp/svnwc/hello.txt
+            svn commit -m "Initial commit" /tmp/svnwc
+
+            git svn clone "file:///tmp/svnrepo" /tmp/gitsvn
+            cd /tmp/gitsvn
+            grep -Fq "hello from subversion" hello.txt
+            git log --oneline | grep -F "Initial commit"
+            git svn info | grep -F "URL: file:///tmp/svnrepo"
+        - name: git svn dcommit writes back to Subversion
+          runs: |
+            cd /tmp/gitsvn
+            echo "from git" > from-git.txt
+            git add from-git.txt
+            git commit -m "Commit from git"
+            git svn dcommit
+
+            svn update /tmp/svnwc
+            grep -Fq "from git" /tmp/svnwc/from-git.txt
+            svn log "file:///tmp/svnrepo" | grep -F "Commit from git"
+
+  - name: "git-completion"
+    description: "Shell completion for git commands"
+    dependencies:
+      runtime:
+        - git
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/local/etc/profile.d/
+          mkdir -p "${{targets.contextdir}}"/etc/bash_completion.d/
+          mv contrib/completion/git-completion.bash "${{targets.contextdir}}"/etc/bash_completion.d/
+          mv contrib/completion/* "${{targets.contextdir}}"/usr/local/etc/profile.d/
+    test:
+      environment:
+        contents:
+          packages:
+            - wolfi-base
+      pipeline:
+        - runs: ls /etc/bash_completion.d/*.bash
+
+  - name: "git-doc"
+    description: "git manpages"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 5350
+
+test:
+  environment:
+    environment:
+      HOME: /tmp
+  pipeline:
+    - uses: test/hardening-check
+      with:
+        # Rust doesn't have standardized control flow integrity protection
+        # flags yet; see discussion in
+        # https://github.com/chainguard-dev/stereo/pull/132889.
+        args: --nocfprotection
+    - runs: |
+        git --help
+        scalar version
+    - name: Verify git installation
+      runs: |
+        git --version || exit 1
+    - name: Basic git operations
+      runs: |
+        git config --global user.name "Wolfi"
+        git config --global user.email "wolf@wolfi.dev"
+        mkdir /tmp/test_repo && cd /tmp/test_repo
+        git init
+        touch README.md
+        git add README.md
+        git commit -m "Initial commit"
+        git status | grep 'nothing to commit, working tree clean'
+    - name: Clone repository
+      runs: |
+        git clone /tmp/test_repo /tmp/test_clone
+        [ -d "/tmp/test_clone/.git" ] || exit 1
+    - name: Fetch repository updates
+      runs: |
+        cd /tmp/test_clone
+        git fetch origin
+    - name: Check git configuration
+      runs: |
+        git config --list | grep 'user.name=Wolfi'
+        git config --list | grep 'user.email=wolf@wolfi.dev'
+    - name: git package stays free of Perl
+      runs: |
+        # git is built with Perl enabled so that git-svn can be split into its
+        # own subpackage. Everything else Perl is either disabled (NO_GITWEB)
+        # or stubbed back out during the build, so the main package must not
+        # end up depending on perl: git is installed in most of our images.
+        # A future git release adding a Perl command would trip this.
+        if apk info -R git | grep -qx "cmd:perl"; then
+          echo "FAIL: git gained a perl runtime dependency:"
+          apk info -R git
+          exit 1
+        fi
+        # Checked against the package's own file list rather than the
+        # filesystem: other packages in the test image legitimately create
+        # /usr/share/perl5.
+        if apk info -L git | grep -qE "^usr/share/(perl5|gitweb)/"; then
+          echo "FAIL: Perl artefacts leaked into the git package:"
+          apk info -L git | grep -E "^usr/share/(perl5|gitweb)/"
+          exit 1
+        fi
+    - name: git svn reports that the git-svn package is missing
+      runs: |
+        # The real script lives in the git-svn subpackage, which replaces this
+        # stub when installed.
+        rc=0; out=$(git svn 2>&1) || rc=$?
+        [ "$rc" -eq 128 ] || { echo "FAIL: expected exit 128, got $rc"; exit 1; }
+        echo "$out" | grep -Fq "git-svn is not installed" || {
+          echo "FAIL: unexpected output: $out"
+          exit 1
+        }
+    - name: Verify git subtree
+      runs: |
+        # subtree with no args shows usage and, since git 2.56 (-h now exits 0),
+        # exits zero. It used to exit 129.
+        # cannot easily test --help as it uses man and shows man formatted output
+        rc=0; git subtree > out 2>&1 || rc=$?
+        [ "$rc" -eq 0 ] || { echo "FAIL: git subtree should exit zero, got $rc"; exit 1; }
+        if ! grep -F "usage: git subtree" out; then
+           echo "FAIL: git subtree seems no to have written usage. output:"
+           sed 's,^,> ,' out
+           exit 1
+        fi
+        rm out

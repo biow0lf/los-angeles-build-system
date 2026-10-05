@@ -1,0 +1,299 @@
+#nolint:depends-on-unversioned-py-provides
+package:
+  name: python-3.10
+  version: "3.10.22"
+  epoch: 2
+  description: "the Python programming language"
+  copyright:
+    - license: PSF-2.0
+  dependencies:
+    provides:
+      - python3=3.10.999
+      - python-3=3.10.999
+    runtime:
+      - ${{package.name}}-base=${{package.full-version}}
+
+vars:
+  openssl-version: "4.0"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - bzip2-dev
+      - ca-certificates-bundle
+      - expat-dev
+      - gdbm-dev
+      - glibc-2.44-dev
+      - libffi-dev
+      - linux-headers
+      - mpdecimal-dev
+      - ncurses-dev
+      - openssl-hardened-${{vars.openssl-version}}-dev
+      - readline-dev
+      - sqlite-dev
+      - xz-dev
+      - zlib-dev
+
+# creates helpful python3.M and 3.M variables
+var-transforms:
+  - from: ${{package.name}}
+    match: '-'
+    replace: ''
+    to: python
+  - from: ${{package.version}}
+    match: (\d).(\d+).(\d+)
+    replace: '$1.$2'
+    to: pyversion
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: acb4dc12b6df8615af7b43120ef601e04072f7d2
+      repository: https://github.com/python/cpython.git
+      tag: v${{package.version}}
+
+  - name: Force use of system libraries
+    runs: |
+      rm -rf Modules/expat \
+        Modules/_ctypes/darwin* \
+        Modules/_ctypes/libffi*
+
+  # gh-61460: Stronger HMAC in multiprocessing (GH-20380)
+  - uses: patch
+    with:
+      patches: |
+        gh-127301.patch
+        gh-61460.patch
+
+  - name: Support OpenSSL 4 ABI
+    uses: patch
+    with:
+      patches: |
+        0001-gh-141801-Use-accessors-for-ASN1_STRING-fields-in-li.patch
+        0002-gh-144787-tests-Allow-TLS-v1.2-to-be-minimum-version.patch
+        0003-gh-146207-Add-support-for-OpenSSL-4.0.0-alpha1-14621.patch
+        0004-gh-148600-Add-Modules-_ssl_data_40.h-data-148601.patch
+        0005-gh-148292-Update-_ssl._SSLSocket-for-OpenSSL-4-14910.patch
+        0006-gh-148600-Add-OpenSSL-4.0.0-support-to-test-configur.patch
+        0007-3.10-gh-156369-Update-OpenSSL-error-ID-data-GH-15638.patch
+        0008-Fix-typo-in-PROTOCOL_TO_TLS_VERSION-in-test_ssl-GH-9.patch
+        0009-Allow-HelloRetryRequest-in-test_ssl-servername-callb.patch
+        0010-Always-provide-PROTOCOL_TLSv1-and-fix-HAS_TLSv1_2-wi.patch
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --host=${{host.triplet.gnu}} \
+        --build=${{host.triplet.gnu}} \
+        --target=${{host.triplet.gnu}} \
+        --prefix=/usr \
+        --enable-ipv6 \
+        --enable-loadable-sqlite-extensions \
+        $([ -d /usr/lib/oldglibc ] || echo --enable-optimizations) \
+        --enable-shared \
+        --with-lto \
+        --with-computed-gotos \
+        --with-dbmliborder=gdbm:ndbm \
+        --with-system-expat \
+        --with-system-libmpdec \
+        --without-ensurepip \
+        --with-builtin-hashlib-hashes=blake2 \
+        --with-wheel-pkg-dir=/usr/share/python-wheels
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      find ${{targets.destdir}}/usr/lib -type f -name 'libpython*.a' -exec rm -rf '{}' +
+      find ${{targets.destdir}}/usr/lib -type d -name 'test' -exec rm -rf '{}' +
+      find ${{targets.destdir}}/usr/lib -type d -name 'tests' -exec rm -rf '{}' +
+      find ${{targets.destdir}}/usr/lib -type d -name 'idle_test' -exec rm -rf '{}' +
+
+      cd ${{targets.destdir}}/usr/bin
+      rm -f idle3* 2to3*
+      rm ${{targets.destdir}}/usr/lib/libpython3.so
+
+      # add dubious python -> python3 link
+      ln -s python3 ${{targets.destdir}}/usr/bin/python
+
+      # Drop site-packages README.txt to avoid SCA dep on python3~3.M
+      cd ${{targets.destdir}}/usr/lib/${{vars.python}}
+      rm site-packages/README.txt
+      rmdir site-packages
+
+  - runs: |
+      rm -R ${{targets.destdir}}/usr/lib/${{vars.python}}/ensurepip/_bundled/
+
+  - runs: |
+      find ${{targets.destdir}}/usr/lib -type f -name '*.pyc' -exec rm -rf '{}' +
+      find ${{targets.destdir}}/usr/lib -type f -name '*.pyo' -exec rm -rf '{}' +
+
+      export LD_LIBRARY_PATH="${{targets.destdir}}/usr/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+      ${{targets.destdir}}/usr/bin/${{vars.python}} -B -m compileall -f --invalidation-mode=unchecked-hash \
+          -r100 ${{targets.destdir}}/usr/lib/
+
+  - uses: strip
+
+subpackages:
+  - name: "${{package.name}}-base"
+    description: "${{package.name}} without /usr/bin/python3"
+    dependencies:
+      runtime:
+        - py3-setuptools-wheel
+        - py3-pip-wheel
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/bin ${{targets.subpkgdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/bin/${{vars.python}} \
+              ${{targets.destdir}}/usr/bin/pydoc${{vars.pyversion}} \
+              ${{targets.subpkgdir}}/usr/bin
+          mv -v ${{targets.destdir}}/usr/lib/${{vars.python}} \
+             ${{targets.subpkgdir}}/usr/lib
+          mv -v ${{targets.destdir}}/usr/lib/libpython${{vars.pyversion}}.so.* \
+             ${{targets.subpkgdir}}/usr/lib
+
+          # pyconfig.h is needed at runtime... ugh.
+          d=usr/include/${{vars.python}}
+          mkdir -p "${{targets.subpkgdir}}"/$d
+          mv "${{targets.destdir}}"/$d/pyconfig.h "${{targets.subpkgdir}}"/$d/
+
+          # move usr/lib/python3.X/config-3.X-x86_64-linux-gnu
+          # back into main package so the -base-dev can take it below.
+          d="usr/lib/${{vars.python}}"
+          mkdir -p "${{targets.destdir}}/$d"
+          mv -v "${{targets.subpkgdir}}/$d"/config-${{vars.pyversion}}* \
+              "${{targets.destdir}}/$d"
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - runs: |
+            ${{vars.python}} version-check.py ${{package.version}}
+        - name: Verify venv installs expected packages
+          runs: |
+            set +x
+            d=$(mktemp -d)
+            echo "$ ${{vars.python}} -m venv $d"
+            ${{vars.python}} -m venv "$d"
+            echo "$ $d/bin/pip list"
+            $d/bin/pip list | tee "$d/list.txt"
+            wd=/usr/share/python-wheels
+            for pkg in setuptools pip ; do
+              set -- "$wd"/$pkg-*.whl
+              [ $# -eq 1 ] || {
+                echo "ERROR: found $# wheels in $wd matching $pkg-*.whl";
+                exit 1;
+              }
+              [ -f "$1" ] || {
+                echo "ERROR: $wd/$pkg-*.whl ('$1') was not a file"
+                exit 1
+              }
+              # name is like pip-24.2-py3-none-any.whl. second token is version.
+              wheel=${1}
+              tmp=${wheel##*/}
+              tmp=${tmp#*-}
+              ver=${tmp%%-*}
+              if ! grep -q "${pkg}[ ]\+${ver}$" "$d/list.txt"; then
+                  echo "FAIL: did not find '$pkg==$ver' in venv"
+                  echo "pip list had:"
+                  sed 's,^,>,' "$d/list.txt"
+                  exit 1
+              fi
+              echo "PASS: venv installed '$pkg==$ver'"
+            done
+
+            rm -Rf "$d"
+
+  - name: "${{package.name}}-doc"
+    description: "python3 documentation"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: "${{package.name}}-dev"
+    description: "python3 development headers"
+    dependencies:
+      provides:
+        - python3-dev=${{package.full-version}}
+        - python-3-dev=${{package.full-version}}
+      runtime:
+        - ${{package.name}}=${{package.full-version}}
+        - ${{package.name}}-base-dev=${{package.full-version}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+          mv -v ${{targets.destdir}}/usr/bin/python3-config ${{targets.subpkgdir}}/usr/bin
+
+          d="usr/lib/pkgconfig"
+          mkdir -p "${{targets.subpkgdir}}/$d"
+          mv -v \
+             "${{targets.destdir}}"/$d/python3-embed.pc \
+             "${{targets.destdir}}"/$d/python3.pc \
+             "${{targets.subpkgdir}}/$d/"
+    test:
+      pipeline:
+        - uses: test/virtualpackage
+          with:
+            virtual-pkg-name: python3-dev
+            real-pkg-name: ${{subpkg.name}}
+        - uses: test/virtualpackage
+          with:
+            virtual-pkg-name: python-3-dev
+            real-pkg-name: ${{subpkg.name}}
+
+  - name: "${{package.name}}-base-dev"
+    description: "python3 development headers"
+    dependencies:
+      runtime:
+        - ${{package.name}}-base=${{package.full-version}}
+    pipeline:
+      - runs: |
+          # usr/lib/python3.X/config-3.X-x86_64-linux-gnu
+          # split/dev will only move 2 files from it, but we want all of it.
+          d="usr/lib/${{vars.python}}"
+          mkdir -p "${{targets.subpkgdir}}/$d"
+          mv -v "${{targets.destdir}}"/$d/config-${{vars.pyversion}}* \
+             "${{targets.subpkgdir}}"/$d
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/symlink-check
+    - uses: test/tw/ver-check
+      with:
+        bins: python ${{vars.python}}
+    - uses: test/tw/help-check
+      with:
+        bins: pydoc3 python ${{vars.python}}
+    - name: Verify Python names
+      runs: |
+        # main package should provide 'python' and 'python3'.
+        python version-check.py ${{package.version}}
+        python3 version-check.py ${{package.version}}
+    - name: Verify working python3 -m venv
+      runs: |
+        d=$(mktemp -d)
+        python3 -m venv "$d"
+        $d/bin/pip list
+        $d/bin/pip check
+        rm -Rf "$d"
+    - name: Verify multiprocessing with SHA256 as default
+      runs: |
+        python3 test_multiprocessing.py
+
+update:
+  enabled: true
+  shared: true
+  github:
+    identifier: python/cpython
+    strip-prefix: v
+    tag-filter: v3.10
+    use-tag: true

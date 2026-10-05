@@ -1,0 +1,114 @@
+package:
+  name: py3-supported-python
+  version: 1
+  # Deviation from Wolfi's own recipe: temporarily trimmed to the
+  # python-3.10/3.11 streams only (dropping 3.12/3.13/3.14) to break a
+  # circular dependency -- python-3.12/3.13/3.14 need tk-dev, which needs
+  # harfbuzz, which needs meson, which needs this exact metapackage (via
+  # the py3-build toolchain) to already cover ALL five streams. 3.10/3.11
+  # need no such dependency, so they bootstrap meson/harfbuzz/tk, which
+  # then unblocks building python-3.12/3.13/3.14 themselves. Once those
+  # are self-hosted, widen this back to all five streams and rebuild the
+  # py3-build toolchain for full parity with Wolfi. Tracked in
+  # BOOTSTRAP.md.
+  epoch: 10
+  description: metapackage to install all supported versions of python
+  copyright:
+    - license: "MIT"
+  dependencies:
+    runtime:
+      - python-3.10-base
+      - python-3.11-base
+  resources:
+    cpu: "10"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - busybox
+
+data:
+  - name: py-versions
+    items:
+      3.10: '310'
+      3.11: '311'
+
+subpackages:
+  - name: ${{package.name}}-dev
+    description: metapackage to install all supported versions of python-dev
+    dependencies:
+      runtime:
+        - python-3.10-base-dev
+        - python-3.11-base-dev
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+
+  - range: py-versions
+    name: py${{range.key}}-build-base
+    description: python ${{range.key}} core/base build packages.
+    dependencies:
+      runtime:
+        - busybox
+        - py${{range.key}}-build
+        - py${{range.key}}-installer
+        - py${{range.key}}-pip-base
+        - py${{range.key}}-setuptools
+        - py${{range.key}}-setuptools-scm
+        - py${{range.key}}-wheel
+      provides:
+        - py3-build-base
+      provider-priority: ${{range.value}}
+    test:
+      pipeline:
+        - uses: test/tw/virtualpackage
+          with:
+            virtual-pkg-name: py3-build-base
+
+  - name: py3-supported-build-base
+    description: "metapackage for common python build-deps"
+    dependencies:
+      runtime:
+        - py3.10-build-base
+        - py3.11-build-base
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+
+  - range: py-versions
+    name: py${{range.key}}-build-base-dev
+    description: python ${{range.key}} core/base build packages with development headers.
+    dependencies:
+      runtime:
+        - py${{range.key}}-build-base
+        - python-${{range.key}}-base-dev
+        - build-base
+      provides:
+        - py3-build-base-dev
+      provider-priority: ${{range.value}}
+    test:
+      pipeline:
+        - uses: test/tw/virtualpackage
+          with:
+            virtual-pkg-name: py3-build-base-dev
+
+  - name: py3-supported-build-base-dev
+    description: "metapackage for common python build-deps with C extensions"
+    dependencies:
+      runtime:
+        - build-base
+        - py3.10-build-base-dev
+        - py3.11-build-base-dev
+        - py3-supported-python-dev
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+
+update:
+  enabled: false
+  exclude-reason: No source to watch for the new versions
+
+test:
+  pipeline:
+    - uses: test/tw/metapackage

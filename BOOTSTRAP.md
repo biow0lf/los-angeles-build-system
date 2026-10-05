@@ -462,6 +462,100 @@ encountered again.
       self-hosted yet, see the `meson`/`ninja`/`samurai`/`cmake` entries
       above).
 
+### Full `environment.contents.packages` audit (supersedes ad-hoc tracking above)
+
+A proper sweep of every `packages/*.yaml`'s `environment.contents.packages`
+-- not just the names called out individually in entries above -- cross-
+referenced against every name we actually provide (every recipe's own
+`package.name`, every `subpackages[].name`, *and* every `provides:` alias,
+e.g. `python3`/`python3-dev` are already covered via `python-3.13.yaml`'s
+own `provides:` block, not a literal subpackage). The following still
+resolve from Wolfi's live repo and have no self-hosted recipe at all:
+
+- [ ] `abi-compliance-checker`, `abi-dumper` (glibc's own ABI-report build dep)
+- [ ] `argon2-dev`
+- [ ] `asciidoc`, `asciidoctor`, `docbook-xml`, `xmlto` (doc toolchain, several recipes)
+- [ ] `autoconf-archive`
+- [ ] `bpftool`
+- [ ] `brotli-dev` (curl's own build dep)
+- [ ] `bzip2-dev`
+- [ ] `clang-22`, `llvm-22`
+- [ ] `cmake`, `meson`, `ninja`, `samurai` (the build-tooling cluster -- already
+      flagged above for `zstd`/`libeconf`/`linux-pam`, confirmed here as the
+      single biggest remaining cluster by number of dependent recipes)
+- [ ] `cyrus-sasl-dev` (curl)
+- [ ] `cython`
+- [ ] `gcc-14-default`
+- [ ] `gdbm-dev`
+- [ ] `gengetopt`
+- [ ] `glib-dev`, `gtk-doc`
+- [ ] `glibc-2.43-dev` -- note: distinct from our self-hosted `glibc-2.44`;
+      whatever still asks for this exact older version needs checking
+      (bump the recipe to 2.44, or this is a genuine still-needed old pin)
+- [ ] `glibc-locale-en`, `glibc-locale-fr` -- distinct from `glibc-locale-extra`/
+      `glibc-locale-posix`/`glibc-locales`, which we *do* already provide
+      (via `glibc-2.44.yaml`'s own `provides:`)
+- [ ] `gnutls-dev`
+- [ ] `groff`
+- [ ] `guile` -- `swig`'s one remaining Wolfi dependency (see that entry above)
+- [ ] `intltool`
+- [ ] `jansson-dev`
+- [ ] `jitterentropy-library-dev` -- note: distinct from the `jitterentropy-library`
+      used inside `openssl.yaml`'s own build environment already; this is the
+      `-dev` split, still missing
+- [ ] `json-c-dev` (elfutils)
+- [ ] `krb5-dev` (curl)
+- [ ] `libcap-ng-dev` -- `libcap-ng.yaml` exists and provides the base library;
+      it has no `-dev` subpackage split at all yet, unlike every other
+      `lib*-dev` pattern in this repo
+- [ ] `libffi-dev`
+- [ ] `libice-dev` (pulled in alongside the already-self-hosted `libsm-dev`)
+- [ ] `libmount` (distinct from `util-linux-dev`, which we partially provide)
+- [ ] `libnftnl-dev` (nftables)
+- [ ] `libpipeline-dev` (man-db's own build dep, ironically -- man-db itself
+      is self-hosted but one of its build deps isn't)
+- [ ] `libpsl-dev` (curl)
+- [ ] `libssh`, `libssh-dev`
+- [ ] `libunistring-dev` (libidn2)
+- [ ] `libuuid` (distinct from `util-linux-dev`)
+- [ ] `libxcb-dev`, `xorgproto`, `xtrans`, `xtrans-dev` (X11 build-tooling
+      cluster, alongside the already-self-hosted `libx11`/`libsm`)
+- [ ] `libxml2-dev`, `libxml2-utils`, `libxslt`
+- [ ] `linenoise-dev`
+- [ ] `linux-headers`
+- [ ] `lua5.3-lzlib` -- distinct from `lua5.3`/`lua5.3-dev`, which we do
+      already provide
+- [ ] `lvm2-dev`
+- [ ] `lz4-dev`
+- [ ] `mpdecimal-dev` (python-3.13's own build dep)
+- [ ] `nghttp2-dev`, `nghttp3-dev`, `ngtcp2-dev` (curl's HTTP/2, HTTP/3, QUIC deps)
+- [ ] `openldap-dev` (curl)
+- [ ] `openssl-hardened-3.6-dev`, `openssl-hardened-4.0-dev` -- directly
+      relevant given `openssl`/`openssl-3.6`/`openssl-4.0` are now all
+      self-hosted (see those entries above): none of the three produces a
+      `-hardened-*-dev` subpackage, so `elfutils.yaml` still reaches Wolfi
+      for this one name specifically
+- [ ] `p11-kit-trust`
+- [ ] `perl-locale-gettext`
+- [ ] `popt-dev`
+- [ ] `py3-build`, `py3-pip`, `py3-supported-beautifulsoup4`, `py3-supported-requests`,
+      `py3.13-gpep517`, `py3.13-jinja2`, `py3.13-pefile`, `py3.13-pyelftools`,
+      `py3.13-setuptools`, `py3.13-wheel` -- the Python packaging-tooling
+      cluster (glibc's own ABI-report tooling plus python-3.13's build deps)
+- [ ] `quota-tools`
+- [ ] `rdfind`
+- [ ] `readline-dev`
+- [ ] `sed` -- surprising one: busybox's `sed` applet is in the shipped
+      image already, but no self-hosted recipe provides the standalone
+      GNU `sed` package some build environment still asks for
+- [ ] `setpriv`
+- [ ] `tk-dev` (python-3.13's Tk bindings -- distinct from the now-fixed
+      `tcl`/`tcl-dev`, see that entry's saga above)
+- [ ] `tpm2-tss`
+- [ ] `tree`
+- [ ] `util-macros`, `util-macros-dev` (X11 build-tooling cluster, cont'd)
+- [ ] `xxhash-dev` (rsync's own build dep)
+
 ## Phase 3 -- builder image tooling (`docker/builder/Dockerfile`)
 
 Blocked on Phase 1/2 (needs a self-hosted toolchain to build these against).

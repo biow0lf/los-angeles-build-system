@@ -160,13 +160,11 @@ contents:
 
   # Written to /etc/apk/repositories in the image so `apk add`/`apk upgrade`
   # work on a booted system (the mutable runtime model) -- not consulted at
-  # apko build time. https://biow0lf.github.io/los-angeles-build-system is
-  # build-packages.yml's `publish` job's real output (GitHub Pages, from
-  # main, gated on boot-test passing -- see that workflow), not a
-  # placeholder: verified live, serving a real APKINDEX.tar.gz per arch.
-  # Temporarily still GitHub Pages rather than the Cloudflare R2 bucket
-  # being migrated to (see Makefile's PUBLISHED_REPO comment) -- R2 doesn't
-  # have real content yet; this flips over once it does.
+  # apko build time. https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev is
+  # build-packages.yml's `publish` job's real output (a public-read
+  # Cloudflare R2 bucket, synced from main, gated on boot-test passing --
+  # see that workflow), not a placeholder: confirmed live, serving a real
+  # signed APKINDEX.tar.gz per arch (run 37236725072).
   # For local dev against packages that haven't been pushed yet, point a
   # booted image at `make serve-repo` instead (localhost:8080 from the
   # *host* -- see that Makefile target for how to reach it from a guest).
@@ -177,7 +175,7 @@ contents:
   # same filename collides with apko's own install of it.
   runtime_repositories:
     - https://packages.wolfi.dev/os
-    - https://biow0lf.github.io/los-angeles-build-system
+    - https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev
 
 archs:
   - x86_64

@@ -1,0 +1,79 @@
+package:
+  name: gh
+  version: "2.102.0"
+  epoch: 0 # CVE-2026-81870
+  description: GitHub's official command line tool
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      # Deviation from Wolfi's own recipe: go-1.27 -> go, matching our
+      # single-stream Go naming (see packages/go.yaml and BOOTSTRAP.md's
+      # Phase 4 -- same deviation already applied to melange.yaml and
+      # apko.yaml).
+      - go
+      - make
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: fc4b137cdef0a6bd28fd461b7cf9c84a5812a8cd
+      repository: https://github.com/cli/cli
+      tag: v${{package.version}}
+
+  - uses: bump
+    with:
+      deps: chainguard.dev/apko@v1.4.5
+
+  - runs: make install prefix=${{targets.destdir}}/usr
+
+  - uses: strip
+
+subpackages:
+  - name: gh-doc
+    description: gh docs
+    pipeline:
+      - uses: split/alldocs
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: cli/cli
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: gh
+    - uses: test/tw/help-check
+      with:
+        bins: gh
+    - name: Shell completion generation
+      runs: |
+        set -euo pipefail
+        # Verify gh can generate shell completions for all supported shells
+        gh completion --shell bash | grep -F "gh"
+        gh completion --shell zsh | grep -F "gh"
+        gh completion --shell fish | grep -F "gh"
+    - name: Config subcommand
+      runs: |
+        set -euo pipefail
+        # Verify config subcommand works and lists known config keys
+        gh config list | grep -F "git_protocol"
+    - name: Auth status subcommand
+      runs: |
+        set -euo pipefail
+        # gh auth status exits non-zero when not authenticated,
+        # but the error message confirms the binary is functional.
+        # Temporarily disable set -e to capture the expected non-zero exit.
+        set +e
+        output=$(gh auth status 2>&1)
+        set -e
+        echo "$output" | grep -F "not logged"

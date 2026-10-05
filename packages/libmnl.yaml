@@ -14,8 +14,13 @@ environment:
       - build-base
       - busybox
       - ca-certificates-bundle
-      - glibc-2.43-dev
+      # Deviation from Wolfi's own recipe: they list glibc-2.43-dev
+      # alongside glibc-2.44 (leftover inconsistency from a version
+      # transition on their end, confirmed by diffing against their
+      # current live file verbatim) -- we only maintain the 2.44 stream,
+      # so this is glibc-2.44-dev instead, not a separate 2.43 fork.
       - glibc-2.44
+      - glibc-2.44-dev
       - libtool
       - linux-headers
 

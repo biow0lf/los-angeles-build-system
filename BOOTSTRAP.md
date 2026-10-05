@@ -469,8 +469,21 @@ A proper sweep of every `packages/*.yaml`'s `environment.contents.packages`
 referenced against every name we actually provide (every recipe's own
 `package.name`, every `subpackages[].name`, *and* every `provides:` alias,
 e.g. `python3`/`python3-dev` are already covered via `python-3.13.yaml`'s
-own `provides:` block, not a literal subpackage). The following still
-resolve from Wolfi's live repo and have no self-hosted recipe at all:
+own `provides:` block, not a literal subpackage).
+
+The first pass at this audit missed melange's `range:`/`data:` templating
+(used by `glibc-2.44.yaml`, `libcap-ng.yaml`, `systemd.yaml`, and
+`util-linux.yaml` to generate many subpackages from one templated entry,
+e.g. `util-linux.yaml`'s `libs` range alone produces `libblkid`/
+`libfdisk`/`libmount`/`libsmartcols`/`libuuid` as literal subpackage
+names), which produced 6 false positives, corrected here:
+`glibc-locale-en`/`glibc-locale-fr` (provided via `glibc-2.44.yaml`'s own
+range-templated `provides:`), `libcap-ng-dev` (a `- range: ""` subpackage
+entry whose `name:` sits on its own following line, a pattern the first
+pass's parser didn't handle), and `libmount`/`libuuid`/`setpriv` (all
+produced by `util-linux.yaml`'s `libs`/`bins` ranges). The following 83
+names still resolve from Wolfi's live repo and have no self-hosted recipe
+at all:
 
 - [ ] `abi-compliance-checker`, `abi-dumper` (glibc's own ABI-report build dep)
 - [ ] `argon2-dev`
@@ -489,12 +502,11 @@ resolve from Wolfi's live repo and have no self-hosted recipe at all:
 - [ ] `gdbm-dev`
 - [ ] `gengetopt`
 - [ ] `glib-dev`, `gtk-doc`
-- [ ] `glibc-2.43-dev` -- note: distinct from our self-hosted `glibc-2.44`;
-      whatever still asks for this exact older version needs checking
-      (bump the recipe to 2.44, or this is a genuine still-needed old pin)
-- [ ] `glibc-locale-en`, `glibc-locale-fr` -- distinct from `glibc-locale-extra`/
-      `glibc-locale-posix`/`glibc-locales`, which we *do* already provide
-      (via `glibc-2.44.yaml`'s own `provides:`)
+- [x] `glibc-2.43-dev` -- was a stale version pin in `libmnl.yaml`
+      (leftover Wolfi inconsistency, confirmed by diffing against their
+      own current live file verbatim -- they list it alongside
+      `glibc-2.44` in the same environment, itself inconsistent). Fixed
+      by bumping to `glibc-2.44-dev` -- we don't maintain a 2.43 stream.
 - [ ] `gnutls-dev`
 - [ ] `groff`
 - [ ] `guile` -- `swig`'s one remaining Wolfi dependency (see that entry above)
@@ -505,19 +517,14 @@ resolve from Wolfi's live repo and have no self-hosted recipe at all:
       `-dev` split, still missing
 - [ ] `json-c-dev` (elfutils)
 - [ ] `krb5-dev` (curl)
-- [ ] `libcap-ng-dev` -- `libcap-ng.yaml` exists and provides the base library;
-      it has no `-dev` subpackage split at all yet, unlike every other
-      `lib*-dev` pattern in this repo
 - [ ] `libffi-dev`
 - [ ] `libice-dev` (pulled in alongside the already-self-hosted `libsm-dev`)
-- [ ] `libmount` (distinct from `util-linux-dev`, which we partially provide)
 - [ ] `libnftnl-dev` (nftables)
 - [ ] `libpipeline-dev` (man-db's own build dep, ironically -- man-db itself
       is self-hosted but one of its build deps isn't)
 - [ ] `libpsl-dev` (curl)
 - [ ] `libssh`, `libssh-dev`
 - [ ] `libunistring-dev` (libidn2)
-- [ ] `libuuid` (distinct from `util-linux-dev`)
 - [ ] `libxcb-dev`, `xorgproto`, `xtrans`, `xtrans-dev` (X11 build-tooling
       cluster, alongside the already-self-hosted `libx11`/`libsm`)
 - [ ] `libxml2-dev`, `libxml2-utils`, `libxslt`
@@ -548,7 +555,6 @@ resolve from Wolfi's live repo and have no self-hosted recipe at all:
 - [ ] `sed` -- surprising one: busybox's `sed` applet is in the shipped
       image already, but no self-hosted recipe provides the standalone
       GNU `sed` package some build environment still asks for
-- [ ] `setpriv`
 - [ ] `tk-dev` (python-3.13's Tk bindings -- distinct from the now-fixed
       `tcl`/`tcl-dev`, see that entry's saga above)
 - [ ] `tpm2-tss`

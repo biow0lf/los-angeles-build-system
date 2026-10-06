@@ -1,0 +1,113 @@
+package:
+  name: perl-yaml-syck
+  version: "1.47"
+  epoch: 2 # glibc: 2.43->2.44
+  description: Fast, lightweight YAML loader and dumper
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      # Deviation from Wolfi's own recipe: same stale-major-version pin
+      # pattern as packages/libmnl.yaml's glibc fix -- we only maintain
+      # a single gcc stream (currently 16), which provides
+      # gcc-16-default (see packages/gcc.yaml), not gcc-14-default.
+      - gcc-16-default
+      - glibc-2.44-dev
+      - perl
+      - perl-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/toddr/YAML-Syck
+      tag: ${{package.version}}
+      expected-commit: d7f942870d2f57b17dd5db1b3714eff448c34cd6
+
+  - runs: |
+      export CFLAGS=$(perl -MConfig -E 'say $Config{ccflags}')
+      PERL_MM_USE_DEFAULT=1 perl Makefile.PL INSTALLDIRS=vendor
+
+  - runs: |
+      export CFLAGS=$(perl -MConfig -E 'say $Config{ccflags}')
+      make
+
+  - uses: autoconf/make-install
+
+  - runs: find ${{targets.destdir}} \( -name perllocal.pod -o -name .packlist \) -delete
+
+  - uses: strip
+
+subpackages:
+  - name: perl-yaml-syck-doc
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: toddr/YAML-Syck
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - perl
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test YAML loading
+      runs: |
+        perl -e '
+          use YAML::Syck;
+          my $data = Load("name: Alice\nage: 30\n");
+          die "Load failed" unless ref($data) eq "HASH";
+          die "name wrong" unless $data->{name} eq "Alice";
+          die "age wrong" unless $data->{age} == 30;
+          print "Load OK\n";
+        '
+    - name: Test YAML dumping
+      runs: |
+        perl -e '
+          use YAML::Syck;
+          my $yaml = Dump({ key => "value", num => 42 });
+          die "Dump failed: no output" unless length($yaml) > 0;
+          die "Dump missing key" unless $yaml =~ /key/;
+          die "Dump missing value" unless $yaml =~ /value/;
+          print "Dump OK\n";
+        '
+    - name: Test YAML round-trip
+      runs: |
+        perl -e '
+          use YAML::Syck;
+          my $orig = { list => [1, 2, 3], map => { a => "b" } };
+          my $yaml = Dump($orig);
+          my $loaded = Load($yaml);
+          die "Round-trip list failed" unless join(",", @{$loaded->{list}}) eq "1,2,3";
+          die "Round-trip map failed" unless $loaded->{map}{a} eq "b";
+          print "Round-trip OK\n";
+        '
+    - name: Test LoadFile and DumpFile
+      runs: |
+        perl -e '
+          use YAML::Syck;
+          my $data = { greeting => "hello", count => 7 };
+          DumpFile("/tmp/test-yaml-syck.yaml", $data);
+          my $loaded = LoadFile("/tmp/test-yaml-syck.yaml");
+          die "LoadFile failed" unless ref($loaded) eq "HASH";
+          die "greeting wrong" unless $loaded->{greeting} eq "hello";
+          die "count wrong" unless $loaded->{count} == 7;
+          print "LoadFile/DumpFile OK\n";
+        '

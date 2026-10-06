@@ -1,0 +1,114 @@
+package:
+  name: popt
+  version: 1.19
+  epoch: 11 # glibc: 2.43->2.44
+  description: commandline option parser
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 3Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext-dev
+      - glibc-2.44-dev
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/rpm-software-management/popt
+      tag: popt-${{package.version}}-release
+      expected-commit: 916e61045d268f7e37ade5ec047eb77e8299e6ad
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-static
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: popt-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - popt
+    description: popt dev
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/pkgconf
+        - uses: test/tw/devpackage
+
+  - name: popt-lang
+    pipeline:
+      - uses: split/locales
+    description: popt locales
+    test:
+      pipeline:
+        - uses: test/tw/langpackage
+
+  - name: popt-doc
+    pipeline:
+      - uses: split/manpages
+    description: popt manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: rpm-software-management/popt
+    strip-prefix: popt-
+    strip-suffix: -release
+    tag-filter-prefix: popt-
+
+test:
+  environment:
+    contents:
+      packages:
+        - popt-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test popt library compilation
+      runs: |
+        tee test.c <<'EOF'
+        #include <popt.h>
+        #include <stdio.h>
+
+        int main() {
+            int argc = 1;
+            const char *argv[] = { "test", NULL };
+            struct poptOption options[] = {
+                POPT_AUTOHELP
+                POPT_TABLEEND
+            };
+
+            poptContext ctx = poptGetContext("test", argc, argv, options, 0);
+            if (ctx == NULL) {
+                fprintf(stderr, "FAIL: poptGetContext returned NULL\n");
+                return 1;
+            }
+
+            poptFreeContext(ctx);
+            printf("SUCCESS: popt library works\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags popt) test.c -o test $(pkg-config --libs popt)
+        ./test

@@ -1,0 +1,151 @@
+package:
+  name: freetype
+  version: "2.14.3"
+  epoch: 6 # glibc: 2.43->2.44
+  description: TrueType font rendering library
+  copyright:
+    - license: FTL OR GPL-2.0-or-later
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 3Gi
+
+var-transforms:
+  - from: ${{package.version}}
+    match: \.
+    replace: "-"
+    to: tag-version
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - brotli-dev
+      - build-base
+      - busybox
+      - bzip2-dev
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libpng-dev
+      - libtool
+      - libx11-dev
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 0a0221a1347e2f1e07c395263540026e9a0aa7c7
+      repository: https://gitlab.freedesktop.org/freetype/freetype
+      tag: VER-${{vars.tag-version}}
+
+  - runs: |
+      ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --enable-static \
+        --with-brotli \
+        --with-bzip2 \
+        --with-png \
+        --enable-freetype-config
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: freetype-static
+    description: freetype static library
+    dependencies:
+      runtime:
+        - libpng-static
+        - libx11-static
+        - zlib-static
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: freetype-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - freetype
+        - libx11-dev
+        - libpng-dev
+        - bzip2-dev
+        - brotli-dev
+    description: freetype dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - runs: |
+            freetype-config --version
+            freetype-config --help
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: freetype-doc
+    pipeline:
+      - uses: split/manpages
+    description: freetype manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  git:
+    strip-prefix: VER-
+    tag-filter-prefix: VER-
+
+test:
+  environment:
+    contents:
+      packages:
+        - freetype-dev
+        - build-base
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Compile and run freetype API test
+      runs: |
+        cat > /tmp/ft_test.c << 'EOF'
+        #include <ft2build.h>
+        #include FT_FREETYPE_H
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main(void) {
+            FT_Library library;
+            FT_Error error;
+
+            error = FT_Init_FreeType(&library);
+            if (error) {
+                fprintf(stderr, "FT_Init_FreeType failed: %d\n", error);
+                return 1;
+            }
+
+            FT_Int major, minor, patch;
+            FT_Library_Version(library, &major, &minor, &patch);
+            printf("FreeType version: %d.%d.%d\n", major, minor, patch);
+
+            error = FT_Done_FreeType(library);
+            if (error) {
+                fprintf(stderr, "FT_Done_FreeType failed: %d\n", error);
+                return 1;
+            }
+
+            printf("FreeType library initialized and cleaned up successfully.\n");
+            return 0;
+        }
+        EOF
+        cc /tmp/ft_test.c -o /tmp/ft_test $(freetype-config --cflags --libs)
+        /tmp/ft_test

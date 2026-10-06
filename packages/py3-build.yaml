@@ -1,0 +1,111 @@
+package:
+  name: py3-build
+  version: "1.6.1"
+  epoch: 0
+  # Deviation from Wolfi's own recipe: still trimmed to 3.10/3.11/3.12/3.13
+  # (dropping 3.14 only) -- python-3.14 isn't self-hosted yet. Widen fully
+  # once it is. Tracked in BOOTSTRAP.md.
+  description: A simple, correct Python build frontend
+  copyright:
+    - license: MIT
+  dependencies:
+    provider-priority: 0
+
+vars:
+  import: build
+  pypi-package: build
+
+data:
+  - name: py-versions
+    items:
+      3.10: "310"
+      3.11: "311"
+      3.12: "312"
+      3.13: "313"
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - ca-certificates-bundle
+      - py3-supported-flit-core
+      - py3-supported-pip
+      - py3-supported-python
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pypa/build
+      tag: ${{package.version}}
+      expected-commit: 89cccef40df9011f03bec18cf52c53d1096ed6ee
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      runtime:
+        - py${{range.key}}-packaging
+        - py${{range.key}}-pyproject-hooks
+        - py${{range.key}}-tomli
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.import}}
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}-bin
+    description: Executable binaries for ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      runtime:
+        - py${{range.key}}-${{vars.pypi-package}}
+      provides:
+        - py3-${{vars.pypi-package}}
+      provider-priority: ${{range.value}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr
+          mv ${{targets.contextdir}}/../py${{range.key}}-${{vars.pypi-package}}/usr/bin ${{targets.contextdir}}/usr
+    test:
+      pipeline:
+        - uses: test/tw/ver-check
+          with:
+            bins: pyproject-build
+            version: ${{package.version}}
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/metapackage
+
+test:
+  pipeline:
+    - uses: python/import
+      with:
+        imports: |
+          import ${{vars.import}}
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - post
+  github:
+    identifier: pypa/build
+    use-tag: true
+    strip-suffix: .post1

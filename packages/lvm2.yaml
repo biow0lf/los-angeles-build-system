@@ -1,0 +1,351 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/lvm2/APKBUILD
+package:
+  name: lvm2
+  version: "2.03.43"
+  epoch: 0 # go/wolfi-rsc/lvm2
+  description: Logical Volume Manager 2 utilities
+  copyright:
+    - license: GPL-2.0-only AND LGPL-2.1-only
+  dependencies:
+    runtime:
+      - merged-lib
+      - merged-sbin
+      - merged-usrsbin
+      - wolfi-baselayout
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+var-transforms:
+  - from: ${{package.version}}
+    match: '\.'
+    replace: '_'
+    to: mangled-package-version
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libaio-dev
+      - linux-headers
+      - util-linux-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.com/lvmteam/lvm2.git
+      tag: v${{vars.mangled-package-version}}
+      expected-commit: 7b0bce6909611966bdc1e17c2408e1ec3b0f8c17
+
+  - runs: |
+      # during cross-compilation malloc test goes wrong
+      export ac_cv_func_malloc_0_nonnull=yes
+      export ac_cv_func_realloc_0_nonnull=yes
+      ./configure \
+        --build=$CBUILD \
+        --host=$CHOST \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --libdir=/usr/lib \
+        --sbindir=/usr/bin \
+        --with-usrsbindir=/usr/bin \
+        --with-staticdir=/usr/bin \
+        --localstatedir=/var \
+        --enable-static_link \
+        --disable-nls \
+        --disable-readline \
+        --enable-pkgconfig \
+        --with-thin=internal \
+        --enable-dmeventd \
+        --enable-cmdlib \
+        --with-thin-check=/usr/bin/thin_check \
+        --disable-thin_check_needs_check \
+        --with-thin-dump=/usr/bin/thin_dump \
+        --with-thin-repair=/usr/bin/thin_repair \
+        --with-thin-restore=/usr/bin/thin_restore \
+        --with-cache-check=/usr/bin/cache_check \
+        --disable-cache_check_needs_check \
+        --with-cache-dump=/usr/bin/cache_dump \
+        --with-cache-repair=/usr/bin/cache_repair \
+        --with-cache-restore=/usr/bin/cache_restore \
+        --with-dmeventd-path=/usr/bin/dmeventd \
+        --without-systemd-run \
+        --enable-udev_rules \
+        CLDFLAGS="$LDFLAGS"
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: make install_systemd_units DESTDIR="${{targets.destdir}}" V=1
+    working-directory: scripts
+
+  - uses: strip
+
+subpackages:
+  - name: lvm2-static
+    pipeline:
+      - uses: split/static
+    description: lvm2 static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: device-mapper-static
+    pipeline:
+      - uses: split/static
+    description: lvm2 static
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+    # test added by a robot. The APK was empty when it was checked,
+    # which may not be true forever. If this test fails in the future, please
+    # replace it with a more accurate test.
+    test:
+      pipeline:
+        - uses: test/tw/emptypackage
+
+  - name: device-mapper-libs
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/
+          mv ${{targets.destdir}}/usr/lib/libdevmapper.so.* ${{targets.subpkgdir}}/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: device-mapper-event-libs
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/
+          mv ${{targets.destdir}}/usr/lib/libdevmapper-event.so.* ${{targets.subpkgdir}}/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: lvm2-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: lvm2-doc
+    pipeline:
+      - uses: split/manpages
+    description: lvm2 manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: device-mapper
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+          for i in ${{targets.destdir}}/usr/bin/*; do
+            case "${i##*/}" in
+              dm*.static) ;;
+              dm*) mv "$i" ${{targets.subpkgdir}}/usr/bin ;;
+            esac
+          done
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/systemd/system/
+          mv ${{targets.destdir}}/usr/lib/systemd/system/dm-* ${{targets.subpkgdir}}/usr/lib/systemd/system/
+          mv ${{targets.destdir}}/usr/lib/systemd/system/lvm2-monitor.service ${{targets.subpkgdir}}/usr/lib/systemd/system/
+    test:
+      environment:
+        contents:
+          packages:
+            - lvm2-doc
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              dmeventd
+              dmsetup
+              dmstats
+        - uses: test/verify-service
+          with:
+            man: true
+    dependencies:
+      runtime:
+        - lvm2
+        - merged-lib
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 5354
+
+test:
+  environment:
+    contents:
+      packages:
+        - lvm2-doc
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          lvchange
+          lvconvert
+          lvcreate
+          lvdisplay
+          lvextend
+          lvm
+          lvmconfig
+          lvmdevices
+          lvmdiskscan
+          lvmsadc
+          lvmsar
+          lvreduce
+          lvremove
+          lvrename
+          lvresize
+          lvs
+          lvscan
+          pvchange
+          pvck
+          pvcreate
+          pvdisplay
+          pvmove
+          pvremove
+          pvresize
+          pvs
+          pvscan
+          vgcfgbackup
+          vgcfgrestore
+          vgchange
+          vgck
+          vgconvert
+          vgcreate
+          vgdisplay
+          vgexport
+          vgextend
+          vgimport
+          vgimportclone
+          vgimportdevices
+          vgmerge
+          vgmknodes
+          vgreduce
+          vgremove
+          vgrename
+          vgs
+          vgscan
+          vgsplit
+          lvm.static
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          lvchange
+          lvconvert
+          lvcreate
+          lvdisplay
+          lvextend
+          lvm
+          lvmconfig
+          lvmdevices
+          lvmdiskscan
+          lvmsadc
+          lvmsar
+          lvreduce
+          lvremove
+          lvrename
+          lvresize
+          lvs
+          lvscan
+          pvchange
+          pvck
+          pvcreate
+          pvdisplay
+          pvmove
+          pvremove
+          pvresize
+          pvs
+          pvscan
+          vgcfgbackup
+          vgcfgrestore
+          vgchange
+          vgck
+          vgconvert
+          vgcreate
+          vgdisplay
+          vgexport
+          vgextend
+          vgimport
+          vgimportclone
+          vgimportdevices
+          vgmerge
+          vgmknodes
+          vgreduce
+          vgremove
+          vgrename
+          vgs
+          vgscan
+          vgsplit
+          lvm.static
+    - uses: test/tw/ldd-check
+    - uses: test/verify-service
+      with:
+        man: true
+    - uses: test/no-docs
+    - name: Test lvm version and compiled features
+      runs: |
+        # Verify lvm version output includes expected fields
+        lvm version | grep -iF "LVM version"
+        lvm version | grep -iF "Library version"
+    - name: Test lvmconfig dumps configuration
+      runs: |
+        # lvmconfig should output valid LVM configuration
+        lvmconfig | grep -F "devices {"
+        lvmconfig | grep -F "global {"
+    - name: Test lvm metadata formats and segment types
+      runs: |
+        # List available metadata formats
+        lvm formats | grep -iF "lvm2"
+        # List available segment types
+        lvm segtypes | grep -iF "linear"

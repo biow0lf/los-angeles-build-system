@@ -1,0 +1,109 @@
+package:
+  name: check
+  version: 0.15.2
+  epoch: 7 # glibc: 2.43->2.44
+  description: A unit test framework for C
+  copyright:
+    - license: LGPL-2.1-or-later
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - pkgconf-dev
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libcheck/check
+      tag: ${{package.version}}
+      expected-commit: 11970a7e112dfe243a2e68773f014687df2900e8
+
+  - uses: patch
+    with:
+      patches: fix-missing-end-verbatim.patch
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-static \
+        --enable-build-docs
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: check-doc
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    description: check manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: check-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - check
+    description: check dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: libcheck/check
+
+test:
+  environment:
+    contents:
+      packages:
+        - check-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test check library API
+      runs: |
+        tee test_check.c <<'EOF'
+        #include <check.h>
+        #include <stdlib.h>
+
+        START_TEST(test_basic_pass)
+        {
+            ck_assert_int_eq(1 + 1, 2);
+        }
+        END_TEST
+
+        int main(void)
+        {
+            Suite *s = suite_create("Basic");
+            TCase *tc = tcase_create("Core");
+            SRunner *sr = srunner_create(s);
+            int nfailed;
+
+            tcase_add_test(tc, test_basic_pass);
+            suite_add_tcase(s, tc);
+
+            srunner_run_all(sr, CK_NORMAL);
+            nfailed = srunner_ntests_failed(sr);
+            srunner_free(sr);
+            return (nfailed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+        }
+        EOF
+        gcc $(pkg-config --cflags check) test_check.c -o test_check $(pkg-config --libs check)
+        ./test_check

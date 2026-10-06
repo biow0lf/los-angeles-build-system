@@ -1,0 +1,180 @@
+package:
+  name: fontconfig
+  version: "2.18.3"
+  epoch: 2 # customer-issues#3608: fc-match generic-scoring regression test
+  description: Library for configuring and customizing font access
+  copyright:
+    - license: MIT
+  scriptlets:
+    trigger:
+      paths:
+        - /usr/share/fonts/*
+      script: |
+        #!/bin/sh
+        fc-cache --system-only > /dev/null
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - brotli-dev
+      - build-base
+      - busybox
+      - bzip2-dev
+      # - docbook2x # TODO disabling docs so we can avoid docbook2x for now
+      - ca-certificates-bundle
+      - expat-dev
+      - freetype-dev
+      - gettext-dev
+      - glibc-2.44-dev
+      - gperf
+      - libpng-dev
+      - libtool
+      - python3-dev
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/fontconfig/fontconfig.git
+      tag: ${{package.version}}
+      expected-commit: 0f236723a3c26bd9745e32ba2b3ee21e5f809295
+
+  - runs: |
+      rm -f src/fcobjshash.h
+      ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --enable-static \
+        --enable-docs \
+        --disable-nls \
+        --disable-docs
+
+  # --disable-docs to avoid building docbook* packages for now
+  - runs: rm -f src/fcobjhash.h
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: fontconfig-static
+    description: fontconfig static library
+    dependencies:
+      runtime:
+        - freetype-static
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: fontconfig-config
+    description: fontconfig configuration data
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr
+          mv "${{targets.destdir}}"/usr/share "${{targets.subpkgdir}}"/usr/
+          mv "${{targets.destdir}}"/etc "${{targets.subpkgdir}}"/etc
+    test:
+      pipeline:
+        - uses: test/tw/configpackage
+
+  - name: libfontconfig1
+    description: fontconfig shared library
+    dependencies:
+      runtime:
+        - fontconfig-config
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libfontconfig.so.* "${{targets.subpkgdir}}"/usr/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: fontconfig-dev
+    pipeline:
+      - uses: split/dev
+    description: fontconfig dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 827
+
+test:
+  environment:
+    contents:
+      packages:
+        - font-liberation
+        - font-noto-cjk
+        - font-ubuntu
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          fc-cache
+          fc-cat
+          fc-conflist
+          fc-list
+          fc-match
+          fc-pattern
+          fc-query
+          fc-scan
+          fc-validate
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          fc-cache
+          fc-cat
+          fc-conflist
+          fc-list
+          fc-match
+          fc-pattern
+          fc-query
+          fc-scan
+          fc-validate
+    - name: Test fc-cache builds font cache
+      runs: |
+        fc-cache -f /usr/share/fonts/font-liberation
+    - name: Test fc-list lists fonts
+      runs: |
+        fc-list | grep -F "Liberation"
+    - name: Test fc-match matches a font family
+      runs: |
+        result=$(fc-match "Liberation Sans" family)
+        echo "fc-match result: $result"
+        echo "$result" | grep -Fi "Liberation"
+    - name: Test fc-query queries a font file
+      runs: |
+        fc-query /usr/share/fonts/font-liberation/LiberationSans-Regular.ttf | grep -F "family:"
+    - name: Test fc-scan scans a font directory
+      runs: |
+        fc-scan /usr/share/fonts/font-liberation | grep -F "family:"
+    - name: Test fc-pattern shows pattern info
+      runs: |
+        fc-pattern "Liberation Sans" | grep -F "family:"
+    - name: Test fc-conflist lists configuration files
+      runs: |
+        fc-conflist | grep -F ".conf"
+    - name: fc-match prefers an exact family over an appended generic (customer-issues#3608)
+      runs: |
+        out=$(fc-match "Ubuntu")
+        echo "fc-match Ubuntu -> $out"
+        echo "$out" | grep -qi ubuntu
+        ! echo "$out" | grep -qiE 'noto|cjk'

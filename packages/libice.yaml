@@ -1,0 +1,113 @@
+package:
+  name: libice
+  version: 1.1.2
+  epoch: 7 # glibc: 2.43->2.44
+  description: X11 Inter-Client Exchange library
+  copyright:
+    - license: X11
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bash
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - check-dev
+      - glibc-2.44-dev
+      - libtool
+      - pkgconf-dev
+      - util-macros-dev
+      - xmlto
+      - xorgproto
+      - xtrans-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libice.git
+      tag: libICE-${{package.version}}
+      expected-commit: adf389fc19aedbf1be077b05365d164cd6f463d8
+
+  - runs: |
+      ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --enable-ipv6 \
+        --enable-docs \
+        --with-xmlto \
+        --without-fop
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libice-static
+    description: libice static library
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: libice-doc
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}/usr/share"
+          mv "${{targets.destdir}}/usr/share/doc" "${{targets.subpkgdir}}/usr/share"
+    description: libice manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: libice-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libice
+        - xorgproto
+    description: libice dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1638
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - libice-dev
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Compile and run ICE library test
+      runs: |
+        cat > test_ice.c << 'EOF'
+        #include <X11/ICE/ICElib.h>
+        #include <stdio.h>
+        int main(void) {
+            IceInitThreads();
+            printf("ICE library initialized successfully\n");
+            return 0;
+        }
+        EOF
+        gcc $(pkg-config --cflags ice) test_ice.c -o test_ice $(pkg-config --libs ice)
+        ./test_ice

@@ -1,0 +1,109 @@
+package:
+  name: xxhash
+  version: "0.8.4"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Extremely fast non-cryptographic hash algorithm
+  copyright:
+    - license: BSD-2-Clause
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Cyan4973/xxHash
+      tag: v${{package.version}}
+      expected-commit: c87183a77d67f7d37e3d2d1b7eaac5e7c695e4f0
+
+  - runs: |
+      export CFLAGS="$CFLAGS -DXXH_FORCE_MEMORY_ACCESS=1 -flto=auto -O2"
+      case "${{build.arch}}" in
+      x86*)
+      	# only implemented for x86/x86_64
+      	dispatch="1"
+      	;;
+      *)
+      	dispatch="0"
+      	;;
+      esac
+      make DISPATCH="$dispatch"
+
+  - runs: |
+      make DESTDIR="${{targets.destdir}}" PREFIX=/usr install
+      rm -rf "${{targets.destdir}}"/usr/lib/libxxhash.a
+
+  - uses: strip
+
+subpackages:
+  - name: xxhash-doc
+    description: xxhash manpages
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: xxhash-libs
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          find ${{targets.destdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib/libxxhash.so* ${{targets.subpkgdir}}/usr/lib/
+    description: xxhash libs
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: xxhash-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - xxhash
+        - xxhash-libs
+    description: xxhash dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+  ignore-regex-patterns:
+    - ^r[0-9]+$
+    - ^graphs$
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          xxhsum
+          xxh64sum
+          xxh128sum
+          xxh32sum
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          xxh128sum
+          xxh32sum
+          xxh64sum
+          xxhsum
+    - name: Verify xxhsum computes and verifies hashes
+      runs: |
+        echo "xxhash functional test" > /tmp/xxhash-test.txt
+        xxhsum /tmp/xxhash-test.txt > /tmp/xxhash-test.xxh64
+        xxhsum --check /tmp/xxhash-test.xxh64
+        xxh32sum /tmp/xxhash-test.txt > /tmp/xxhash-test.xxh32
+        xxh32sum --check /tmp/xxhash-test.xxh32
+        xxh128sum /tmp/xxhash-test.txt > /tmp/xxhash-test.xxh128
+        xxh128sum --check /tmp/xxhash-test.xxh128

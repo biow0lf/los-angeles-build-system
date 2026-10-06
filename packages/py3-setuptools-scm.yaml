@@ -1,0 +1,110 @@
+# Generated from https://pypi.org/project/setuptools-scm/
+package:
+  name: py3-setuptools-scm
+  version: "9.2.2"
+  epoch: 4 # go/wolfi-rsc/py3-setuptools-scm
+  # Deviation from Wolfi's own recipe: still trimmed to 3.10/3.11/3.12/3.13
+  # (dropping 3.14 only) -- python-3.14 isn't self-hosted yet. Widen fully
+  # once it is. Tracked in BOOTSTRAP.md.
+  description: the blessed package to manage your versions by scm tags
+  copyright:
+    - license: MIT
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "4"
+    memory: 4Gi
+
+vars:
+  pypi-package: setuptools-scm
+  module-name: setuptools_scm
+
+data:
+  - name: py-versions
+    items:
+      3.10: '310'
+      3.11: '311'
+      3.12: '312'
+      3.13: '313'
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - py3-supported-packaging
+      - py3-supported-pip
+      - py3-supported-python
+      - py3-supported-tomli
+      - py3-supported-wheel
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pypa/setuptools_scm
+      tag: v${{package.version}}
+      expected-commit: e56b78fcd4c1e79aa36c1e4700fca34c8ff540fe
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      runtime:
+        - py${{range.key}}-packaging
+        - py${{range.key}}-setuptools
+        - py${{range.key}}-typing-extensions
+        - py${{range.key}}-tomli
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            import: ${{vars.module-name}}
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}-bin
+    description: Executable binaries for ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      runtime:
+        - py${{range.key}}-${{vars.pypi-package}}
+    pipeline:
+      - uses: split/bin
+    test:
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: setuptools-scm
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/metapackage
+
+update:
+  enabled: true
+  github:
+    identifier: pypa/setuptools_scm
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/byproductpackage

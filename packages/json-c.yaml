@@ -1,0 +1,112 @@
+package:
+  name: json-c
+  version: "0.19"
+  epoch: 1 # glibc: 2.43->2.44
+  description: A JSON implementation in C
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 5Gi
+  test-resources:
+    memory: 8Gi
+
+vars:
+  json-c-date: "20260627"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake
+      - doxygen
+      - glibc-2.44-dev
+      - samurai
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/json-c/json-c
+      tag: json-c-${{package.version}}-${{vars.json-c-date}}
+      expected-commit: aa716cd8d663c976b99b0f30f102ee1d8ef63146
+
+  - uses: cmake/configure
+    with:
+      opts: |
+        -DBUILD_APPS=OFF
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: json-c-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - json-c
+    description: json-c dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: json-c-doc
+    pipeline:
+      - uses: split/manpages
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/share/doc/json-c
+          mv doc/html "${{targets.subpkgdir}}"/usr/share/doc/json-c
+    description: json-c doc
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: false
+  exclude-reason: "Tag format includes release date (json-c-X.Y-YYYYMMDD) that cannot be automatically tracked; update vars.json-c-date and expected-commit manually"
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - gcc
+        - json-c-dev
+  pipeline:
+    - name: "Verify library presence"
+      runs: |
+        test -f /usr/lib/libjson-c.so
+    - name: "Basic JSON parsing test"
+      runs: |
+        cat > test.c << 'EOF'
+        #include <json-c/json.h>
+        #include <stdio.h>
+        #include <string.h>
+
+        int main() {
+            const char *input = "{\"name\":\"test\", \"value\":42}";
+            struct json_object *obj = json_tokener_parse(input);
+            if (!obj) return 1;
+
+            struct json_object *name, *value;
+            if (!json_object_object_get_ex(obj, "name", &name)) return 1;
+            if (!json_object_object_get_ex(obj, "value", &value)) return 1;
+
+            if (strcmp(json_object_get_string(name), "test") != 0) return 1;
+            if (json_object_get_int(value) != 42) return 1;
+
+            json_object_put(obj);
+            return 0;
+        }
+        EOF
+        gcc -Wall -Wextra test.c -ljson-c -o test_json
+        ./test_json
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs

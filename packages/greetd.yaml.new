@@ -11,6 +11,7 @@ environment:
   contents:
     packages:
       - build-base
+      - linux-pam-dev
 
 pipeline:
   - uses: git-checkout
@@ -20,6 +21,18 @@ pipeline:
       expected-commit: 08efe60feceea8c81f9571c666880ff1e1c2e3ff
 
   - uses: cargo/build
+
+  - name: "Install"
+    run: |
+      mkdir -p "${{targets.destdir}}"/usr/bin/
+      cp target/release/greetd "${{targets.destdir}}"/usr/bin/
+      cp target/release/agreety "${{targets.destdir}}"/usr/bin/
+
+      mkdir -p "${{targets.destdir}}"/etc/systemd/system/
+      cp greetd.service "${{targets.destdir}}"/etc/systemd/system/greetd.service
+
+      mkdir -p "${{targets.destdir}}"/etc/greetd
+      cp config.toml "${{targets.destdir}}"/etc/greetd/config.toml
 
   - uses: strip
 

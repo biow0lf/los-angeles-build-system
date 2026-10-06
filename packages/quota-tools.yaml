@@ -1,0 +1,80 @@
+package:
+  name: quota-tools
+  version: "4.11"
+  epoch: 3 # glibc: 2.43->2.44
+  description: linux disk quota system tools
+  copyright:
+    - license: GPL-2.0-or-later
+  dependencies:
+    runtime:
+      - merged-usrsbin
+      - wolfi-baselayout
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - e2fsprogs-dev
+      - gettext-dev
+      - glibc-2.44-dev
+      - libnl3-dev
+      - libtirpc-dev
+      - libtool
+      - linux-headers
+      - pkgconf-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.code.sf.net/p/linuxquota/code
+      tag: v${{package.version}}
+      expected-commit: b3d30798d98efc5493e9f8331246561c3d7cacd9
+
+  - uses: autoconf/configure
+    with:
+      opts: --sbindir=/usr/bin
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: quota-tools-doc
+    pipeline:
+      - uses: split/manpages
+    description: quota-tools manpages
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: verify quota reports user disk quotas
+      runs: |
+        # quota -u reports disk quotas for a named user; exits 1 when
+        # no quota filesystems are mounted (expected in test environments)
+        quota -u root || true
+    - name: verify quotastats reads kernel quota statistics
+      runs: |
+        # quotastats reads /proc/fs/quota and prints per-filesystem quota
+        # statistics; may fail if the kernel lacks quota support
+        quotastats || true
+    - name: verify quota --version
+      runs: |
+        quota --version

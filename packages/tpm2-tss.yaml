@@ -1,0 +1,107 @@
+package:
+  name: tpm2-tss
+  version: "4.2.0"
+  epoch: 3 # openssl: 3.6->4.0
+  description: "Implementation of the TCG Trusted Platform Module 2.0 Software Stack (TSS2)"
+  copyright:
+    - license: BSD-2-Clause
+  resources:
+    cpu: "2"
+    memory: 5Gi
+
+vars:
+  openssl-version: "4.0"
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - autoconf-archive
+      - automake
+      - build-base
+      - busybox-full
+      - curl-dev
+      - glibc-2.44-dev
+      - json-c-dev
+      - libltdl
+      - libtool
+      - openssl-${{vars.openssl-version}}-dev
+      - pkgconf
+      - pkgconf-dev
+  environment:
+    PKG_CONFIG_PATH: /usr/lib/pkgconfig
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/tpm2-software/tpm2-tss
+      tag: ${{package.version}}
+      expected-commit: 506c5e6db0c8514f321dc16a0da2580483f3df04
+
+  - runs: |
+      ./bootstrap
+      ./configure --prefix=/usr --with-runstatedir=/run
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      find "${{targets.destdir}}" -type d -empty -delete
+
+subpackages:
+  - name: tpm2-tss-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - openssl-${{vars.openssl-version}}-dev
+    description: tpm2-tss dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: tpm2-tss-doc
+    pipeline:
+      - uses: split/manpages
+    description: tpm2-tss manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  environment:
+    contents:
+      packages:
+        - tpm2-tss-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test TSS2 library compile and link
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <tss2/tss2_esys.h>
+        #include <stdio.h>
+
+        int main() {
+            /* Verify we can reference TSS2 types and functions */
+            ESYS_CONTEXT *ctx = NULL;
+            /* Esys_Finalize with NULL is a no-op, proves linkage works */
+            Esys_Finalize(&ctx);
+            printf("TSS2 ESYS library linked successfully\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags tss2-esys) test.c -o test $(pkg-config --libs tss2-esys)
+        ./test
+
+update:
+  enabled: true
+  github:
+    identifier: tpm2-software/tpm2-tss

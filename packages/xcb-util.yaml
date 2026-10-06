@@ -1,0 +1,79 @@
+package:
+  name: xcb-util
+  version: 0.4.1
+  epoch: 8 # glibc: 2.43->2.44
+  description: Utility libraries for X C-language Binding
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - gperf
+      - libtool
+      - libxcb-dev
+      - m4
+      - pkgconf-dev
+      - util-macros-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxcb-util
+      tag: xcb-util-${{package.version}}
+      expected-commit: 3a157762578a2e4253a7cb40d2854a3444d5a9df
+
+  - uses: patch
+    with:
+      patches: |
+        0001-.gitmodules-fix-xcb-util-m4-url-and-CI-failure.patch
+
+  - runs: git submodule update --init
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --with-pic \
+        --disable-static \
+        --disable-silent-rules
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: rm -rf ${{targets.destdir}}/usr/lib/*.la
+
+  - uses: strip
+
+subpackages:
+  - name: xcb-util-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - xcb-util
+        - libxcb-dev
+        - util-macros
+    description: xcb-util dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 5165
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

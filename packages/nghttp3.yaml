@@ -1,0 +1,73 @@
+package:
+  name: nghttp3
+  version: "1.18.0"
+  epoch: 1 # glibc: 2.43->2.44
+  description: HTTP/3 library written in C
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - glibc-2.44-dev
+      - libtool
+      - pkgconf-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/ngtcp2/nghttp3.git
+      tag: v${{package.version}}
+      expected-commit: dbfc24286138cb0b6490160e7ca87fe1ce6722a0
+      recurse-submodules: true
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    description: Development dependencies and libraries for ${{package.name}}
+    pipeline:
+      - uses: split/dev
+    test:
+      environment:
+        contents:
+          packages:
+            - build-base
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/pkgconf
+        - runs: |
+            tee ver-check.c <<'EOF'
+            #include <stdio.h>
+            #include <nghttp3/version.h>
+
+            int main() {
+              printf("%s", NGHTTP3_VERSION);
+              return 0;
+            }
+            EOF
+
+            gcc -lnghttp3 ./ver-check.c -o nghttp3-vercheck
+        - uses: test/tw/ver-check
+          with:
+            bins: ./nghttp3-vercheck
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

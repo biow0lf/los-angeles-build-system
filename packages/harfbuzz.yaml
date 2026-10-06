@@ -1,0 +1,248 @@
+package:
+  name: harfbuzz
+  version: "14.5.1"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Text shaping library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "5"
+    memory: 7Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cairo-dev
+      - expat-dev
+      - freetype-dev
+      - glib-dev
+      - glib-gir
+      - glibc-2.44-dev
+      - gobject-introspection-dev
+      - graphite2-dev
+      - icu-dev
+      - meson
+      - posix-libc-utils
+      - python3
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/harfbuzz/harfbuzz
+      expected-commit: eb033319fc2ebe723597fa497d4bb4331bab8b6b
+      tag: ${{package.version}}
+
+  # oldglibc has redundant declarations, which is harmless
+  - runs: |
+      [ -d /usr/lib/oldglibc ] && sed -i '/-Wredundant-decls/d' src/hb.hh
+
+  - uses: meson/configure
+    with:
+      opts: |
+        --default-library=both \
+        -Dcpp_std=c++17 \
+        -Dglib=enabled \
+        -Dgobject=enabled \
+        -Dgraphite=enabled \
+        -Dicu=enabled \
+        -Dfreetype=enabled \
+        -Dcairo=enabled
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: harfbuzz-static
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+    dependencies:
+      runtime:
+        - cairo-static
+        - freetype-static
+        - glib-static
+        - graphite2-static
+        - libpng-static
+        - zlib-static
+    description: harfbuzz static
+
+  - name: harfbuzz-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - harfbuzz
+        - harfbuzz-icu
+        - graphite2-dev
+        - freetype-dev
+        - glib-dev~2
+    description: harfbuzz dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: ${{subpkg.name}}
+
+  - name: harfbuzz-icu
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv ${{targets.destdir}}/usr/lib/lib*icu.so.* ${{targets.subpkgdir}}/usr/lib/
+    test:
+      environment:
+        contents:
+          packages:
+            - build-base
+            - harfbuzz-dev
+            - icu-dev
+            - pkgconf
+      pipeline:
+        - uses: test/tw/ldd-check
+        - name: Test harfbuzz-icu library linkage and functionality
+          runs: |
+            cat > /tmp/test_hb_icu.c << 'EOF'
+            #include <hb.h>
+            #include <hb-icu.h>
+            #include <stdio.h>
+
+            int main(void) {
+                hb_unicode_funcs_t *ufuncs = hb_icu_get_unicode_funcs();
+                if (ufuncs == NULL) {
+                    fprintf(stderr, "hb_icu_get_unicode_funcs() returned NULL\n");
+                    return 1;
+                }
+                /* Verify ICU unicode funcs work by querying a codepoint's general category */
+                hb_unicode_general_category_t cat = hb_unicode_general_category(ufuncs, 'A');
+                if (cat == HB_UNICODE_GENERAL_CATEGORY_OTHER_LETTER) {
+                    fprintf(stderr, "Unexpected general category for 'A'\n");
+                    return 1;
+                }
+                printf("harfbuzz-icu: hb_icu_get_unicode_funcs() works, category=%d\n", (int)cat);
+                return 0;
+            }
+            EOF
+            gcc $(pkg-config --cflags harfbuzz-icu) /tmp/test_hb_icu.c -o /tmp/test_hb_icu $(pkg-config --libs harfbuzz-icu)
+            /tmp/test_hb_icu
+    description: Harfbuzz ICU support library
+
+  - name: harfbuzz-utils
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr
+          mv ${{targets.destdir}}/usr/bin ${{targets.subpkgdir}}/usr/
+    description: harfbuzz (utilities)
+    test:
+      environment:
+        contents:
+          packages:
+            - ttf-dejavu
+      pipeline:
+        - uses: test/tw/ver-check
+          with:
+            bins: |
+              hb-info
+              hb-shape
+              hb-subset
+              hb-view
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              hb-info
+              hb-shape
+              hb-subset
+              hb-view
+        - name: Test hb-shape produces glyph output
+          runs: |
+            out=$(hb-shape /usr/share/fonts/ttf-dejavu/DejaVuSans.ttf "Hello")
+            echo "hb-shape output: $out"
+            echo "$out" | grep -q '\[' || { echo "ERROR: expected glyph array in output"; exit 1; }
+        - name: Test hb-subset produces a valid subset font
+          runs: |
+            hb-subset --text="Hello" \
+              --output-file=/tmp/subset.ttf \
+              /usr/share/fonts/ttf-dejavu/DejaVuSans.ttf
+            [ -s /tmp/subset.ttf ] || { echo "ERROR: subset font file is empty or missing"; exit 1; }
+        - name: Test hb-info reports font metadata
+          runs: |
+            out=$(hb-info --font-file=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf)
+            echo "hb-info output: $out"
+            echo "$out" | grep -qi 'dejavu\|upem\|glyph' || { echo "ERROR: expected font metadata in hb-info output"; exit 1; }
+
+update:
+  enabled: true
+  github:
+    identifier: harfbuzz/harfbuzz
+
+test:
+  environment:
+    contents:
+      packages:
+        - bash
+        - coreutils
+        - fontconfig
+        - freetype
+        - glib
+        - icu
+        - python3
+        - harfbuzz-utils
+        - ttf-dejavu
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: "Test basic text shaping"
+      runs: |
+        hb-view --font-file=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf \
+                --text="Hello World" \
+                --output-format=ansi
+    - name: "Test RTL text shaping"
+      runs: |
+        echo -e "\u0645\u0631\u062D\u0628\u0627" | \
+        hb-view --font-file=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf \
+                --direction=rtl \
+                --output-format=ansi
+    - name: "Test complex script shaping"
+      runs: |
+        echo -e "\u0909\u092A\u0915\u0930\u0923" | \
+        hb-view --font-file=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf \
+                --features="+liga,+kern" \
+                --output-format=ansi
+    - name: "Test font information retrieval"
+      runs: |
+        hb-info --font-file=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf
+        hb-info --quiet --font-file=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf
+    - name: "Test rendering with different iterations"
+      runs: |
+        hb-view --num-iterations=3 \
+                --font-file=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf \
+                --text="Test Performance" \
+                --output-format=ansi
+    - name: "Test font feature handling"
+      runs: |
+        hb-view --font-file=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf \
+                --text="Hello" \
+                --features="kern,liga=0" \
+                --output-format=ansi
+    - name: "Test various output formats"
+      runs: |
+        hb-view --font-file=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf \
+                --text="Test" \
+                --output-format=svg
+
+        hb-view --font-file=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf \
+                --text="Test" \
+                --output-format=ansi

@@ -1,0 +1,224 @@
+package:
+  name: krb5
+  version: "1.22.2"
+  epoch: 5
+  description: The Kerberos network authentication system
+  copyright:
+    - license: MIT
+  checks:
+    disabled:
+      - setuidgid
+  dependencies:
+    runtime:
+      - merged-usrsbin
+      - wolfi-baselayout
+  resources:
+    cpu: "2"
+    memory: 6Gi
+
+vars:
+  openssl-version: "4.0"
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bison
+      - build-base
+      - busybox
+      - e2fsprogs-dev
+      - flex
+      - glibc-2.44-dev
+      - keyutils-dev
+      - krb5-conf
+      - libverto-dev
+      - openldap-dev
+      - openssl-${{vars.openssl-version}}-dev
+      - perl
+      - python3
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/krb5/krb5.git
+      tag: krb5-${{package.version}}-final
+      expected-commit: 8570e77819563e036027e1da789d08ec9333ed4d
+      cherry-picks: |
+        master/b7290e0cab5b7e39cd4aa7c098beb18a886d4a1d: "Make configure.ac work with autoconf 2.73"
+        master/ad4dcf1856dadc4b352b5c8ff08e51c7290fb41f: "Fix strchr() conformance to C23"
+
+  - runs: |
+      git -c "user.name=Melange Build" -c "user.email=melange-build@cgr.dev" am \
+        0001-Port-to-current-OpenSSL-APIs.patch \
+        0002-Chainguard-Cryptographic-Hardening.patch
+
+  - working-directory: src
+    runs: |
+      autoreconf -vfi
+
+  - uses: autoconf/configure
+    with:
+      dir: src
+      opts: |
+        CPPFLAGS="$CPPFLAGS -fPIC -I/usr/include/et" \
+        --localstatedir=/var/lib \
+        --enable-shared \
+        --disable-nls \
+        --disable-static \
+        --disable-rpath \
+        --with-crypto-impl=openssl \
+        --with-tls-impl=openssl \
+        --with-system-et \
+        --with-system-ss \
+        --with-system-verto \
+        --with-ldap \
+        --disable-des3 \
+        --disable-rc4 \
+        --disable-camellia \
+        --sbindir=/usr/bin
+
+  - uses: autoconf/make
+    with:
+      dir: src
+
+  - working-directory: src
+    runs: |
+      make check
+
+  - uses: autoconf/make-install
+    with:
+      dir: src
+
+  - runs: |
+      mkdir -p ${{targets.destdir}}/usr/share/doc/krb5
+      mv ${{targets.destdir}}/usr/share/examples ${{targets.destdir}}/usr/share/doc/krb5/
+
+  - uses: strip
+
+subpackages:
+  - name: krb5-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - e2fsprogs-dev
+        - krb5-conf
+        - krb5-libs
+        - libverto-dev
+        - merged-usrsbin
+        - wolfi-baselayout
+    description: krb5 dev
+    test:
+      pipeline:
+        - runs: |
+            krb5-config --version
+            krb5-config --help
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: krb5-doc
+    pipeline:
+      - uses: split/manpages
+    description: krb5 manpages
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: krb5-server
+    dependencies:
+      runtime:
+        - libverto-libev
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/share
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+
+          for i in ${{targets.destdir}}/usr/bin/*; do
+            case "${i##*/}" in
+              sclient|gss-server|kadmin.local|kadmind|kdb5_ldap_util|kdb5_util|kprop|kpropd|kproplog|krb5-send-pr|krb5kdc|sim_server|sserver|uuserver) mv "$i" ${{targets.subpkgdir}}/usr/bin ;;
+            esac
+          done
+          install -d ${{targets.subpkgdir}}/var/lib/krb5kdc
+    description: The KDC and related programs for Kerberos 5
+    test:
+      pipeline:
+        - runs: |
+            kdb5_ldap_util --version
+            kdb5_ldap_util --help
+            krb5-send-pr --version
+            krb5-send-pr --help
+
+  - name: krb5-server-ldap
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/krb5/plugins/kdb
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+
+          install -Dm644 \
+            -t ${{targets.subpkgdir}}/usr/share/kerberos \
+            src/plugins/kdb/ldap/libkdb_ldap/kerberos.ldif \
+            src/plugins/kdb/ldap/libkdb_ldap/kerberos.openldap.ldif
+
+          mv ${{targets.destdir}}/usr/lib/krb5/plugins/kdb/kldap.so ${{targets.subpkgdir}}/usr/lib/krb5/plugins/kdb/
+          mv ${{targets.destdir}}/usr/lib/libkdb_ldap* ${{targets.subpkgdir}}/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    description: The LDAP storage plugin for the Kerberos 5 KDC
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: krb5-pkinit
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/krb5/plugins/preauth
+          mv ${{targets.destdir}}/usr/lib/krb5/plugins/preauth/pkinit.so ${{targets.subpkgdir}}/usr/lib/krb5/plugins/preauth/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    description: The PKINIT module for Kerberos 5
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: krb5-libs
+    dependencies:
+      runtime:
+        - krb5-conf
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib ${{targets.subpkgdir}}/usr/
+    description: The shared libraries used by Kerberos 5
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: krb5/krb5
+    use-tag: true
+    strip-prefix: krb5-
+    strip-suffix: -final
+
+test:
+  pipeline:
+    # AUTOGENERATED
+    - runs: |
+        klist -V
+        ktutil --version
+        ktutil --help
+    - uses: test/no-docs

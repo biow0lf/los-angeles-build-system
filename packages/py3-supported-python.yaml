@@ -2,8 +2,15 @@ package:
   name: py3-supported-python
   version: 1
   # Deviation from Wolfi's own recipe: still trimmed to 3.10/3.11/3.12/3.13
-  # (dropping 3.14 only) -- python-3.14 isn't self-hosted yet. Widen fully
-  # once it is. Tracked in BOOTSTRAP.md.
+  # (dropping 3.14). python-3.14 itself IS self-hosted now, but Wolfi's own
+  # recipe doesn't route 3.14 through this package's ranged
+  # py${{range.key}}-build-base pattern the same way -- it needs a parallel
+  # set of standalone py3.14-build/py3.14-installer/py3.14-pip/etc. packages
+  # (py3.14-installer.yaml and py3.14-flit-core.yaml already exist as
+  # separate recipes upstream, outside py3-installer.yaml/py3-flit-core.yaml's
+  # ranges, due to 3.14's free-threading build differences). That's separate
+  # scope from the meson/wayland chain this trim exists to unblock, which
+  # only needs 3.10-3.13. Tracked in BOOTSTRAP.md.
   epoch: 10
   description: metapackage to install all supported versions of python
   copyright:

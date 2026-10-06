@@ -1,0 +1,106 @@
+package:
+  name: perl-xml-parser
+  version: "2.59"
+  epoch: 3 # glibc: 2.43->2.44
+  description: A perl module for parsing XML documents
+  copyright:
+    - license: Artistic-2.0
+  dependencies:
+    runtime:
+      - perl-file-sharedir
+      - perl-libwww
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - expat-dev
+      - glibc-2.44-dev
+      - perl
+      - perl-dev
+      - perl-file-sharedir-install
+      - perl-libwww
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/toddr/XML-Parser
+      tag: ${{package.version}}
+      expected-commit: 16fff0b90acbfb788f4c16ddc7c594ece91b5089
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+subpackages:
+  - name: perl-xml-parser-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-xml-parser manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - _
+  github:
+    identifier: toddr/XML-Parser
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test XML::Parser module loading
+      runs: perl -e 'use XML::Parser; print "loaded\n"'
+    - name: Test basic XML parsing
+      runs: |
+        perl -e '
+          use XML::Parser;
+          my $p = XML::Parser->new(Style => "Tree");
+          my $tree = $p->parse("<root><child>hello</child></root>");
+          die "parse failed" unless defined $tree;
+          print "basic parse ok\n";
+        '
+    - name: Test XML parsing with handlers
+      runs: |
+        perl -e '
+          use XML::Parser;
+          my @elements;
+          my $p = XML::Parser->new(
+            Handlers => {
+              Start => sub { push @elements, $_[1] },
+            }
+          );
+          $p->parse("<doc><foo/><bar/></doc>");
+          die "expected doc, foo, bar" unless "@elements" eq "doc foo bar";
+          print "handler parse ok\n";
+        '
+    - name: Test XML parsing with character data
+      runs: |
+        perl -e '
+          use XML::Parser;
+          my $text = "";
+          my $p = XML::Parser->new(
+            Handlers => {
+              Char => sub { $text .= $_[1] },
+            }
+          );
+          $p->parse("<root>hello world</root>");
+          die "expected \"hello world\", got \"$text\"" unless $text eq "hello world";
+          print "char data ok\n";
+        '
+    - name: Test XML::Parser::Expat submodule
+      runs: perl -e 'use XML::Parser::Expat; print "expat submodule loaded\n"'

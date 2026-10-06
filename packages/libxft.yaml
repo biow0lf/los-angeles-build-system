@@ -1,0 +1,101 @@
+package:
+  name: libxft
+  version: "2.3.9"
+  epoch: 7 # glibc: 2.43->2.44
+  description: FreeType-based font drawing library for X
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 3Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - expat-dev
+      - fontconfig-dev
+      - freetype-dev
+      - glibc-2.44-dev
+      - libtool
+      - libxrender-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xorgproto
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxft
+      tag: libXft-${{package.version}}
+      expected-commit: f4805c8645914cbdcfd42e71051ba3f8fc664ef5
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --host=${{host.triplet.gnu}} \
+        --build=${{host.triplet.gnu}} \
+        --sysconfdir=/etc
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxft-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libxft
+        - xorgproto
+        - zlib-dev
+    description: libxft dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libxft-doc
+    pipeline:
+      - uses: split/manpages
+    description: libxft manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1777
+
+test:
+  environment:
+    contents:
+      packages:
+        - libxft-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test libXft compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <X11/Xft/Xft.h>
+        int main() {
+            /* Verify library is linkable by referencing a symbol */
+            XftVersion;
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xft) test.c -o test $(pkg-config --libs xft)
+        ./test

@@ -1,0 +1,172 @@
+package:
+  name: meson
+  version: "1.12.1"
+  epoch: 0 # reference python-version var
+  description: Fast and user friendly build system
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "1"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 4Gi
+
+vars:
+  pypi-package: meson
+  import: mesonbuild
+  # Latest supported python version; the -doc subpackage splits
+  # the manual pages out of this interpreter's subpackage.
+  python-version: "3.13"
+  test-demo: |
+    tmpdir=$(mktemp -d)
+    trap "rm -rf $tmpdir" EXIT
+    cd "$tmpdir"
+
+    cat <<'EOF' > main.c
+    #include <stdio.h>
+    int main(int argc, char **argv) {
+      printf("Hello Wolfi.\n");
+      return 0;
+    }
+    EOF
+
+    cat <<'EOF' > "meson.build"
+    project('tutorial', 'c')
+    executable('demo', 'main.c')
+    EOF
+
+    CC=gcc meson setup builddir
+    cd builddir
+    meson compile
+    ./demo
+
+data:
+  - name: py-versions
+    items:
+      3.10: "310"
+      3.11: "311"
+      3.12: "312"
+      3.13: "313"
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - ca-certificates-bundle
+      - py3-supported-build-base
+      - samurai
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/mesonbuild/meson
+      expected-commit: 70598bb7825f0f804fb31ec2795de5e79e7692a0
+      tag: ${{package.version}}
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: python${{range.key}} version of ${{vars.pypi-package}}
+    dependencies:
+      provides:
+        - py3-${{vars.pypi-package}}
+      provider-priority: ${{range.value}}
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - name: "move usr/bin executables for -bin"
+        runs: |
+          mkdir -p ./cleanup/${{range.key}}/
+          mv ${{targets.contextdir}}/usr/bin ./cleanup/${{range.key}}/
+      - uses: strip
+    test:
+      pipeline:
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.import}}
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}-bin
+    description: Executable binaries for ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      runtime:
+        - py${{range.key}}-${{vars.pypi-package}}
+        - samurai
+      provides:
+        - meson
+        - py3-${{vars.pypi-package}}-bin
+      provider-priority: ${{range.value}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr/
+          mv ./cleanup/${{range.key}}/bin ${{targets.contextdir}}/usr/
+    test:
+      environment:
+        contents:
+          packages:
+            - build-base
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: meson
+        - runs: ${{vars.test-demo}}
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: python/import
+          with:
+            python: python3.10
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.11
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.12
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.13
+            import: ${{vars.import}}
+
+  - name: ${{package.name}}-doc
+    description: ${{package.name}} manpages
+    pipeline:
+      - uses: split/manpages
+        with:
+          package: py${{vars.python-version}}-${{vars.pypi-package}}
+      - runs: |
+          rm -rf ${{targets.outdir}}/py3*-${{vars.pypi-package}}/usr/share/man
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: mesonbuild/meson
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+  pipeline:
+    - uses: test/tw/help-check
+      with:
+        bins: meson
+    - runs: ${{vars.test-demo}}

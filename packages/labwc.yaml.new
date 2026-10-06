@@ -18,7 +18,7 @@ pipeline:
     with:
       repository: https://github.com/labwc/labwc.git
       tag: ${{package.version}}
-      expected-commit: d66a65ad5a0e31b287f53930b0f09e31801f1613
+      expected-commit: 97f28877a343e062f3178d201f0248cd9c2610cf
 
   - uses: meson/configure
 

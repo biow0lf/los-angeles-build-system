@@ -1,0 +1,35 @@
+package:
+  name: labwc
+  version: 0.20.2
+  epoch: 0
+  description: "A Wayland window-stacking compositor"
+  url: https://labwc.github.io/
+  copyright:
+    - license: GPL-2.0-only
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - meson
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/labwc/labwc.git
+      tag: ${{package.version}}
+      expected-commit: d66a65ad5a0e31b287f53930b0f09e31801f1613
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: labwc/labwc
+

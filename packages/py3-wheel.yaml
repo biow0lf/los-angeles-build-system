@@ -1,0 +1,102 @@
+package:
+  name: py3-wheel
+  version: "0.48.0"
+  epoch: 0 # fix test: use byproductpackage for meta package
+  # Deviation from Wolfi's own recipe: still trimmed to 3.10/3.11/3.12/3.13
+  # (dropping 3.14 only) -- python-3.14 isn't self-hosted yet. Widen fully
+  # once it is. Tracked in BOOTSTRAP.md.
+  description: "built-package format for Python"
+  copyright:
+    - license: MIT
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "2"
+    memory: 5Gi
+
+vars:
+  pypi-package: wheel
+
+data:
+  - name: py-versions
+    items:
+      3.10: "310"
+      3.11: "311"
+      3.12: "312"
+      3.13: "313"
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - py3-supported-python
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pypa/wheel
+      tag: ${{package.version}}
+      expected-commit: 21c4da4c54c3b354cc22dc7f6f6374ffcd560e84
+
+  - runs: |
+      # Fix license metadata to avoid flit-core exception
+      sed -i 's/license = "MIT"/license = { file = "LICENSE.txt"}/' pyproject.toml
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      runtime:
+        - py${{range.key}}-packaging
+    pipeline:
+      - uses: py/pip-build-install-bootstrap
+        with:
+          python: python${{range.key}}
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            import: wheel
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}-bin
+    description: Executable binaries for ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      runtime:
+        - py${{range.key}}-${{vars.pypi-package}}
+      provides:
+        - py3-${{vars.pypi-package}}
+      provider-priority: ${{range.value}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr
+          mv ${{targets.contextdir}}/../py${{range.key}}-${{vars.pypi-package}}/usr/bin ${{targets.contextdir}}/usr
+    test:
+      pipeline:
+        - runs: |
+            wheel version
+            wheel --help
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/metapackage
+
+update:
+  enabled: true
+  github:
+    identifier: pypa/wheel
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/byproductpackage

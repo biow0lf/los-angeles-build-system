@@ -1,16 +1,9 @@
 package:
   name: py3-supported-python
   version: 1
-  # Deviation from Wolfi's own recipe: temporarily trimmed to the
-  # python-3.10/3.11 streams only (dropping 3.12/3.13/3.14) to break a
-  # circular dependency -- python-3.12/3.13/3.14 need tk-dev, which needs
-  # harfbuzz, which needs meson, which needs this exact metapackage (via
-  # the py3-build toolchain) to already cover ALL five streams. 3.10/3.11
-  # need no such dependency, so they bootstrap meson/harfbuzz/tk, which
-  # then unblocks building python-3.12/3.13/3.14 themselves. Once those
-  # are self-hosted, widen this back to all five streams and rebuild the
-  # py3-build toolchain for full parity with Wolfi. Tracked in
-  # BOOTSTRAP.md.
+  # Deviation from Wolfi's own recipe: still trimmed to 3.10/3.11/3.12/3.13
+  # (dropping 3.14 only) -- python-3.14 isn't self-hosted yet. Widen fully
+  # once it is. Tracked in BOOTSTRAP.md.
   epoch: 10
   description: metapackage to install all supported versions of python
   copyright:
@@ -19,6 +12,8 @@ package:
     runtime:
       - python-3.10-base
       - python-3.11-base
+      - python-3.12-base
+      - python-3.13-base
   resources:
     cpu: "10"
     memory: 4Gi
@@ -33,6 +28,8 @@ data:
     items:
       3.10: '310'
       3.11: '311'
+      3.12: '312'
+      3.13: '313'
 
 subpackages:
   - name: ${{package.name}}-dev
@@ -41,6 +38,8 @@ subpackages:
       runtime:
         - python-3.10-base-dev
         - python-3.11-base-dev
+        - python-3.12-base-dev
+        - python-3.13-base-dev
     test:
       pipeline:
         - uses: test/tw/metapackage
@@ -72,6 +71,8 @@ subpackages:
       runtime:
         - py3.10-build-base
         - py3.11-build-base
+        - py3.12-build-base
+        - py3.13-build-base
     test:
       pipeline:
         - uses: test/tw/metapackage
@@ -100,6 +101,8 @@ subpackages:
         - build-base
         - py3.10-build-base-dev
         - py3.11-build-base-dev
+        - py3.12-build-base-dev
+        - py3.13-build-base-dev
         - py3-supported-python-dev
     test:
       pipeline:

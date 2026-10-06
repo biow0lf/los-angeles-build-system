@@ -1,0 +1,135 @@
+package:
+  name: nghttp2
+  version: "1.70.0"
+  epoch: 5 # openssl-hardened: 3.6->4.0
+  description: "experimental HTTP/2 client, server and library"
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "2"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  openssl-version: "4.0"
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - build-base
+      - busybox
+      - c-ares-dev
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libev-dev
+      - libtool
+      - openssl-hardened-${{vars.openssl-version}}-dev
+      - pkgconf-dev
+      - python3
+      - wolfi-base
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/nghttp2/nghttp2.git
+      tag: v${{package.version}}
+      expected-commit: 85e300c79fb6dbcfa9c1013215c8710c1c2cd3d2
+      recurse-submodules: true
+
+  - runs: autoreconf -vfi
+
+  - uses: autoconf/configure
+    with:
+      opts: --enable-app
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "nghttp2-dev"
+    description: "headers for nghttp2"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - nghttp2
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/tw/ldd-check
+        - uses: test/pkgconf
+
+  - name: "nghttp2-doc"
+    description: "documentation for nghttp2"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: "libnghttp2-14"
+    description: "nghttp2 client library"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libnghttp2.so.* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: nghttp2/nghttp2
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - openssl
+        - wait-for-it
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: h2load nghttp nghttpd nghttpx
+        version: ${{package.version}}
+    - uses: test/tw/help-check
+      with:
+        bins: h2load nghttp nghttpd nghttpx
+    - name: Test nghttpd serves HTTP/2 and nghttp client fetches content
+      runs: |
+        # Generate a self-signed TLS certificate (nghttpd requires TLS)
+        openssl req -x509 -newkey rsa:2048 -keyout /tmp/server.key \
+          -out /tmp/server.crt -days 1 -nodes \
+          -subj "/CN=localhost"
+
+        # Create content to serve
+        mkdir -p /tmp/htdocs
+        echo "nghttp2-functional-test-content" > /tmp/htdocs/index.html
+
+        # Start nghttpd in the background (it does not log to stdout/stderr)
+        /usr/bin/nghttpd -d /tmp/htdocs 8443 /tmp/server.key /tmp/server.crt &
+        NGHTTPD_PID=$!
+
+        # Wait for the server to be ready on port 8443
+        wait-for-it localhost:8443 -t 20
+
+        # Fetch index.html with nghttp; --no-verify-peer skips TLS cert check
+        response=$(nghttp --no-verify-peer https://localhost:8443/index.html)
+        echo "$response" | grep -F "nghttp2-functional-test-content"
+
+        # Verify h2load can benchmark the server; -n 5 requests, -c 1 connection
+        # h2load does not verify TLS certificates by default
+        h2load_out=$(h2load -n 5 -c 1 https://localhost:8443/)
+        echo "$h2load_out" | grep -E "5 succeeded"
+
+        kill "$NGHTTPD_PID"

@@ -1,0 +1,99 @@
+package:
+  name: ed
+  version: "1.22.6"
+  epoch: 1 # glibc: 2.43->2.44
+  description: Line-oriented text editor used to create, display, modify and otherwise manipulate text files
+  copyright:
+    - license: GPL-2.0-or-later
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - lzip
+
+pipeline:
+  - uses: fetch
+    with:
+      expected-sha256: 3f33b22135219c39c3c695f7b7171c2567d3e2a17c798c0a90607320cbb268f2
+      uri: https://ftp.gnu.org/gnu/ed/ed-${{package.version}}.tar.lz
+      extract: false
+
+  - runs: |
+      lzip -cd ed-${{package.version}}.tar.lz | tar -xf -
+      cp -r ed-${{package.version}}/* .
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: ed-doc
+    pipeline:
+      - uses: split/infodir
+      - uses: split/manpages
+    description: ed manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 659
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        ed --version
+        red --version
+        ed --help
+        red --help
+    - name: Test ed can create and write a file
+      runs: |
+        # Use ed to create a file with content
+        printf 'a\nHello, ed!\n.\nw /tmp/ed-test.txt\nq\n' | ed
+        grep -F "Hello, ed!" /tmp/ed-test.txt
+    - name: Test ed can append lines to a file
+      runs: |
+        # Create initial file
+        printf 'a\nline one\n.\nw /tmp/ed-append.txt\nq\n' | ed
+        # Append a second line
+        printf '$a\nline two\n.\nw\nq\n' | ed /tmp/ed-append.txt
+        grep -F "line one" /tmp/ed-append.txt
+        grep -F "line two" /tmp/ed-append.txt
+    - name: Test ed can substitute text in a file
+      runs: |
+        # Create a file with known content
+        printf 'a\nfoo bar baz\n.\nw /tmp/ed-subst.txt\nq\n' | ed
+        # Substitute 'foo' with 'qux'
+        printf '1s/foo/qux/\nw\nq\n' | ed /tmp/ed-subst.txt
+        grep -F "qux bar baz" /tmp/ed-subst.txt
+    - name: Test ed can delete lines
+      runs: |
+        # Create a file with two lines
+        printf 'a\nkeep this\ndelete this\n.\nw /tmp/ed-delete.txt\nq\n' | ed
+        # Delete the second line
+        printf '2d\nw\nq\n' | ed /tmp/ed-delete.txt
+        grep -F "keep this" /tmp/ed-delete.txt
+        if grep -F "delete this" /tmp/ed-delete.txt; then
+          echo "ERROR: line should have been deleted"
+          exit 1
+        fi
+    - uses: test/no-docs

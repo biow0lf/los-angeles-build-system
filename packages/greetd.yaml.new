@@ -1,0 +1,30 @@
+package:
+  name: greetd
+  version: 0.10.3
+  epoch: 0
+  description: "Minimal and flexible login manager daemon"
+  url: https://man.sr.ht/~kennylevinsen/greetd/
+  copyright:
+    - license: "GPL-3.0"
+
+environment:
+  contents:
+    packages:
+      - build-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/kennylevinsen/greetd
+      tag: ${{package.version}}
+      expected-commit: 08efe60feceea8c81f9571c666880ff1e1c2e3ff
+
+  - uses: cargo/build
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: kennylevinsen/greetd
+

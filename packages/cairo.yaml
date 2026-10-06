@@ -1,0 +1,209 @@
+package:
+  name: cairo
+  version: "1.18.6"
+  epoch: 0 # glibc: 2.43->2.44
+  description: A vector graphics library
+  copyright:
+    - license: LGPL-2.1
+  resources:
+    cpu: "2"
+    memory: 7Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - expat-dev
+      - fontconfig-dev
+      - freetype-dev
+      - glib-dev
+      - glibc-2.44-dev
+      - libpng-dev
+      - libxext-dev
+      - libxrender-dev
+      - meson
+      - pixman-dev
+      - python3
+      - xcb-util
+      - xcb-util-dev
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/cairo/cairo
+      tag: ${{package.version}}
+      expected-commit: 018b3424a10ecd37450360f21454ecf0f3007e17
+
+  - runs: |
+      meson . output \
+        -Db_lto=true \
+        -Dgtk_doc=false \
+        -Ddefault_library=both \
+        -Dtests=disabled \
+        --prefix=/usr
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: cairo-static
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+    dependencies:
+      runtime:
+        - fontconfig-static
+        - freetype-static
+        - glib-static
+        - libpng-static
+        - libx11-static
+        - libxcb-static
+        - pixman-static
+        - zlib-static
+    description: cairo static
+
+  - name: cairo-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - cairo
+        - cairo-tools
+        - fontconfig-dev
+        - freetype-dev
+        - libxext-dev
+        - libxrender-dev
+        - pixman-dev
+        - xcb-util-dev
+    description: cairo dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: cairo-gobject
+    # dependencies:
+    #   provides:
+    #     - cairo-gobject
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib/libcairo-gobject.so.*  ${{targets.subpkgdir}}/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    description: cairo (gobject bindings)
+
+  - name: cairo-tools
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/cairo
+
+          mv ${{targets.destdir}}/usr/bin/*  ${{targets.subpkgdir}}/usr/bin/
+          mv ${{targets.destdir}}/usr/lib/cairo/libcairo-trace.*  ${{targets.subpkgdir}}/usr/lib/cairo/
+    description: cairo (development tools)
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/help-check
+          with:
+            bins: cairo-trace
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 247
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - cairo-dev
+        - cairo-gobject
+        - cairo-tools
+        - gcc
+        - pkgconf
+        - expat-dev
+        - file
+        - zlib-dev
+        - glib-dev
+  pipeline:
+    - name: "Check cairo version"
+      runs: |
+        pkg-config --modversion cairo
+    - name: "Check cairo-gobject version"
+      runs: |
+        pkg-config --modversion cairo-gobject
+    - name: "Verify cairo libraries are installed"
+      runs: |
+        ldconfig -p | grep libcairo
+        ldconfig -p | grep libcairo-gobject
+        ldconfig -p | grep libcairo-script-interpreter
+    - uses: test/tw/ver-check
+      with:
+        bins: cairo-trace
+    - name: "Compile and run a simple cairo program"
+      runs: |
+        cat << EOF > test_cairo.c
+        #include <cairo.h>
+        #include <stdio.h>
+
+        int main(void) {
+            cairo_surface_t *surface;
+            cairo_t *cr;
+
+            surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 240, 80);
+            cr = cairo_create(surface);
+
+            cairo_select_font_face(cr, "serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+            cairo_set_font_size(cr, 32.0);
+            cairo_set_source_rgb(cr, 0.0, 0.0, 1.0);
+            cairo_move_to(cr, 10.0, 50.0);
+            cairo_show_text(cr, "Hello, Cairo!");
+
+            cairo_destroy(cr);
+            cairo_surface_write_to_png(surface, "hello.png");
+            cairo_surface_destroy(surface);
+
+            printf("Cairo test completed successfully.\n");
+            return 0;
+        }
+        EOF
+
+        gcc -o test_cairo test_cairo.c $(pkg-config --cflags --libs cairo)
+        ./test_cairo
+        test -f hello.png || (echo "PNG file was not created" && exit 1)
+        file hello.png | grep -F "PNG image data" || (echo "Invalid PNG file created" && exit 1)
+    - name: "Test cairo-gobject compilation"
+      runs: |
+        cat << EOF > test_cairo_gobject.c
+        #include <cairo-gobject.h>
+        #include <stdio.h>
+
+        int main(void) {
+            GType type = cairo_gobject_context_get_type();
+            if (type == G_TYPE_INVALID) {
+                fprintf(stderr, "Failed to get cairo context type\n");
+                return 1;
+            }
+            printf("Cairo-GObject test completed successfully.\n");
+            return 0;
+        }
+        EOF
+
+        gcc -o test_cairo_gobject test_cairo_gobject.c $(pkg-config --cflags --libs cairo-gobject)
+        ./test_cairo_gobject
+    - uses: test/tw/ldd-check

@@ -1,0 +1,64 @@
+package:
+  name: perl-test-pod
+  version: 1.52
+  epoch: 11
+  description: check for POD errors in files
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/perl-pod/test-pod
+      tag: v${{package.version}}
+      expected-commit: 5377c46cee373171bc31c745ec758b122fc18a30
+
+  - runs: |
+      export CFLAGS=$(perl -MConfig -E 'say $Config{ccflags}')
+      PERL_MM_USE_DEFAULT=1 perl Makefile.PL INSTALLDIRS=vendor
+
+  - runs: |
+      export CFLAGS=$(perl -MConfig -E 'say $Config{ccflags}')
+      make
+
+  - uses: autoconf/make-install
+
+  - runs: find ${{targets.destdir}} \( -name perllocal.pod -o -name .packlist \) -delete
+
+  - uses: strip
+
+subpackages:
+  - name: perl-test-pod-doc
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}/usr/share"
+          mv "${{targets.destdir}}/usr/share/man" "${{targets.subpkgdir}}/usr/share"
+          mv "${{targets.destdir}}/usr/share/perl5" "${{targets.subpkgdir}}/usr/share"
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: perl-pod/test-pod
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/emptypackage

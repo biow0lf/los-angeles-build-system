@@ -2,11 +2,9 @@ package:
   name: py3-installer
   version: "1.0.1"
   epoch: 0 # remove py3.14 from range, use standalone py3.14-installer instead
-  # Deviation from Wolfi's own recipe: temporarily trimmed to the
-  # python-3.10/3.11 streams only (see packages/py3-supported-python.yaml's
-  # own comment for the full rationale -- breaking a circular dependency
-  # with the tk/harfbuzz/meson chain). Widen back once 3.12/3.13/3.14 are
-  # self-hosted.
+  # Deviation from Wolfi's own recipe: still trimmed to 3.10/3.11/3.12/3.13
+  # (dropping 3.14 only) -- python-3.14 isn't self-hosted yet. Widen fully
+  # once it is. Tracked in BOOTSTRAP.md.
   description: A library for installing Python wheels.
   copyright:
     - license: "MIT"
@@ -27,6 +25,8 @@ data:
     items:
       3.10: "310"
       3.11: "311"
+      3.12: "312"
+      3.13: "313"
 
 environment:
   contents:
@@ -83,6 +83,8 @@ subpackages:
       runtime:
         - py3.10-${{vars.pypi-package}}
         - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
     test:
       pipeline:
         - uses: test/tw/metapackage

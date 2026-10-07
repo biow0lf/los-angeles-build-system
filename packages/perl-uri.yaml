@@ -1,0 +1,86 @@
+package:
+  name: perl-uri
+  version: "5.37"
+  epoch: 0
+  description: Uniform Resource Identifiers (absolute and relative)
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libwww-perl/URI.git
+      tag: v${{package.version}}
+      expected-commit: 6d2f3303c308ac199641f262600067513edb082d
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-uri-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-uri manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: libwww-perl/URI
+    use-tag: true
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: URI
+    - name: Test URI Creation
+      runs: |
+        perl -MURI -e '
+        my $uri = URI->new("http://example.com:8080/foo/bar?query=123#fragment");
+        die "Scheme is incorrect" unless $uri->scheme eq "http";
+        die "Host is incorrect" unless $uri->host eq "example.com";
+        die "Port is incorrect" unless $uri->port == 8080;
+        die "Path is incorrect" unless $uri->path eq "/foo/bar";
+        die "Query is incorrect" unless $uri->query eq "query=123";
+        die "Fragment is incorrect" unless $uri->fragment eq "fragment";
+        print "URI creation and component checks passed.\n";'
+    - name: Test Relative URI Resolution
+      runs: |
+        perl -MURI -e '
+        my $base_uri = URI->new("http://example.com/foo/");
+        my $rel_uri = URI->new("bar.html");
+        my $abs_uri = $rel_uri->abs($base_uri);
+        die "Resolved URI is incorrect" unless $abs_uri eq "http://example.com/foo/bar.html";
+        print "Relative URI resolution passed.\n";'
+    - name: Test URI Query Parameter Parsing
+      runs: |
+        perl -MURI -e '
+        my $uri = URI->new("http://example.com/foo?name=John&age=30");
+        my %query = $uri->query_form;
+        die "Name is incorrect" unless $query{name} eq "John";
+        die "Age is incorrect" unless $query{age} == 30;
+        print "Query parameter parsing passed.\n";'
+    - uses: test/no-docs

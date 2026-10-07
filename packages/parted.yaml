@@ -1,0 +1,121 @@
+package:
+  name: parted
+  version: "3.8"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Utility to create, destroy, resize, check and copy partitions
+  copyright:
+    - license: GPL-3.0-or-later
+  dependencies:
+    runtime:
+      - merged-usrsbin
+      - wolfi-baselayout
+  resources:
+    cpu: "6"
+    memory: 8Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bash
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - check
+      - cmake
+      - coreutils
+      # Deviation from Wolfi's own recipe: gcc-14-default -> gcc-16-default (we
+      # don't self-host the older gcc major-version-pinned packages).
+      - gcc-16-default
+      - gettext
+      - glib-dev
+      - glibc-2.44-dev
+      - gperf
+      - libtool
+      - lvm2-dev
+      - ncurses-dev
+      - pkgconf-dev
+      - readline-dev
+      - rsync
+      - texinfo
+      - util-linux-dev
+      - wget
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.launchpad.net/~xnox/parted/+git/master
+      expected-commit: 5f600791b40a48c51aeb6db0432e67a29e8e7951
+      tag: v${{package.version}}
+
+  - name: git.savannah.gnu.org is flakey
+    runs: git submodule set-url gnulib https://github.com/coreutils/gnulib.git
+
+  - runs: ./bootstrap
+
+  - uses: autoconf/configure
+    with:
+      opts: --sbindir=/usr/bin
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: parted-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - parted
+        - wolfi-baselayout
+    description: parted dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: parted-doc
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    description: parted documentation
+    test:
+      pipeline:
+        - uses: test/tw/docs
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 2596
+
+test:
+  pipeline:
+    - runs: |
+        parted --help
+        parted --version
+        partprobe --version
+        partprobe --help
+    - name: Functional test - create and inspect partition table on disk image
+      runs: |
+        # Create a 10 MiB disk image
+        dd if=/dev/zero of=/tmp/test.img bs=1M count=10
+        # Write a GPT partition table
+        parted --script /tmp/test.img mklabel gpt
+        # Create a partition
+        parted --script /tmp/test.img mkpart primary 1MiB 9MiB
+        # Print the partition table and verify output
+        parted --script /tmp/test.img print | grep -q "gpt"
+        parted --script /tmp/test.img print | grep -q "primary"
+        rm -f /tmp/test.img
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs

@@ -1,0 +1,64 @@
+package:
+  name: perl-test-failwarnings
+  version: "0.008"
+  epoch: 2
+  description: "Add test failures if warnings are caught"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-capture-tiny
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/dagolden/Test-FailWarnings
+      tag: release-${{package.version}}
+      expected-commit: 83545156c332d26b4e0a97b5be8e58962b2af9db
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make
+    with:
+      opts: test
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Test::FailWarnings
+
+update:
+  enabled: true
+  github:
+    identifier: dagolden/Test-FailWarnings
+    use-tag: true
+    tag-filter-prefix: release-
+    strip-prefix: release-

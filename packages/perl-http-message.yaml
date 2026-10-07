@@ -1,0 +1,68 @@
+package:
+  name: perl-http-message
+  version: "7.04"
+  epoch: 0
+  description: HTTP style message
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl-clone
+      - perl-encode-locale
+      - perl-http-date
+      - perl-io-html
+      - perl-lwp-mediatypes
+      - perl-uri
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-clone
+      - perl-encode-locale
+      - perl-http-date
+      - perl-io-html
+      - perl-lwp-mediatypes
+      - perl-uri
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libwww-perl/HTTP-Message.git
+      tag: v${{package.version}}
+      expected-commit: fcfb5e8b7e7cc05fbe55f42ec48075267b15cf20
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-http-message-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-http-message manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: libwww-perl/HTTP-Message
+    use-tag: true
+    strip-prefix: v

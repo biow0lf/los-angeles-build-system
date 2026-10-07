@@ -1,0 +1,80 @@
+package:
+  name: perl-net-http
+  version: "6.24"
+  epoch: 2 # add tests
+  description: Low-level HTTP connection (client)
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl-uri
+  resources:
+    cpu: "2"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-uri
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 6d8ad51962f536b0cb0f2a07176a3a5530a8e6a7
+      repository: https://github.com/libwww-perl/Net-HTTP.git
+      tag: v${{package.version}}
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-net-http-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-net-http manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    # 2 tags problematic, 6.08_001, 6.08_002
+    - "6[.]08_00[12]"
+  github:
+    identifier: libwww-perl/Net-HTTP
+    strip-prefix: v
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - perl-io-socket-ssl
+  pipeline:
+    - uses: test/no-docs
+    - name: Verify Net::HTTP module loads
+      runs: perl -e 'use Net::HTTP; print "Net::HTTP loaded\n"'
+    - name: Verify Net::HTTPS module loads
+      runs: perl -e 'use Net::HTTPS; print "Net::HTTPS loaded\n"'
+    - name: Verify Net::HTTP::Methods module loads and has expected methods
+      runs: |
+        perl -e '
+          use Net::HTTP::Methods;
+          print "Net::HTTP::Methods loaded\n";
+        '
+    - name: Verify Net::HTTP::NB module loads
+      runs: perl -e 'use Net::HTTP::NB; print "Net::HTTP::NB loaded\n"'

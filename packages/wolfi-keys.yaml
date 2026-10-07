@@ -1,0 +1,62 @@
+package:
+  name: wolfi-keys
+  version: 1
+  epoch: 13 # go/wolfi-rsc/wolfi-keys
+  description: "Wolfi signing keyring"
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - busybox
+
+pipeline:
+  - name: Install
+    runs: |
+      mkdir -p "${{targets.destdir}}"/etc/apk/keys
+      install -m644 wolfi-signing.rsa.pub "${{targets.destdir}}"/etc/apk/keys
+
+      for i in x86_64 aarch64; do
+        mkdir -p "${{targets.destdir}}"/usr/share/apk/keys/${i}
+        install -m644 wolfi-signing.rsa.pub "${{targets.destdir}}"/usr/share/apk/keys/${i}/wolfi-signing.rsa.pub
+      done
+
+update:
+  enabled: false
+  exclude-reason: "wolfi-keys is not updated, it is a static keyring"
+
+test:
+  environment:
+    contents:
+      packages:
+        - openssl
+  pipeline:
+    - runs: |
+        # Make sure key file matches expected format
+        for i in /usr/share/apk/keys/*/wolfi-signing.rsa.pub; do
+          head -n1 $i | grep "^-----BEGIN PUBLIC KEY-----"
+          grep -v "^-" $i | grep "^[a-zA-Z0-9/+=]\+$"
+          tail -n1 /usr/share/apk/keys/*/wolfi-signing.rsa.pub | grep "^-----END PUBLIC KEY-----"
+          # Make sure openssl can successfully process it as a public key
+          openssl pkey -pubin -in $i -pubout
+          # Mess it up, and make sure it can't be processed
+          sed -e "s/\-/x/g" $i | openssl pkey -pubin 2>&1 | grep -q "Could not find private key of Public Key from"
+        done
+        apk update
+        # Verify what should be a good signature
+        ls -halF /var/cache/apk/APKINDEX.*.tar.gz
+        apk verify /var/cache/apk/APKINDEX.*.tar.gz
+        # Now, tamper with a signature, and ensure the signature does not verify
+        for f in /var/cache/apk/APKINDEX.*.tar.gz; do
+          d=$(mktemp -d)
+          cd "$d"
+          tar xf "$f"
+          sed -i -e "1 s/^C:......../C:abcdefgh/" APKINDEX
+          tar zcf APKINDEX.bad.tar.gz .SIGN.RSA256.*.pub APKINDEX DESCRIPTION
+          # This must fail, due to the signature tampering
+          (apk verify APKINDEX.bad.tar.gz || true) | grep -i "BAD signature"
+        done

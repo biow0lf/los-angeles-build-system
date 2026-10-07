@@ -1,0 +1,87 @@
+package:
+  name: perl-html-tagset
+  version: "3.24"
+  epoch: 7 # add tests
+  description: data tables useful in parsing HTML
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libwww-perl/HTML-Tagset.git
+      tag: ${{package.version}}
+      expected-commit: c44a8e2ceb66236c48e855c2dc9879a6e0656026
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-html-tagset-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-html-tagset manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - name: Test HTML::Tagset module loads and provides tag data
+      runs: |
+        perl -e 'use HTML::Tagset; print "loaded\n"'
+    - name: Test isKnownAttribute hash contains expected HTML attributes
+      runs: |
+        perl -e '
+          use HTML::Tagset;
+          die "href not in isKnownAttribute" unless exists $HTML::Tagset::isKnownAttribute{href};
+          die "src not in isKnownAttribute" unless exists $HTML::Tagset::isKnownAttribute{src};
+          print "isKnownAttribute ok\n";
+        '
+    - name: Test isBodyElement hash contains expected HTML tags
+      runs: |
+        perl -e '
+          use HTML::Tagset;
+          die "p not in isBodyElement" unless exists $HTML::Tagset::isBodyElement{p};
+          die "div not in isBodyElement" unless exists $HTML::Tagset::isBodyElement{div};
+          print "isBodyElement ok\n";
+        '
+    - name: Test linkElements hash maps tags to their link attributes
+      runs: |
+        perl -e '
+          use HTML::Tagset;
+          die "a not in linkElements" unless exists $HTML::Tagset::linkElements{a};
+          die "img not in linkElements" unless exists $HTML::Tagset::linkElements{img};
+          print "linkElements ok\n";
+        '
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - ^cpan_version.*
+    - ^stable.*
+    - ^gitpan_version.*
+    - ^cpan_path.*
+    - ^SBURKE.*
+    - ^PETDANCE.*
+  github:
+    identifier: libwww-perl/HTML-Tagset
+    use-tag: true

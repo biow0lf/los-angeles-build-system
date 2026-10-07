@@ -1,0 +1,86 @@
+package:
+  name: direnv
+  version: "2.37.1"
+  epoch: 17 # toolchain rebuild for  go-1.27-1.27.1
+  description: unclutter your .profile
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "2"
+    memory: 5Gi
+
+# Deviation from Wolfi's own recipe: Wolfi maintains several parallel Go
+# release streams (go-1.27, etc.); we only maintain a single stream named
+# plain "go" (see packages/go.yaml). Renamed go-1.27 -> go below and in
+# the go/build step's go-package input.
+environment:
+  contents:
+    packages:
+      - go
+  environment:
+    CGO_ENABLED: "0"
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 7590ee2442104060bb11eedebd7bd6daf3d88fcd
+      repository: https://github.com/direnv/direnv
+      tag: v${{package.version}}
+
+  - uses: go/build
+    with:
+      packages: .
+      output: direnv
+      go-package: go
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: direnv/direnv
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - bash
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: direnv
+    - uses: test/tw/help-check
+      with:
+        bins: direnv
+    - name: Test direnv core functionality
+      runs: |
+        set -euo pipefail
+
+        # Setup direnv config directory
+        export DIRENV_CONFIG="/tmp/direnv-config"
+        mkdir -p "$DIRENV_CONFIG"
+
+        # Create a test directory with a .envrc file
+        mkdir -p /tmp/test-direnv
+        echo 'export TESTVAR=hello' > /tmp/test-direnv/.envrc
+
+        # Allow the .envrc file
+        cd /tmp/test-direnv
+        direnv allow
+
+        # Export and verify the environment variable is loaded
+        output=$(direnv export bash)
+        echo "$output" | grep -F "TESTVAR" || {
+          echo "FAIL: direnv export did not include TESTVAR"
+          exit 1
+        }
+
+        # Evaluate the export and verify the value
+        eval "$output"
+        [ "$TESTVAR" = "hello" ] || {
+          echo "FAIL: Expected TESTVAR=hello, got TESTVAR=$TESTVAR"
+          exit 1
+        }
+
+        echo "SUCCESS: direnv loaded .envrc and set TESTVAR=hello"

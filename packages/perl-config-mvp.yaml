@@ -1,0 +1,84 @@
+package:
+  name: perl-config-mvp
+  version: "2.200015"
+  epoch: 0 # go/wolfi-rsc/perl-config-mvp
+  description: "Multivalue-property package-oriented configuration"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-class-load
+      - perl-module-pluggable
+      - perl-moose
+      - perl-moosex-oneargnew
+      - perl-params-someutil
+      - perl-role-hasmessage
+      - perl-role-identifiable
+      - perl-throwable
+      - perl-tie-ixhash
+      - perl-try-tiny
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-class-load
+      - perl-dist-zilla
+      - perl-module-pluggable
+      - perl-moose
+      - perl-moosex-oneargnew
+      - perl-params-someutil
+      - perl-role-hasmessage
+      - perl-role-identifiable
+      - perl-test-fatal
+      - perl-throwable
+      - perl-tie-ixhash
+      - perl-try-tiny
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/rjbs/Config-MVP
+      tag: ${{package.version}}
+      expected-commit: 33c616253975b4a4c9ec8430760ef9bd6a4cc38e
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Config::MVP
+
+update:
+  enabled: true
+  github:
+    identifier: rjbs/Config-MVP
+    use-tag: true

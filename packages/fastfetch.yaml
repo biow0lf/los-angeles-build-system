@@ -1,0 +1,54 @@
+package:
+  name: fastfetch
+  version: "2.69.0"
+  epoch: 0 # split/manpages
+  description: A maintained, feature-rich and performance oriented, neofetch like system information tool.
+  copyright:
+    - license: MIT
+  resources:
+    memory: 7Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - glibc-2.44-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/fastfetch-cli/fastfetch
+      tag: ${{package.version}}
+      expected-commit: 0c3b852bf7bad2837a814c7a31bf332092048a2b
+
+  - uses: cmake/configure
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    description: ${{package.name}} manpages
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: fastfetch-cli/fastfetch
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        fastfetch --help
+        fastfetch --version | grep ${{package.version}}
+        fastfetch

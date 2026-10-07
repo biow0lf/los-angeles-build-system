@@ -1,0 +1,39 @@
+package:
+  name: wireplumber
+  version: 0.5.18
+  epoch: 0
+  description: "WirePlumber is a modular session / policy manager for PipeWire"
+  url: https://pipewire.pages.freedesktop.org/wireplumber/
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - meson
+      - glib-dev
+      - pipewire-dev
+      - lua5.3-dev
+      - python-3.14-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/PipeWire/wireplumber
+      tag: ${{package.version}}
+      expected-commit: 81606cbb32d29df20147d1b68b662c1082654d81
+
+  - uses: meson/configure
+    with:
+      opts: |
+        -D system-lua=true
+
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+

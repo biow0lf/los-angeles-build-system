@@ -1,0 +1,185 @@
+package:
+  name: libxcrypt
+  version: "4.5.2"
+  epoch: 5 # glibc: 2.43->2.44
+  description: "Modern library for one-way hashing of passwords"
+  copyright:
+    - license: GPL-2.0-or-later AND LGPL-2.1-or-later
+  options:
+    # For apko same-origin resolution, see glibc libcrypt1 empty
+    # package, which provides so:libcrypt1.so
+    no-provides: true
+    no-depends: true
+  dependencies:
+    # For apk upgrades
+    replaces:
+      - libcrypt1<2.38-r15
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext
+      - glibc-2.44-dev
+      - libtool
+      - pkgconf
+      - pkgconf-dev
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/besser82/libxcrypt
+      tag: v${{package.version}}
+      expected-commit: db70b42bd7b2a5b00a8580c8dec0aa66791c950a
+      cherry-picks: |
+        develop/174c24d6e87aeae631bc0a7bb1ba983cf8def4de: fix -Werror=discarded-qualifiers
+
+  - runs: |
+      ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --prefix=/usr \
+        --enable-hashes=strong,glibc \
+        --enable-obsolete-api=glibc \
+        --disable-xcrypt-compat-files \
+        --disable-failure-tokens
+
+  - uses: autoconf/make
+    with:
+      opts: check
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxcrypt-doc
+    pipeline:
+      - uses: split/manpages
+    description: libxcrypt manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: libxcrypt-dev
+    pipeline:
+      - uses: split/dev
+    description: libxcrypt dev
+    options:
+      # libxcrypt is exact match
+      # versus so:libcrypt.so.1 which prefers obsolete glibc origin
+      no-depends: true
+    dependencies:
+      runtime:
+        - libxcrypt=${{package.full-version}}
+      replaces:
+        # For apk upgrades
+        - glibc-dev<2.38-r15
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libxcrypt2
+    description: libxcrypt2 library
+    pipeline:
+      - uses: autoconf/configure
+        with:
+          opts: |
+            --prefix=/usr \
+            --enable-hashes=strong,glibc \
+            --enable-obsolete-api=no \
+            --disable-xcrypt-compat-files \
+            --disable-failure-tokens
+      - uses: autoconf/make
+        with:
+          opts: check
+      - uses: autoconf/make-install
+      - uses: strip
+      - runs: |
+          rm -r ${{targets.contextdir}}/usr/share
+          rm -r ${{targets.contextdir}}/usr/lib/pkgconfig
+          rm -r ${{targets.contextdir}}/usr/include
+          rm ${{targets.contextdir}}/usr/lib/libcrypt.a
+          rm ${{targets.contextdir}}/usr/lib/libcrypt.so
+          # only 1 file and 1 symlink should be packaged
+          [ "1" -eq "$(find ${{targets.contextdir}} -type f | wc -l)" ]
+          [ "1" -eq "$(find ${{targets.contextdir}} -type l | wc -l)" ]
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/no-docs
+        - uses: test/tw/contains-files
+          with:
+            dir: /usr/lib
+            name: libcrypt.so.2
+            type: l
+        - uses: test/tw/contains-files
+          with:
+            dir: /usr/lib
+            name: libcrypt.so.2.0.0
+
+update:
+  enabled: true
+  github:
+    identifier: besser82/libxcrypt
+    strip-prefix: v
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - libxcrypt-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Test crypt() password hashing
+      runs: |
+        tee test_crypt.c <<'EOF'
+        #include <crypt.h>
+        #include <stdio.h>
+        #include <string.h>
+        #include <stdlib.h>
+
+        int main(void) {
+            /* Hash a password using SHA-512 (yescrypt prefix $y$) */
+            const char *password = "testpassword";
+            const char *setting = "$6$saltsalt$";
+            char *hash = crypt(password, setting);
+            if (hash == NULL) {
+                fprintf(stderr, "crypt() returned NULL\n");
+                return 1;
+            }
+            /* SHA-512 hashes start with $6$ */
+            if (strncmp(hash, "$6$", 3) != 0) {
+                fprintf(stderr, "Unexpected hash prefix: %s\n", hash);
+                return 1;
+            }
+            printf("crypt() produced hash: %s\n", hash);
+
+            /* Verify the hash by re-hashing with the hash as the setting */
+            char *verify = crypt(password, hash);
+            if (verify == NULL || strcmp(verify, hash) != 0) {
+                fprintf(stderr, "Hash verification failed\n");
+                return 1;
+            }
+            printf("Hash verification succeeded\n");
+            return 0;
+        }
+        EOF
+        gcc $(pkg-config --cflags libcrypt) test_crypt.c -o test_crypt $(pkg-config --libs libcrypt)
+        ./test_crypt

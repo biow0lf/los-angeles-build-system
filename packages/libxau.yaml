@@ -1,0 +1,104 @@
+package:
+  name: libxau
+  version: 1.0.12
+  epoch: 8 # glibc: 2.43->2.44
+  description: X11 authorisation library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 2Gi
+  test-resources:
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - pkgconf-dev
+      - util-macros-dev
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxau.git
+      tag: libXau-${{package.version}}
+      expected-commit: a9c65683e68b3a4349afee5d7673b393fb924d2e
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: --sysconfdir=/etc
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxau-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libxau
+        - xorgproto
+    description: libxau dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libxau-doc
+    pipeline:
+      - uses: split/manpages
+    description: libxau manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  environment:
+    contents:
+      packages:
+        - libxau-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <X11/Xauth.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main() {
+            /* XauFileName returns the path to the .Xauthority file */
+            char *filename = XauFileName();
+            if (filename == NULL) {
+                fprintf(stderr, "FAIL: XauFileName() returned NULL\n");
+                return 1;
+            }
+            printf("Xauthority file: %s\n", filename);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xau) test.c -o test $(pkg-config --libs xau)
+        ./test
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1765

@@ -1,0 +1,97 @@
+package:
+  name: perl-html-parser
+  version: "3.86"
+  epoch: 0 # glibc: 2.43->2.44
+  description: HTML parser class
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl-html-tagset
+      - perl-http-message
+      - perl-uri
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - perl
+      - perl-dev
+      - perl-html-tagset
+      - perl-http-message
+      - perl-uri
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libwww-perl/HTML-Parser.git
+      tag: ${{package.version}}
+      expected-commit: 6c64b1d539905d9745f6887bac2a5382ffb15322
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+subpackages:
+  - name: perl-html-parser-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-html-parser manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - ^R
+  github:
+    identifier: libwww-perl/HTML-Parser
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        # Verify core modules load
+        perl -e 'use HTML::Parser; print "HTML::Parser loaded\n"'
+        perl -e 'use HTML::Entities; print "HTML::Entities loaded\n"'
+        perl -e 'use HTML::HeadParser; print "HTML::HeadParser loaded\n"'
+    - runs: |
+        # Test HTML parsing functionality
+        perl -e '
+          use HTML::Parser;
+          my @tags;
+          my $p = HTML::Parser->new(
+            start_h => [sub { push @tags, $_[0] }, "tagname"],
+          );
+          $p->parse("<html><body><p>Hello</p></body></html>");
+          $p->eof;
+          print "Parsed tags: @tags\n";
+          die "Expected html tag" unless grep { $_ eq "html" } @tags;
+          die "Expected body tag" unless grep { $_ eq "body" } @tags;
+          die "Expected p tag" unless grep { $_ eq "p" } @tags;
+          print "HTML parsing OK\n";
+        '
+    - runs: |
+        # Test HTML::Entities encode/decode
+        perl -e '
+          use HTML::Entities;
+          my $encoded = encode_entities("<>&\"");
+          die "encode failed: $encoded" unless $encoded eq "&lt;&gt;&amp;&quot;";
+          my $decoded = decode_entities("&lt;hello&gt;");
+          die "decode failed: $decoded" unless $decoded eq "<hello>";
+          print "HTML::Entities encode/decode OK\n";
+        '

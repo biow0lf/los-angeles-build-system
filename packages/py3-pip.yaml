@@ -2,9 +2,6 @@ package:
   name: py3-pip
   version: "26.2.1" # IF the next version fixes CVEs, check the idna/urllib3 surgery below!
   epoch: 2 # CVE-2026-97687
-  # Deviation from Wolfi's own recipe: still trimmed to 3.10/3.11/3.12/3.13
-  # (dropping 3.14 only) -- python-3.14 isn't self-hosted yet. Widen fully
-  # once it is. Tracked in BOOTSTRAP.md.
   description: The PyPA recommended tool for installing Python packages.
   copyright:
     - license: MIT
@@ -27,6 +24,7 @@ data:
       3.11: '311'
       3.12: '312'
       3.13: '313'
+      3.14: '14' # Keep default as 3.13
 
 environment:
   contents:
@@ -34,6 +32,7 @@ environment:
       - build-base
       - busybox
       - py3-supported-python
+      - python-3.14-base
       - uv # to replace vendored urllib3
 
 pipeline:
@@ -196,6 +195,7 @@ subpackages:
         - py3.11-${{vars.pypi-package}}-base
         - py3.12-${{vars.pypi-package}}-base
         - py3.13-${{vars.pypi-package}}-base
+        - py3.14-${{vars.pypi-package}}-base
     test:
       pipeline:
         - uses: test/metapackage

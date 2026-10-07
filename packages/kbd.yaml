@@ -1,0 +1,79 @@
+package:
+  name: kbd
+  version: "2.10.0"
+  epoch: 3 # split/manpages
+  description: Linux keyboard tools
+  copyright:
+    - license: GPL-2.0-or-later
+  resources:
+    cpu: "2"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - bison
+      - build-base
+      - busybox-full
+      - coreutils
+      - flex-dev
+      - gettext-dev
+      - glibc-2.44-dev
+      - libtool
+      - linux-pam-dev
+      - pkgconf-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/legionus/kbd
+      tag: v${{package.version}}
+      expected-commit: 8eff1ed9100ed14e455f5438101037d6320474bd
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-nls \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --datadir=/usr/share \
+        --htmldir=/usr/share/html/${{package.name}} \
+        --disable-static
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    description: ${{package.name}} manpages
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: legionus/kbd
+    strip-prefix: v
+    tag-filter-prefix: v
+
+test:
+  pipeline:
+    - name: Verify kbd installation
+      runs: |
+        /usr/bin/loadkeys --version || exit 1
+        /usr/bin/loadkeys --help
+        /usr/bin/dumpkeys --version || exit 1
+        /usr/bin/dumpkeys --help
+    - name: Verify kbd binaries are installed
+      runs: |
+        test -x /usr/bin/loadkeys
+        test -x /usr/bin/dumpkeys
+        test -x /usr/bin/setfont
+        test -x /usr/bin/showkey
+        test -x /usr/bin/kbd_mode

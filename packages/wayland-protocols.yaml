@@ -1,0 +1,76 @@
+package:
+  name: wayland-protocols
+  version: "1.49"
+  epoch: 0
+  description: Protocols and protocol extensions complementing the Wayland core protocol
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "2"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - meson
+      - python3-dev
+      - wayland-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/wayland/wayland-protocols
+      tag: ${{package.version}}
+      expected-commit: ee78491a237eaff9389a0ccf8680521d074407d3
+
+  - runs: |
+      env
+      meson . output --prefix=/usr
+      meson compile -j $(nproc) -C output
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    description: Development files for ${{package.name}}
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/pkgconf
+
+update:
+  enabled: true
+  git: {}
+
+test:
+  environment:
+    contents:
+      packages:
+        - coreutils
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: "Verify installation directory structure"
+      runs: |
+        test -d /usr/share/wayland-protocols
+    - name: "Verify presence of core protocol files"
+      runs: |
+        for proto in \
+          "stable/xdg-shell/xdg-shell.xml" \
+          "unstable/xdg-decoration/xdg-decoration-unstable-v1.xml" \
+          "stable/viewporter/viewporter.xml" \
+          "stable/presentation-time/presentation-time.xml"
+        do
+          test -f "/usr/share/wayland-protocols/$proto"
+        done
+    - uses: test/tw/xml-syntax-check
+      with:
+        path: /usr/share/wayland-protocols

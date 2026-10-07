@@ -1,0 +1,65 @@
+package:
+  name: perl-lwp-mediatypes
+  version: "6.05"
+  epoch: 0 # go/wolfi-rsc/perl-lwp-mediatypes
+  description: Perl module - guess media type for a file or a URL
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libwww-perl/LWP-MediaTypes
+      tag: v${{package.version}}
+      expected-commit: 557e0d86e44ab8fe56c3f16b2db69516a64030d1
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-lwp-mediatypes-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-lwp-mediatypes manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: LWP::MediaTypes
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: libwww-perl/LWP-MediaTypes
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

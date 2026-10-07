@@ -1,0 +1,45 @@
+package:
+  name: sdbus-cpp
+  version: 2.3.1
+  epoch: 0
+  description: "High-level C++ D-Bus library for Linux"
+  url: https://github.com/Kistler-Group/sdbus-cpp
+  copyright:
+    - license: LGPL-2.1-or-later
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - cmake
+      - systemd-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Kistler-Group/sdbus-cpp
+      tag: v${{package.version}}
+      expected-commit: ca073434d2c03c2b619f7e23f285cebbf32c7e46
+
+  - uses: cmake/configure
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: sdbus-cpp-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - sdbus-cpp
+    description: sdbus-cpp dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+

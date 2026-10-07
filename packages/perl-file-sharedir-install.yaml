@@ -1,0 +1,112 @@
+package:
+  name: perl-file-sharedir-install
+  version: "0.14"
+  epoch: 9
+  description: Install shared files
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Perl-Toolchain-Gang/File-ShareDir-Install
+      tag: v${{package.version}}
+      expected-commit: ae5ac10e7016b859e1cd83ae28f2b5215a06edb5
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-file-sharedir-install-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-file-sharedir-install manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: File::ShareDir::Install
+    - name: Test install_share and delete_share
+      runs: |
+        perl <<'EOF'
+        use strict;
+        use warnings;
+        use File::ShareDir::Install qw(install_share delete_share);
+
+        # Create a temporary share directory to register
+        mkdir '/tmp/test-share' or die "Cannot create dir: $!";
+        open(my $fh, '>', '/tmp/test-share/data.txt') or die "Cannot create file: $!";
+        print $fh "test data\n";
+        close $fh;
+
+        # install_share registers the directory for dist-level installation
+        install_share '/tmp/test-share';
+        print "install_share succeeded for dist share\n";
+
+        # delete_share removes the registration
+        delete_share '/tmp/test-share';
+        print "delete_share succeeded\n";
+
+        print "install_share/delete_share integration test passed\n";
+        EOF
+    - name: Test module-specific install_share
+      runs: |
+        perl <<'EOF'
+        use strict;
+        use warnings;
+        use File::ShareDir::Install qw(install_share delete_share);
+
+        # Create a temporary share directory for a module-specific share
+        mkdir '/tmp/mymodule-share' or die "Cannot create dir: $!";
+        open(my $fh, '>', '/tmp/mymodule-share/config.txt') or die "Cannot create file: $!";
+        print $fh "module config\n";
+        close $fh;
+
+        # install_share with 'module' keyword registers a module-specific share
+        install_share module => 'My::Module', '/tmp/mymodule-share';
+        print "install_share with module => 'My::Module' succeeded\n";
+
+        # delete_share with module keyword removes the registration
+        delete_share module => 'My::Module', '/tmp/mymodule-share';
+        print "delete_share with module => 'My::Module' succeeded\n";
+
+        print "Module-specific install_share test passed\n";
+        EOF
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: Perl-Toolchain-Gang/File-ShareDir-Install
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

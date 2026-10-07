@@ -1,0 +1,59 @@
+package:
+  name: perl-http-negotiate
+  version: "6.01"
+  epoch: 8
+  description: HTTP::Negotiate perl module
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl-http-message
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-http-message
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/gisle/http-negotiate
+      tag: ${{package.version}}
+      expected-commit: cc40eaf2cc9b579773b50dfb7a419fb42ca3e16d
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-http-negotiate-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-http-negotiate manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - runs: perl -e "use HTTP::Negotiate"
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: gisle/http-negotiate
+    use-tag: true

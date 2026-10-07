@@ -1,0 +1,205 @@
+# Generated from https://git.alpinelinux.org/aports/plain/community/pulseaudio/APKBUILD
+package:
+  name: pipewire
+  version: "1.6.9"
+  epoch: 0 # glibc: 2.43->2.44
+  description: server and user space API to deal with multimedia pipelines
+  copyright:
+    - license: MIT
+
+vars:
+  # PipeWire plugin ABI directory name. Distinct from package.version:
+  # upstream has kept this at "0.3" across all 0.3.x, 1.0.x, and 1.6.x
+  # releases and treats it as a stable module-loading namespace.
+  # Referenced in the pipewire-pulse subpackage below and in the
+  # top-level test block. Bump only if upstream bumps the ABI dir.
+  pipewire-abi: "0.3"
+
+environment:
+  contents:
+    packages:
+      - alsa-lib-dev
+      - build-base
+      - dbus-dev
+      - glib-dev
+      - glibc-2.44-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/pipewire/pipewire
+      tag: ${{package.version}}
+      expected-commit: 8fa27cabdc6c0c1350c69c026af5850ef0af1e26
+
+  - uses: meson/configure
+    with:
+      opts: |
+        -Dsession-managers=
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: pipewire-dev
+    pipeline:
+      - uses: split/dev
+    description: pipewire development headers
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  # PulseAudio-compatibility server. Split off so consumers who just
+  # need the pipewire core library (or the JACK / ALSA paths) don't
+  # have to install the pulse-protocol daemon and its modules.
+  #
+  # File set mirrors Alpine's community/pipewire pulse() subpackage.
+  - name: pipewire-pulse
+    description: PulseAudio-compatible replacement server for pipewire
+    dependencies:
+      runtime:
+        - pipewire
+    pipeline:
+      - runs: |
+          set -e
+          d=${{targets.destdir}}
+          s=${{targets.subpkgdir}}
+
+          # Move-if-exists helper — pipewire's meson opts control which
+          # optional pulse modules are built, so we tolerate absence.
+          mv_if() {
+              for src in "$@"; do
+                  if [ -e "$d/$src" ] || [ -L "$d/$src" ]; then
+                      mkdir -p "$s/$(dirname "$src")"
+                      mv "$d/$src" "$s/$src"
+                  fi
+              done
+          }
+
+          # Binary (symlink to the main pipewire binary) — required.
+          mkdir -p "$s/usr/bin"
+          mv "$d/usr/bin/pipewire-pulse" "$s/usr/bin/pipewire-pulse"
+
+          # Protocol module — required; the whole point of the subpkg.
+          mkdir -p "$s/usr/lib/pipewire-${{vars.pipewire-abi}}"
+          mv "$d/usr/lib/pipewire-${{vars.pipewire-abi}}/libpipewire-module-protocol-pulse.so" \
+             "$s/usr/lib/pipewire-${{vars.pipewire-abi}}/"
+
+          # Optional modules that may or may not be built.
+          mv_if usr/lib/pipewire-${{vars.pipewire-abi}}/libpipewire-module-pulse-tunnel.so
+
+          # Pulse configuration — required file, optional .avail/ dir.
+          mkdir -p "$s/usr/share/pipewire"
+          mv "$d/usr/share/pipewire/pipewire-pulse.conf" \
+             "$s/usr/share/pipewire/"
+          if [ -d "$d/usr/share/pipewire/pipewire-pulse.conf.avail" ]; then
+              mv "$d/usr/share/pipewire/pipewire-pulse.conf.avail" \
+                 "$s/usr/share/pipewire/"
+          fi
+
+          # systemd user units, if built.
+          for u in "$d"/usr/lib/systemd/user/pipewire-pulse.*; do
+              [ -e "$u" ] || continue
+              mkdir -p "$s/usr/lib/systemd/user"
+              mv "$u" "$s/usr/lib/systemd/user/"
+          done
+    test:
+      environment:
+        contents:
+          packages:
+            - binutils
+            - pipewire-pulse
+      pipeline:
+        - uses: test/tw/ver-check
+          with:
+            bins: pipewire-pulse
+            version: ${{package.version}}
+        - uses: test/tw/help-check
+          with:
+            bins: pipewire-pulse
+        - uses: test/tw/ldd-check
+        - uses: test/tw/contains-files
+          with:
+            files: |
+              /usr/bin/pipewire-pulse
+              /usr/lib/pipewire-${{vars.pipewire-abi}}/libpipewire-module-protocol-pulse.so
+              /usr/share/pipewire/pipewire-pulse.conf
+        - name: Verify protocol-pulse module exports pipewire entry point
+          runs: |
+            nm -D /usr/lib/pipewire-${{vars.pipewire-abi}}/libpipewire-module-protocol-pulse.so \
+              | grep -F "pipewire__module_init"
+        - name: Verify pipewire-pulse config references pulse protocol module
+          runs: |
+            grep -F "libpipewire-module-protocol-pulse" \
+              /usr/share/pipewire/pipewire-pulse.conf
+
+update:
+  enabled: true
+  git: {}
+
+test:
+  environment:
+    contents:
+      packages:
+        - binutils
+        - build-base
+        - pipewire-dev
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          pipewire
+          pipewire-aes67
+          pipewire-avb
+        version: ${{package.version}}
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          pipewire
+          pipewire-aes67
+          pipewire-avb
+    - uses: test/tw/ldd-check
+    - name: Test libpipewire API - init, version, and deinit
+      runs: |
+        cat > /tmp/pw_test.c << 'EOF'
+        #include <pipewire/pipewire.h>
+        #include <stdio.h>
+        #include <string.h>
+
+        int main(int argc, char *argv[]) {
+            const char *version;
+
+            pw_init(&argc, &argv);
+
+            version = pw_get_library_version();
+            if (!version || strlen(version) == 0) {
+                fprintf(stderr, "ERROR: pw_get_library_version() returned empty string\n");
+                return 1;
+            }
+            printf("PipeWire library version: %s\n", version);
+
+            pw_deinit();
+            printf("pw_init/pw_deinit cycle completed successfully\n");
+            return 0;
+        }
+        EOF
+        gcc $(pkg-config --cflags libpipewire-${{vars.pipewire-abi}}) /tmp/pw_test.c \
+          -o /tmp/pw_test \
+          $(pkg-config --libs libpipewire-${{vars.pipewire-abi}})
+        /tmp/pw_test
+    - name: Test pw-cli version output
+      runs: |
+        pw-cli --version | grep -F "${{package.version}}"
+    - uses: test/tw/contains-files
+      with:
+        files: |
+          /usr/lib/spa-0.2/alsa/libspa-alsa.so
+    - name: Verify ALSA SPA plugin exports spa_handle_factory entry point
+      runs: |
+        nm -D /usr/lib/spa-0.2/alsa/libspa-alsa.so \
+          | grep -F "spa_handle_factory"

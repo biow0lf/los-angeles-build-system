@@ -1,0 +1,79 @@
+package:
+  name: libxdmcp
+  version: 1.1.5
+  epoch: 11 # glibc: 2.43->2.44
+  description: X11 Display Manager Control Protocol library
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libbsd-dev
+      - libtool
+      - pkgconf-dev
+      - util-macros-dev
+      - xmlto
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxdmcp.git
+      tag: libXdmcp-${{package.version}}
+      expected-commit: 1192d3bc407348ff316bd3bffc791b3ac73f591b
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: $([ -d /usr/lib/oldglibc ] && echo ac_cv_func_arc4random_buf='no')
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxdmcp-doc
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}/usr/share"
+          mv "${{targets.destdir}}/usr/share/doc" "${{targets.subpkgdir}}/usr/share"
+    description: libxdmcp manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: libxdmcp-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libxdmcp
+        - xorgproto
+    description: libxdmcp dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - \d_\d_\d
+  release-monitor:
+    identifier: 1772
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs

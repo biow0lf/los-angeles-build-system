@@ -1,0 +1,7 @@
+packages:
+  - name: crossbeam-channel
+    version: 0.5.15
+  - name: time
+    version: 0.3.47
+  - name: gix-fs
+    version: 0.21.1

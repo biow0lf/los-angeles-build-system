@@ -1,0 +1,69 @@
+package:
+  name: starship
+  version: "1.26.0"
+  epoch: 4 # glibc: 2.43->2.44
+  description: "The minimal, blazing-fast, and infinitely customizable prompt for any shell!"
+  copyright:
+    - license: ISC
+
+vars:
+  rust-version: "1.94"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cargo-auditable
+      - cmake
+      - glibc-2.44-dev
+      - rust-${{vars.rust-version}}
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/starship/starship
+      tag: v${{package.version}}
+      expected-commit: fca92d8dcbd5981b0160af2f7ed7a430b6475a72
+
+  - uses: cargo/build
+    with:
+      output: starship
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: starship/starship
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: starship
+    - uses: test/tw/help-check
+      with:
+        bins: starship
+    - name: Test shell init script generation
+      runs: |
+        starship init bash | grep -F "starship"
+    - name: Test shell completions generation
+      runs: |
+        starship completions bash | grep -F "complete"
+    - name: Test prompt rendering
+      runs: |
+        # Render the prompt - should succeed and produce output
+        output=$(starship prompt 2>&1)
+        [ -n "$output" ] || { echo "FAIL: starship prompt produced no output"; exit 1; }
+    - name: Test module system
+      runs: |
+        # Use explain to verify the module system works
+        starship explain | grep -F "character"
+    - name: Test preset listing
+      runs: |
+        # List available presets to verify configuration handling
+        starship preset --list | grep -F "nerd-font-symbols"

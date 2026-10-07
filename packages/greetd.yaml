@@ -1,0 +1,61 @@
+package:
+  name: greetd
+  version: 0.10.3
+  epoch: 0
+  description: "Minimal and flexible login manager daemon"
+  url: https://man.sr.ht/~kennylevinsen/greetd/
+  copyright:
+    - license: "GPL-3.0"
+
+vars:
+  rust-version: "1.99"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - linux-pam-dev
+      - rust-${{vars.rust-version}}
+      - scdoc
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/kennylevinsen/greetd
+      tag: ${{package.version}}
+      expected-commit: 08efe60feceea8c81f9571c666880ff1e1c2e3ff
+
+  - runs: |
+      cargo build --release
+
+  - runs: |
+      make -C man all SCDOC=scdoc
+
+  - runs: |
+      mkdir -p "${{targets.destdir}}/usr/bin"
+      cp target/release/greetd "${{targets.destdir}}/usr/bin"
+      cp target/release/agreety "${{targets.destdir}}/usr/bin"
+
+      mkdir -p "${{targets.destdir}}/etc/systemd/system/"
+      cp greetd.service "${{targets.destdir}}/etc/systemd/system/greetd.service"
+
+      mkdir -p "${{targets.destdir}}/etc/greetd"
+      cp config.toml "${{targets.destdir}}/etc/greetd/config.toml"
+
+      mkdir -p "${{targets.destdir}}/usr/share/man/man1"
+      mkdir -p "${{targets.destdir}}/usr/share/man/man5"
+      mkdir -p "${{targets.destdir}}/usr/share/man/man7"
+
+      cp man/greetd.1 "${{targets.destdir}}/usr/share/man/man1"
+      cp man/agreety.1 "${{targets.destdir}}/usr/share/man/man1"
+      cp man/greetd.5 "${{targets.destdir}}/usr/share/man/man5"
+      cp man/greetd-ipc.7 "${{targets.destdir}}/usr/share/man/man7"
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: kennylevinsen/greetd
+

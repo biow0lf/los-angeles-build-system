@@ -1,0 +1,69 @@
+package:
+  name: perl-file-listing
+  version: "6.16"
+  epoch: 9 # go/wolfi-rsc/perl-file-listing
+  description: Parse directory listing
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl-http-date
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dist-zilla
+      - perl-http-date
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/PerlAlien/File-Listing
+      tag: v${{package.version}}
+      expected-commit: d098e126670ab44d6da4dd6ae66b7d121754d0f0
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: File::Listing
+    - uses: test/no-docs
+
+subpackages:
+  - name: perl-file-listing-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-file-listing manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: PerlAlien/File-Listing
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

@@ -1,0 +1,119 @@
+package:
+  name: neovim
+  version: "0.12.5"
+  epoch: 2 # glibc: 2.43->2.44
+  description: "Vim-fork focused on extensibility and agility"
+  copyright:
+    - license: Apache-2.0 AND Vim
+  dependencies:
+    provides:
+      # workaround missing provides in lua-lpeg and failure to rebuild lua-lpeg
+      - so:/usr/lib/lua/5.1/lpeg.so
+    runtime:
+      - lua5.1-lpeg
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - cmake
+      - gettext-dev
+      - glibc-2.44-dev
+      - gperf
+      - libuv-dev
+      - lua-luv
+      - lua-luv-dev
+      - lua5.1-lpeg
+      - lua5.1-mpack
+      - luajit-dev
+      - msgpack-c-dev
+      - samurai
+      - tree-sitter-dev<0.26
+      - unibilium-dev
+      - utf8proc-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/neovim/neovim
+      tag: v${{package.version}}
+      expected-commit: 5885a30e1e1225349079e7a1c4a3848aa8e43e42
+
+  # TODO: Don't rely on bundled treesitter grammars
+  - runs: |
+      cmake -S cmake.deps -B .deps -G Ninja -D CMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DUSE_BUNDLED=OFF \
+        -DUSE_BUNDLED_TS_PARSERS=ON
+      cmake --build .deps
+
+  - runs: |
+      cmake -B output -G Ninja \
+       -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+       -DCMAKE_INSTALL_PREFIX=/usr \
+       -DCMAKE_INSTALL_LIBDIR=lib \
+       -DENABLE_JEMALLOC=FALSE \
+       -DENABLE_LTO=TRUE \
+       -DCMAKE_VERBOSE_MAKEFILE=TRUE \
+       -DCI_BUILD=OFF
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: neovim-doc
+    description: neovim docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - name: Verify vim installation
+      runs: |
+        nvim -V1 --version || exit 1
+        nvim --version
+        nvim --help
+    - uses: test/tw/ldd-check
+    - name: Test text editing in headless mode
+      runs: |
+        # Create a test file
+        echo "hello world" > /tmp/test.txt
+
+        # Use nvim headless mode to perform a substitution
+        nvim --headless -c '%s/hello/goodbye/g' -c 'wq' /tmp/test.txt
+
+        # Verify the substitution was applied
+        grep -F "goodbye world" /tmp/test.txt
+    - name: Test Lua scripting support
+      runs: |
+        # Execute Lua code via nvim headless mode
+        output=$(nvim --headless -c 'lua print(vim.inspect(vim.version()))' -c 'q' 2>&1)
+
+        # Verify Lua executed and produced version output
+        echo "$output" | grep -F "major"
+    - name: Test command execution
+      runs: |
+        # Execute a Vim command and capture output
+        output=$(nvim --headless -c 'echo "test_output"' -c 'q' 2>&1)
+
+        # Verify the command produced expected output
+        echo "$output" | grep -F "test_output"
+
+update:
+  enabled: true
+  github:
+    identifier: neovim/neovim
+    strip-prefix: v
+    tag-filter-prefix: v

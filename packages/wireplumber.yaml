@@ -30,10 +30,26 @@ pipeline:
       opts: |
         -D system-lua=true
 
-
   - uses: meson/compile
 
   - uses: meson/install
 
   - uses: strip
+
+subpackages:
+  - name: wireplumber-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - wireplumber
+    description: wireplumber dev
+    test:
+      pipeline:
+        - uses: test/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: PipeWire/wireplumber
 

@@ -1,0 +1,53 @@
+package:
+  name: py3.14-flit-core
+  version: "4.1.0"
+  epoch: 0
+  description: "simple packaging tool for simple packages (core)"
+  copyright:
+    - license: BSD-3-Clause
+
+vars:
+  pypi-package: flit_core
+  import: flit_core
+  python-version: "3.14"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - python-${{vars.python-version}}-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pypa/flit
+      tag: ${{package.version}}
+      expected-commit: 75b1c909d587c1ff5e0fd5f3df1046f74ee249d4
+
+  - runs: |
+      cd flit_core
+      rm -Rf dist/
+      python${{vars.python-version}} -m flit_core.wheel
+      python${{vars.python-version}} bootstrap_install.py \
+          --install-root=${{targets.destdir}} \
+          dist/flit_core-${{package.version}}-py3-none-any.whl
+      python${{vars.python-version}} -m compileall --invalidation-mode=unchecked-hash -r100 \
+          ${{targets.destdir}}
+      rm -rf "${{targets.destdir}}"/usr/lib/python3*/site-packages/flit_core/tests
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/tw/pip-check
+    - uses: python/import
+      with:
+        python: python${{vars.python-version}}
+        import: ${{vars.import}}
+
+update:
+  enabled: true
+  github:
+    identifier: pypa/flit
+    use-tag: true

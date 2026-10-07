@@ -1,0 +1,67 @@
+package:
+  name: perl-sub-exporter
+  version: "0.992"
+  epoch: 0
+  description: "A sophisticated exporter for custom-built routines"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-data-optlist
+      - perl-params-someutil
+      - perl-sub-install
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-data-optlist
+      - perl-dist-zilla
+      - perl-params-someutil
+      - perl-sub-install
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/rjbs/Sub-Exporter
+      tag: ${{package.version}}
+      expected-commit: 871f4d571ae26158c76a645ee3967303a41ada91
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Sub::Exporter
+
+update:
+  enabled: true
+  github:
+    identifier: rjbs/Sub-Exporter
+    use-tag: true

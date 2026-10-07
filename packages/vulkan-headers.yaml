@@ -1,0 +1,90 @@
+package:
+  name: vulkan-headers
+  version: "1.4.365"
+  epoch: 0 # add devpackage test and increase memory to fix QEMU initramfs OOM
+  description: Vulkan header files and API registry
+  copyright:
+    - license: Apache-2.0
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake
+      - ninja-build # samurai doesn't provide a new enough version
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/KhronosGroup/Vulkan-Headers
+      tag: v${{package.version}}
+      expected-commit: c46850864f4661461b0f6cb9922c058ffea4915e
+
+  - runs: |
+      cmake -G Ninja -B build \
+        -DCMAKE_MAKE_PROGRAM="/usr/lib/ninja-build/bin/ninja" \
+        -DCMAKE_BUILD_TYPE=None \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib
+
+  - runs: |
+      DESTDIR="${{targets.destdir}}" cmake  --install build
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    description: Development files for ${{package.name}}
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: KhronosGroup/Vulkan-Headers
+    strip-prefix: v
+    use-tag: true
+    tag-filter: v1
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - gcc
+        - make
+        - vulkan-headers-dev
+  pipeline:
+    - uses: test/tw/ldd-check
+    # Step 1: Verify the installation of Vulkan headers
+    - name: "Check Vulkan Headers Installation"
+      runs: |
+        if [ -f "/usr/include/vulkan/vulkan.h" ]; then
+          echo "Vulkan headers found."
+        else
+          echo "Vulkan headers not found!" && exit 1
+        fi
+    # Step 2: Compile and run a simple C program that includes Vulkan headers
+    - name: "Compile and Run Vulkan Test Program"
+      runs: |
+        cat <<EOF > test_vulkan.c
+        #include <vulkan/vulkan.h>
+        #include <stdio.h>
+
+        int main() {
+            printf("Vulkan headers are working correctly\\n");
+            return 0;
+        }
+        EOF
+
+        gcc test_vulkan.c -o test_vulkan || (echo "Vulkan headers test failed!" && exit 1)
+        ./test_vulkan || (echo "Vulkan headers test failed!" && exit 1)

@@ -1,0 +1,51 @@
+package:
+  name: py3.14-tomli
+  version: "2.4.1"
+  epoch: 5 # go/wolfi-rsc/py3.14-tomli
+  description: TOML parser
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 2Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+vars:
+  pypi-package: tomli
+  import: tomli
+  python-version: "3.14"
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - py${{vars.python-version}}-flit-core
+      - py${{vars.python-version}}-pip
+      - python-${{vars.python-version}}-base
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://files.pythonhosted.org/packages/source/t/tomli/tomli-${{package.version}}.tar.gz
+      expected-sha256: 7c7e1a961a0b2f2472c1ac5b69affa0ae1132c39adcb67aba98568702b9cc23f
+
+  - uses: py/pip-build-install
+    with:
+      python: python${{vars.python-version}}
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/tw/pip-check
+    - uses: python/import
+      with:
+        python: python${{vars.python-version}}
+        import: ${{vars.import}}
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 207408

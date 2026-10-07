@@ -1,0 +1,88 @@
+package:
+  name: perl-encode-locale
+  version: "1.05"
+  epoch: 8 # go/wolfi-rsc/perl-encode-locale
+  description: Perl module - Determine the locale encoding
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/gisle/encode-locale.git
+      tag: ${{package.version}}
+      expected-commit: 64f2bd803bbf5b725d33289691eb706a4f8f0639
+
+  - runs: |
+      PERL_MM_USE_DEFAULT=1 perl Makefile.PL INSTALLDIRS=vendor
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+test:
+  pipeline:
+    - name: Test module loading
+      runs: perl -e 'use Encode::Locale; print "loaded\n"'
+    - name: Test locale encoding detection
+      runs: |
+        perl -e '
+          use Encode::Locale;
+          use Encode;
+          # The module registers "locale" and "locale_fs" encoding aliases
+          my $enc = Encode::find_encoding("locale");
+          die "locale encoding not found" unless defined $enc;
+          print "locale encoding: " . $enc->name . "\n";
+          my $enc_fs = Encode::find_encoding("locale_fs");
+          die "locale_fs encoding not found" unless defined $enc_fs;
+          print "locale_fs encoding: " . $enc_fs->name . "\n";
+        '
+    - name: Test encoding variables are accessible
+      runs: |
+        perl -e '
+          use Encode::Locale;
+          # Package variables should be accessible (may be undef in minimal envs)
+          print "CONSOLE_IN: " . (defined $Encode::Locale::LOCALE_ENCODING_CONSOLE_IN ? $Encode::Locale::LOCALE_ENCODING_CONSOLE_IN : "undef") . "\n";
+          print "CONSOLE_OUT: " . (defined $Encode::Locale::LOCALE_ENCODING_CONSOLE_OUT ? $Encode::Locale::LOCALE_ENCODING_CONSOLE_OUT : "undef") . "\n";
+          print "locale vars accessible\n";
+        '
+    - name: Test decode_argv function
+      runs: |
+        perl -e '
+          use Encode::Locale qw(decode_argv);
+          # decode_argv should be importable and callable
+          decode_argv();
+          print "decode_argv works\n";
+        '
+
+subpackages:
+  - name: perl-encode-locale-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-encode-locale manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: gisle/encode-locale
+    use-tag: true

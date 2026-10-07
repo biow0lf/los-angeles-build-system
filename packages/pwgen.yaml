@@ -1,0 +1,86 @@
+package:
+  name: pwgen
+  version: "2.08"
+  epoch: 10 # glibc: 2.43->2.44
+  description: "A Password Generator"
+  copyright:
+    - license: GPL-2.0-or-later
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/tytso/pwgen
+      tag: v${{package.version}}
+      expected-commit: c25787fce93b2c99efd87219585c0531e80b6d1c
+
+  - runs: |
+      autoconf
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: pwgen-doc
+    description: pwgen docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: tytso/pwgen
+    strip-prefix: v
+    use-tag: true
+    tag-filter: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test password length
+      runs: |
+        # Generate a single 12-character password and verify length
+        password=$(pwgen 12 1)
+        len=$(echo -n "$password" | wc -c)
+        [ "$len" -eq 12 ] || {
+          echo "FAIL: Expected 12 characters, got $len"
+          exit 1
+        }
+    - name: Test password count
+      runs: |
+        # Generate 5 passwords of length 8 and verify count
+        output=$(pwgen 8 5)
+        count=$(echo "$output" | wc -w)
+        [ "$count" -eq 5 ] || {
+          echo "FAIL: Expected 5 passwords, got $count"
+          exit 1
+        }
+    - name: Test no-vowels flag
+      runs: |
+        # Generate a password with -v (no vowels) and verify no vowels present
+        password=$(pwgen -v 20 1)
+        if echo "$password" | grep -i '[aeiou]'; then
+          echo "FAIL: Password contains vowels: $password"
+          exit 1
+        fi
+        echo "PASS: Password has no vowels: $password"

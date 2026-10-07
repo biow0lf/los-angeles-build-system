@@ -1,0 +1,108 @@
+package:
+  name: powertop
+  version: "2.16"
+  epoch: 0 # glibc: 2.43->2.44
+  description: "Power consumption monitor"
+  copyright:
+    - license: GPL-2.0-only
+  dependencies:
+    runtime:
+      - merged-usrsbin
+      - wolfi-baselayout
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - autoconf-archive
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext-dev
+      - glibc-2.44-dev
+      - libnl3-dev
+      - libtool
+      - libtracefs-dev
+      - linux-headers
+      - m4
+      - ncurses-dev
+      - pciutils
+      - pciutils-dev
+      - pkgconf
+      - pkgconf-dev
+      - wolfi-base
+      - xz
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/fenrus75/powertop
+      tag: v${{package.version}}
+      expected-commit: 6147262e506c607036eaca4182ee491b61d06aa3
+
+  - uses: patch
+    with:
+      patches: fix-makefile-missing-sources.patch fix-kworker-false-positive.patch
+
+  - runs: |
+      autopoint --force
+      ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-nls \
+        --sbindir=/usr/bin \
+        CXXFLAGS="-std=gnu++20"
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: powertop-doc
+    pipeline:
+      - uses: split/manpages
+    description: powertop manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: "powertop-bash-completion"
+    description: "bash completion for powertop"
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/share/bash-completion/completions
+          mv ${{targets.destdir}}/usr/share/bash-completion/completions/powertop ${{targets.subpkgdir}}/usr/share/bash-completion/completions
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/shell-syntax-check
+
+update:
+  enabled: true
+  github:
+    identifier: fenrus75/powertop
+    strip-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        powertop --version
+        powertop --help

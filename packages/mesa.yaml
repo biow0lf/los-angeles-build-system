@@ -1,0 +1,229 @@
+package:
+  name: mesa
+  version: "26.2.4"
+  epoch: 0 # llvm: 22->23
+  description: Mesa DRI OpenGL library
+  copyright:
+    - license: MIT AND SGI-B-2.0 AND BSL-1.0
+  dependencies:
+    runtime:
+      - libglvnd
+      - wayland-protocols
+  resources:
+    cpu: "5"
+    memory: 13Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  llvm-version: 23
+  python-version: "3.13"
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - elfutils-dev
+      - expat-dev
+      - findutils
+      - flex
+      - gettext
+      - glibc-2.44-dev
+      - glslang-dev
+      - libdrm-dev
+      - libglvnd-dev
+      - libtool
+      - libva
+      - libva-dev
+      - libvdpau-dev
+      - libx11-dev
+      - libxcb-dev
+      - libxdamage-dev
+      - libxext-dev
+      - libxfixes-dev
+      - libxml2-dev
+      - libxrandr
+      - libxrandr-dev
+      - libxrender
+      - libxrender-dev
+      - libxshmfence-dev
+      - libxxf86vm-dev
+      - llvm-${{vars.llvm-version}}
+      - llvm-${{vars.llvm-version}}-dev
+      - meson
+      - py${{vars.python-version}}-mako
+      - py${{vars.python-version}}-markupsafe
+      - py${{vars.python-version}}-pygments
+      - py${{vars.python-version}}-pyyaml
+      - py${{vars.python-version}}-setuptools
+      - python-${{vars.python-version}}
+      - systemd-dev
+      - vulkan-loader
+      - wayland-dev
+      - wayland-protocols
+      - xorgproto
+      - zlib-dev
+      - zstd-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/mesa/mesa
+      tag: mesa-${{package.version}}
+      expected-commit: 96cb43121031992b85767f9c1be8f3f48e22b1d2
+
+  - runs: |
+      export CFLAGS="$CFLAGS -O2 -g1"
+      export CXXFLAGS="$CXXFLAGS -O2 -g1"
+      export CPPFLAGS="$CPPFLAGS -O2 -g1"
+
+      _dri_driverdir=/usr/lib/xorg/modules/dri
+      # v3d: Broadcom VideoCore VI/VII 3D core — Raspberry Pi 4 / Pi 5.
+      # vc4: Broadcom VideoCore IV display + KMS — older Pi (still used
+      #      alongside v3d on Pi 4/5 for display/KMS handoff).
+      # NB: panfrost (Mali) and broadcom-vulkan (v3dv) are DELIBERATELY
+      # not in this PR — both require `libclc` at build time, which is
+      # not yet packaged in Wolfi. Adds to follow once libclc lands.
+      _gallium_drivers="r300,r600,radeonsi,nouveau,llvmpipe,virgl,zink,v3d,vc4"
+      _vulkan_drivers="amd,swrast"
+      _vulkan_layers="device-select,overlay"
+
+      meson \
+        --prefix=/usr \
+        -Ddri-drivers-path=$_dri_driverdir \
+        -Dgallium-drivers=$_gallium_drivers \
+        -Dvulkan-drivers=$_vulkan_drivers \
+        -Dvulkan-layers=$_vulkan_layers \
+        -Dplatforms=x11,wayland \
+        -Dllvm=enabled \
+        -Dglvnd=true \
+        -Dshared-llvm=enabled \
+        -Dshared-glapi=enabled \
+        -Dgbm=enabled \
+        -Dglx=dri \
+        -Dopengl=true \
+        -Dgles1=enabled \
+        -Dgles2=enabled \
+        -Degl=enabled \
+        -Dgallium-extra-hud=true \
+        -Dgallium-va=enabled \
+        -Dvideo-codecs=h264dec,h264enc,h265dec,h265enc \
+        -Db_ndebug=true \
+        -Db_lto=false \
+        . output
+
+      meson configure --no-pager output
+      meson compile -C output
+
+      DESTDIR="${{targets.destdir}}" meson install --no-rebuild -C output
+
+  - name: Remove wayland-protocols spec files (owned by wayland-protocols pkg)
+    runs: |
+      rm -rf "${{targets.destdir}}/usr/share/wayland-protocols"
+
+  - uses: strip
+
+data:
+  - name: libs
+    items:
+      egl: libEGL_mesa
+      glx: libGLX_mesa
+      gbm: libgbm
+      libgallium: libgallium-${{package.version}}
+
+  - name: transitive
+    items:
+      gl: ""
+      gles: ""
+
+subpackages:
+  - range: libs
+    name: mesa-${{range.key}}
+    description: mesa ${{range.key}}
+    dependencies:
+      runtime:
+        - libglvnd
+        - mesa-libgallium
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib/${{range.value}}.so* ${{targets.subpkgdir}}/usr/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - range: transitive
+    name: mesa-${{range.key}}
+    description: meta package providing mesa ${{range.key}} transitive dependencies
+    dependencies:
+      runtime:
+        - mesa
+        - mesa-glx
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+
+  - name: mesa-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libglvnd-dev
+    description: mesa dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+
+test:
+  environment:
+    contents:
+      packages:
+        - gcc
+        - libglvnd-dev
+        - libx11-dev
+        - libxext-dev
+        - glibc-dev
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Compile GL program
+      runs: |
+        # Write a minimal GL/GLX program inline to verify mesa headers and
+        # libraries are present and linkable (no display required to compile).
+        tee gltest.c <<'EOF'
+        #include <GL/gl.h>
+        #include <GL/glx.h>
+        #include <X11/Xlib.h>
+        #include <X11/Xutil.h>
+        #include <math.h>
+        #include <stdio.h>
+
+        int main(void) {
+            /* Verify GL constants are accessible from mesa headers */
+            printf("GL_VERSION constant: 0x%x\n", GL_VERSION);
+            printf("GL_RENDERER constant: 0x%x\n", GL_RENDERER);
+            printf("GL_VENDOR constant: 0x%x\n", GL_VENDOR);
+            return 0;
+        }
+        EOF
+
+        # Compile and link against mesa GL, X11, and math libraries
+        gcc gltest.c -o gltest -lGL -lX11 -lXext -lm
+
+        # Run the compiled binary to verify it executes correctly
+        ./gltest | grep -F "GL_VERSION constant:"
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - "_"
+    - "-"
+  git:
+    strip-prefix: mesa-
+    tag-filter-prefix: mesa-

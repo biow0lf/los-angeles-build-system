@@ -1,0 +1,59 @@
+package:
+  name: py3.14-setuptools-scm
+  version: "9.2.2"
+  epoch: 1
+  description: the blessed package to manage your versions by scm tags
+  copyright:
+    - license: MIT
+  dependencies:
+    runtime:
+      - py${{vars.python-version}}-packaging
+      - py${{vars.python-version}}-setuptools
+      - py${{vars.python-version}}-tomli
+      - py${{vars.python-version}}-typing-extensions
+
+vars:
+  pypi-package: setuptools-scm
+  import: setuptools_scm
+  python-version: "3.14"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - py${{vars.python-version}}-packaging
+      - py${{vars.python-version}}-pip
+      - py${{vars.python-version}}-setuptools
+      - py${{vars.python-version}}-tomli
+      - py${{vars.python-version}}-wheel
+      - python-${{vars.python-version}}-base
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pypa/setuptools_scm
+      tag: v${{package.version}}
+      expected-commit: e56b78fcd4c1e79aa36c1e4700fca34c8ff540fe
+
+  - uses: py/pip-build-install
+    with:
+      python: python${{vars.python-version}}
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/tw/pip-check
+    - uses: python/import
+      with:
+        python: python${{vars.python-version}}
+        import: ${{vars.import}}
+
+update:
+  enabled: true
+  github:
+    identifier: pypa/setuptools_scm
+    strip-prefix: v

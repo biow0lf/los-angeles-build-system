@@ -1,0 +1,125 @@
+package:
+  name: libxrender
+  version: 0.9.12
+  epoch: 9 # glibc: 2.43->2.44
+  description: X Rendering Extension client library
+  copyright:
+    - license: XFree86-1.1
+  resources:
+    cpu: "2"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - libx11-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxrender.git
+      tag: libXrender-${{package.version}}
+      expected-commit: 46e12ff9e8e4d3f0313a2f097df93dbfdc14f92f
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxrender-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libxrender
+    description: libxrender dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libxrender-doc
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}/usr/share"
+          mv "${{targets.destdir}}/usr/share/doc" "${{targets.subpkgdir}}/usr/share"
+    description: libxrender manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  environment:
+    contents:
+      packages:
+        - libxrender-dev
+        - libx11-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation and API calls
+      runs: |
+        tee test.c <<'EOF'
+        #include <X11/extensions/Xrender.h>
+        #include <X11/Xlib.h>
+        #include <stdio.h>
+
+        int main() {
+            /* Verify Xrender version macros are defined */
+            printf("Xrender major version: %d\n", RENDER_MAJOR);
+            printf("Xrender minor version: %d\n", RENDER_MINOR);
+
+            /* Attempt to open display - will be NULL without a display server,
+               but this proves the library links and functions are callable */
+            Display *dpy = XOpenDisplay(NULL);
+            if (dpy != NULL) {
+                int event_base, error_base;
+                /* Call XRenderQueryExtension - main entry point for the library */
+                Bool present = XRenderQueryExtension(dpy, &event_base, &error_base);
+                printf("XRender extension present: %s\n", present ? "yes" : "no");
+
+                if (present) {
+                    int major = 0, minor = 0;
+                    /* Call XRenderQueryVersion to get runtime version */
+                    XRenderQueryVersion(dpy, &major, &minor);
+                    printf("XRender runtime version: %d.%d\n", major, minor);
+
+                    /* Call XRenderFindVisualFormat to exercise format lookup */
+                    XRenderFindVisualFormat(dpy, DefaultVisual(dpy, DefaultScreen(dpy)));
+                }
+                XCloseDisplay(dpy);
+            } else {
+                /* Verify the API symbols resolve even without a display */
+                void *sym = (void *)XRenderQueryExtension;
+                if (sym == NULL) return 1;
+                printf("XRender API symbols resolve correctly (no display available)\n");
+            }
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xrender x11) test.c -o test $(pkg-config --libs xrender x11)
+        ./test
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1789

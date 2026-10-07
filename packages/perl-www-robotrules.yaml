@@ -1,0 +1,61 @@
+package:
+  name: perl-www-robotrules
+  version: "6.02"
+  epoch: 9 # go/wolfi-rsc/perl-www-robotrules
+  description: WWW::RobotRules perl module
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl-uri
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-uri
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 02d50e5d0d5aed3f810ac24aec30349fb9390010
+      repository: https://github.com/gisle/www-robotrules.git
+      tag: ${{package.version}}
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-www-robotrules-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-www-robotrules manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: gisle/www-robotrules
+    strip-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/no-docs

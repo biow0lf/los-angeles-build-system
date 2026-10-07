@@ -1,0 +1,115 @@
+package:
+  name: perl-clone
+  version: "0.51"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Clone perl module
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+var-transforms:
+  - from: ${{package.version}}
+    match: ^(\d+\.\d+)\.(\d+)$
+    replace: ${1}_$2
+    to: mangled-package-version
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - perl
+      - perl-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/garu/Clone.git
+      tag: v${{vars.mangled-package-version}}
+      expected-commit: 03dad8ba2cee6d4b06c7bd09bbb4c49b52b76113
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+subpackages:
+  - name: perl-clone-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-clone manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  version-transform:
+    - match: _(\d+)$
+      replace: .$1
+  github:
+    identifier: garu/Clone
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test Clone module loading
+      runs: perl -e 'use Clone qw(clone); print "loaded\n"'
+    - name: Test cloning a scalar
+      runs: |
+        perl -e '
+          use Clone qw(clone);
+          my $orig = 42;
+          my $copy = clone($orig);
+          die "scalar clone failed" unless $copy == 42;
+          print "scalar clone ok\n";
+        '
+    - name: Test cloning an array ref (deep copy)
+      runs: |
+        perl -e '
+          use Clone qw(clone);
+          my $orig = [1, 2, 3];
+          my $copy = clone($orig);
+          die "array clone failed" unless $copy->[0] == 1 && $copy->[2] == 3;
+          $copy->[0] = 99;
+          die "deep copy failed: original was modified" if $orig->[0] == 99;
+          print "array clone ok\n";
+        '
+    - name: Test cloning a hash ref (deep copy)
+      runs: |
+        perl -e '
+          use Clone qw(clone);
+          my $orig = {a => 1, b => 2};
+          my $copy = clone($orig);
+          die "hash clone failed" unless $copy->{a} == 1 && $copy->{b} == 2;
+          $copy->{a} = 99;
+          die "deep copy failed: original was modified" if $orig->{a} == 99;
+          print "hash clone ok\n";
+        '
+    - name: Test deep cloning nested structures
+      runs: |
+        perl -e '
+          use Clone qw(clone);
+          my $orig = {list => [1, 2, {nested => "value"}]};
+          my $copy = clone($orig);
+          die "nested clone failed" unless $copy->{list}[2]{nested} eq "value";
+          $copy->{list}[2]{nested} = "changed";
+          die "deep copy failed: original nested value was modified"
+            if $orig->{list}[2]{nested} eq "changed";
+          print "nested clone ok\n";
+        '

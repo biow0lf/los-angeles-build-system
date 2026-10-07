@@ -1,0 +1,118 @@
+package:
+  name: vim
+  version: "9.2.1169"
+  epoch: 0 # glibc: 2.43->2.44
+  description: "Improved vi-style text editor"
+  copyright:
+    - license: Vim
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - lua5.3-dev
+      - ncurses-dev
+      - python3-dev
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/vim/vim
+      tag: v${{package.version}}
+      expected-commit: ea1e40e5e06b1a6a5abebe77223f4a7e36930a87
+
+  - runs: |
+      # vim seems to manually set FORTIFY_SOURCE=1, and setting both breaks the build
+      export CFLAGS=${CFLAGS/-Wp,-D_FORTIFY_SOURCE=3/}
+      export CPPFLAGS="$CFLAGS"
+      export CXXFLAGS="$CFLAGS"
+      ./configure \
+        --build=$CBUILD \
+        --host=$CHOST \
+        --prefix=/usr \
+        --enable-luainterp \
+        --enable-python3interp=dynamic \
+        --without-x \
+        --disable-nls \
+        --enable-multibyte \
+        --enable-gui=no \
+        --with-lua-prefix=/usr/lua5.3 \
+        --with-compiledby="Wolfi Linux"
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Verify vim installation
+      runs: |
+        vim --version | grep -Fi "VIM - Vi IMproved"
+        xxd --version
+    - name: Test vim text editing
+      runs: |
+        # Write text to a file using vim in ex mode
+        echo "hello world" > /tmp/vim_test_input.txt
+        vim -es /tmp/vim_test_input.txt <<'EOF'
+        %s/hello/goodbye/g
+        wq
+        EOF
+        grep -F "goodbye world" /tmp/vim_test_input.txt
+    - name: Test vim ex mode commands
+      runs: |
+        # Use ex to append a line and verify
+        cat > /tmp/ex_test.txt <<'EOF'
+        line1
+        line2
+        EOF
+        ex /tmp/ex_test.txt <<'EOF'
+        $a
+        line3
+        .
+        wq
+        EOF
+        grep -F "line3" /tmp/ex_test.txt
+    - name: Test xxd hex dump and reverse
+      runs: |
+        echo "vim test" > /tmp/xxd_input.txt
+        xxd /tmp/xxd_input.txt > /tmp/xxd_output.hex
+        xxd -r /tmp/xxd_output.hex > /tmp/xxd_restored.txt
+        diff /tmp/xxd_input.txt /tmp/xxd_restored.txt
+    - name: Test vimdiff detects differences
+      runs: |
+        echo "line1" > /tmp/diff_a.txt
+        echo "line2" > /tmp/diff_b.txt
+        # Run vimdiff in batch mode and verify it exits cleanly
+        vim -d -es /tmp/diff_a.txt /tmp/diff_b.txt -c "qa!"
+
+subpackages:
+  - name: vim-doc
+    description: vim docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: vim/vim
+    strip-prefix: v
+    use-tag: true
+  schedule:
+    period: daily
+    reason: upstream project creates a tag for each commit to main

@@ -1,0 +1,75 @@
+package:
+  name: perl-test-file-sharedir
+  version: "1.001002"
+  epoch: 1
+  description: "Create a Fake ShareDir for your modules for testing"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-class-tiny
+      - perl-file-copy-recursive
+      - perl-file-sharedir
+      - perl-path-tiny
+      - perl-scope-guard
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-class-tiny
+      - perl-file-copy-recursive
+      - perl-file-sharedir
+      - perl-path-tiny
+      - perl-scope-guard
+      - perl-test-fatal
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 01f595ce78a6440efff351bd4a548ecaa011cfcb
+      repository: https://github.com/kentnl/Test-File-ShareDir
+      tag: ${{package.version}}
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make
+    with:
+      opts: test
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Test::File::ShareDir
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - -source$
+  github:
+    identifier: kentnl/Test-File-ShareDir
+    use-tag: true

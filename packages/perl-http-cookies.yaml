@@ -1,0 +1,68 @@
+#nolint:valid-pipeline-git-checkout-tag
+package:
+  name: perl-http-cookies
+  version: "6.12"
+  epoch: 0 # go/wolfi-rsc/perl-http-cookies
+  description: HTTP cookie jars
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl-http-date
+      - perl-http-message
+  resources:
+    cpu: "1"
+    memory: 3Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-http-date
+      - perl-http-message
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libwww-perl/HTTP-Cookies
+      branch: master
+      expected-commit: 3b3e7c4a9a42cb07746291d9d9b71323d421b8cb
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-http-cookies-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-http-cookies manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: libwww-perl/HTTP-Cookies
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

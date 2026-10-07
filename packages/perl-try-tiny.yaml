@@ -1,0 +1,62 @@
+package:
+  name: perl-try-tiny
+  version: "0.32"
+  epoch: 5
+  description: Minimal try/catch with proper preservation of $@
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/p5sagit/Try-Tiny
+      tag: v${{package.version}}
+      expected-commit: 53dc90c99e908b6c12f60fa13b860bc72d8fa7db
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-try-tiny-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-try-tiny manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: p5sagit/Try-Tiny
+    strip-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: Try::Tiny
+    - uses: test/no-docs

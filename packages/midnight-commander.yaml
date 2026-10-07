@@ -1,0 +1,71 @@
+package:
+  name: midnight-commander
+  version: "4.8.33"
+  epoch: 2 # glibc: 2.43->2.44
+  description: GNU Midnight Commander - terminal for admins of a certain age
+  copyright:
+    - license: GPL-3.0-or-later
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext
+      - glib-dev
+      - glibc-2.44-dev
+      - libtool
+      - m4
+      - pkgconf
+      - pkgconf-dev
+      - s-lang
+      - s-lang-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: e7e21869da5a2651ebccce5274e47fb3e607eba6
+      repository: https://github.com/MidnightCommander/mc
+      tag: ${{package.version}}
+
+  - runs: |
+      aclocal
+      autoreconf -fiv
+      automake
+      ./autogen.sh
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: midnight-commander-doc
+    pipeline:
+      - uses: split/manpages
+    description: midnight-commander manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: MidnightCommander/mc
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Verify mc binaries exist
+      runs: |
+        mc --help 2>&1 | grep -i "midnight commander" || mc --help 2>&1 | grep -i "usage"
+        mcdiff --help 2>&1 | grep -i "usage\|mcdiff\|diff"
+        mcview --help 2>&1 | grep -i "usage\|mcview\|view"
+        mcedit --help 2>&1 | grep -i "usage\|mcedit\|edit"

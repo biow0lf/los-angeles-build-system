@@ -1,0 +1,104 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/libvdpau/APKBUILD
+package:
+  name: libvdpau
+  version: "1.5"
+  epoch: 8 # glibc: 2.43->2.44
+  description: Hardware-accelerated video playback library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libx11-dev
+      - libxext-dev
+      - meson
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/vdpau/libvdpau
+      tag: ${{package.version}}
+      expected-commit: 79f1506a3307d3275b0fdfb2e110c173f68e6f78
+
+  - runs: |
+      meson \
+        -Ddri2=true \
+        --prefix=/usr \
+        . output
+      meson compile -C output
+      DESTDIR="${{targets.destdir}}" meson install --no-rebuild -C output
+
+  - uses: strip
+
+subpackages:
+  - name: libvdpau-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libvdpau
+    description: libvdpau dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1755
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - libvdpau-dev
+        - libx11-dev
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Verify libvdpau API compiles and links
+      runs: |
+        cat > test_vdpau.c << 'EOF'
+        #include <vdpau/vdpau.h>
+        #include <vdpau/vdpau_x11.h>
+        #include <dlfcn.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main(void) {
+            /* Verify the library can be loaded at runtime */
+            void *handle = dlopen("libvdpau.so.1", RTLD_LAZY);
+            if (!handle) {
+                fprintf(stderr, "dlopen failed: %s\n", dlerror());
+                return 1;
+            }
+
+            /* Verify the main API entry point symbol is present */
+            void *sym = dlsym(handle, "vdp_device_create_x11");
+            if (!sym) {
+                fprintf(stderr, "dlsym(vdp_device_create_x11) failed: %s\n", dlerror());
+                dlclose(handle);
+                return 1;
+            }
+            printf("vdp_device_create_x11 found at %p\n", sym);
+
+            dlclose(handle);
+            printf("libvdpau API verification passed\n");
+            return 0;
+        }
+        EOF
+        gcc $(pkg-config --cflags vdpau) test_vdpau.c -o test_vdpau $(pkg-config --libs vdpau) -ldl
+        ./test_vdpau

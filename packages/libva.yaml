@@ -1,0 +1,92 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/libva/APKBUILD
+package:
+  name: libva
+  version: "2.24.1"
+  epoch: 2 # glibc: 2.43->2.44
+  description: Video Acceleration (VA) API for Linux
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "2"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libdrm
+      - libdrm-dev
+      - libx11-dev
+      - libxext-dev
+      - libxfixes-dev
+      - meson
+      - wayland-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 710eb465c6277ee2cac3e6948767b01eebe7e77a
+      repository: https://github.com/intel/libva
+      tag: ${{package.version}}
+
+  - runs: |
+      meson \
+        -Db_lto=true \
+        -Dwith_glx=no \
+        -Dwith_wayland=yes \
+        --prefix=/usr \
+        builddir
+      meson compile -C builddir
+
+  - runs: |
+      DESTDIR="${{targets.destdir}}" meson install --no-rebuild -C builddir
+
+  - uses: strip
+
+subpackages:
+  - name: libva-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+    description: libva dev
+
+update:
+  enabled: true
+  github:
+    identifier: intel/libva
+
+test:
+  environment:
+    contents:
+      packages:
+        - libva-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test libva compile and link
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <va/va.h>
+        #include <stdio.h>
+        int main() {
+            /* vaDisplayIsValid returns 0 for NULL display */
+            int result = vaDisplayIsValid(NULL);
+            printf("vaDisplayIsValid(NULL) = %d\n", result);
+            return (result == 0) ? 0 : 1;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libva) test.c -o test $(pkg-config --libs libva)
+        ./test

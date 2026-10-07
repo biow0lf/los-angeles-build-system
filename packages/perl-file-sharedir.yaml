@@ -1,0 +1,116 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-file-sharedir/APKBUILD
+package:
+  name: perl-file-sharedir
+  version: "1.118"
+  epoch: 10 # add tests
+  description: Locate per-dist and per-module shared files
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-class-inspector
+      - perl-file-sharedir-install
+      - perl-inc-latest
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-class-inspector
+      - perl-file-sharedir-install
+      - perl-inc-latest
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/perl5-utils/File-ShareDir
+      tag: ${{package.version}}
+      expected-commit: ecfd86404a58c1aa4efe4f30ab75ce1c0a5e06f2
+
+  # CPAN tarballs bundle deps in inc/ and load them via inc::latest.
+  # With git-checkout there is no inc/ dir, so patch Makefile.PL to
+  # use the system-installed File::ShareDir::Install directly.
+  - runs: |
+      sed -i "s/use inc::latest 'File::ShareDir::Install';/use File::ShareDir::Install 0.03 qw(install_share);/" Makefile.PL
+      sed -i "/^File::ShareDir::Install->import/d" Makefile.PL
+      sed -i '/^if (inc::latest/,/^}/d' Makefile.PL
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-file-sharedir-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-file-sharedir manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: File::ShareDir
+    - name: Test module version and exports
+      runs: |
+        perl -e '
+          use File::ShareDir qw(dist_dir module_dir dist_file module_file);
+          print "File::ShareDir version: $File::ShareDir::VERSION\n";
+          print "Exports loaded OK\n";
+        '
+    - name: Test dist_dir error handling
+      runs: |
+        perl -e '
+          use File::ShareDir qw(dist_dir);
+          eval { dist_dir("NonExistent-Dist-That-Does-Not-Exist") };
+          die "Expected dist_dir to die for missing dist" unless $@;
+          print "dist_dir correctly dies for missing dist\n";
+        '
+    - name: Test module_dir error handling
+      runs: |
+        perl -e '
+          use File::ShareDir qw(module_dir);
+          eval { module_dir("NonExistent::Module::That::Does::Not::Exist") };
+          die "Expected module_dir to die for missing module" unless $@;
+          print "module_dir correctly dies for missing module\n";
+        '
+    - name: Test dist_file error handling
+      runs: |
+        perl -e '
+          use File::ShareDir qw(dist_file);
+          eval { dist_file("NonExistent-Dist", "no-such-file.txt") };
+          die "Expected dist_file to die for missing dist" unless $@;
+          print "dist_file correctly dies for missing dist\n";
+        '
+    - name: Test module_file error handling
+      runs: |
+        perl -e '
+          use File::ShareDir qw(module_file);
+          eval { module_file("NonExistent::Module", "no-such-file.txt") };
+          die "Expected module_file to die for missing module" unless $@;
+          print "module_file correctly dies for missing module\n";
+        '
+
+update:
+  enabled: true
+  github:
+    identifier: perl5-utils/File-ShareDir
+    use-tag: true

@@ -1,0 +1,107 @@
+package:
+  name: pixman
+  version: "0.46.4"
+  epoch: 6 # glibc: 2.43->2.44
+  description: Low-level pixel manipulation library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "2"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libpng-dev
+      - meson
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/pixman/pixman
+      tag: pixman-${{package.version}}
+      expected-commit: 9cc163c9da0fb4da430641715313d95a6ec466d9
+
+  - runs: |
+      export LDFLAGS="$LDFLAGS -Wl,-z,stack-size=2097152"
+      meson . output --prefix=/usr \
+        -Db_lto=true \
+        -Ddefault_library=both
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: pixman-static
+    pipeline:
+      - uses: split/static
+    description: pixman static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: pixman-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - pixman
+    description: pixman dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 3648
+
+test:
+  environment:
+    contents:
+      packages:
+        - pixman-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test pixman library compilation and usage
+      runs: |
+        tee test.c <<'EOF'
+        #include <pixman.h>
+        #include <stdio.h>
+
+        int main() {
+            pixman_region32_t region;
+            pixman_region32_init(&region);
+
+            /* Add a rectangle to the region */
+            pixman_region32_union_rect(&region, &region, 0, 0, 100, 100);
+
+            /* Verify the region is not empty */
+            if (pixman_region32_not_empty(&region)) {
+                printf("pixman region operations work correctly\n");
+            } else {
+                fprintf(stderr, "FAIL: region should not be empty\n");
+                pixman_region32_fini(&region);
+                return 1;
+            }
+
+            pixman_region32_fini(&region);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags pixman-1) test.c -o test $(pkg-config --libs pixman-1)
+        ./test

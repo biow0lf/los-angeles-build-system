@@ -1,0 +1,44 @@
+contents:
+  keyring:
+    - ../keys/melange.rsa.pub
+
+  repositories:
+    - https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev
+
+  packages:
+    - apk-tools
+    - busybox
+    - ca-certificates-bundle
+    - glibc-2.44
+    - glibc-2.44-locale-posix
+    - ld-linux-2.44
+    - libbrotlicommon1
+    - libbrotlidec1
+    - libbrotlienc1
+    - libcrypt1-2.44
+    - libgcc
+    - libxcrypt
+    - openssl-4.0-libcrypto
+    - openssl-4.0-libssl
+    - openssl-provider-legacy-allowed
+    - wolfi-base
+    - wolfi-baselayout
+    - wolfi-keys
+    - zlib
+
+accounts:
+  groups:
+    - groupname: nonroot
+      gid: 65532
+  users:
+    - username: nonroot
+      uid: 65532
+      gid: 65532
+  run-as: 0        # wolfi-base runs as root; use 65532 for nonroot
+
+entrypoint:
+  command: /bin/sh -l
+
+archs:
+  - x86_64
+

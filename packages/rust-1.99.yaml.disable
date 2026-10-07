@@ -68,7 +68,11 @@ pipeline:
       ./x vendor
 
       # Populate cargo config
-      mkdir .cargo
+      # Deviation from Wolfi's own recipe: mkdir -> mkdir -p. "./x vendor"
+      # above already creates .cargo/ itself (observed directly: the plain
+      # mkdir fails with "File exists"), so this needs to tolerate that
+      # rather than assume a clean directory.
+      mkdir -p .cargo
       cat > .cargo/config.toml <<EOF
       [source.crates-io]
       replace-with = "vendored-sources"

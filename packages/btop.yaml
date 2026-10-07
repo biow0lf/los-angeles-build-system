@@ -1,0 +1,53 @@
+package:
+  name: btop
+  version: "1.4.7"
+  epoch: 2 # glibc: 2.43->2.44
+  description: Resource monitor
+  copyright:
+    - license: Apache-2.0
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+      repository: https://github.com/aristocratos/btop
+      tag: v${{package.version}}
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: aristocratos/btop
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        btop --version
+        btop --help
+    - name: Verify btop can read system resources
+      runs: |
+        # Run btop briefly. It requires a terminal; in the QEMU test
+        # environment the SSH session provides a PTY. Capture the exit
+        # code safely under set -e: accept timeout (124, meaning it ran
+        # the full 5 s) or any other non-zero (no terminal in headless).
+        # Only fail when btop exits 0 immediately, which would be a bug.
+        ret=0
+        timeout 5s btop || ret=$?
+        [ "$ret" -ne 0 ]

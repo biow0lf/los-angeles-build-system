@@ -1,0 +1,66 @@
+package:
+  name: perl-cpan-meta-check
+  version: "0.018"
+  epoch: 4
+  description: "Verify requirements in a CPAN::Meta object"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Leont/cpan-meta-check
+      tag: v${{package.version}}
+      expected-commit: cfe7bbb0caa167e154c92d1eeb96042bdf6cd16b
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: CPAN::Meta::Check
+
+update:
+  enabled: true
+  github:
+    identifier: Leont/cpan-meta-check
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

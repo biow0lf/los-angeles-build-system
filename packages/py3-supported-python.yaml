@@ -1,16 +1,6 @@
 package:
   name: py3-supported-python
   version: 1
-  # Deviation from Wolfi's own recipe: still trimmed to 3.10/3.11/3.12/3.13
-  # (dropping 3.14). python-3.14 itself IS self-hosted now, but Wolfi's own
-  # recipe doesn't route 3.14 through this package's ranged
-  # py${{range.key}}-build-base pattern the same way -- it needs a parallel
-  # set of standalone py3.14-build/py3.14-installer/py3.14-pip/etc. packages
-  # (py3.14-installer.yaml and py3.14-flit-core.yaml already exist as
-  # separate recipes upstream, outside py3-installer.yaml/py3-flit-core.yaml's
-  # ranges, due to 3.14's free-threading build differences). That's separate
-  # scope from the meson/wayland chain this trim exists to unblock, which
-  # only needs 3.10-3.13. Tracked in BOOTSTRAP.md.
   epoch: 10
   description: metapackage to install all supported versions of python
   copyright:
@@ -21,6 +11,7 @@ package:
       - python-3.11-base
       - python-3.12-base
       - python-3.13-base
+      - python-3.14-base
   resources:
     cpu: "10"
     memory: 4Gi
@@ -37,6 +28,7 @@ data:
       3.11: '311'
       3.12: '312'
       3.13: '313'
+      3.14: '14'
 
 subpackages:
   - name: ${{package.name}}-dev
@@ -47,6 +39,7 @@ subpackages:
         - python-3.11-base-dev
         - python-3.12-base-dev
         - python-3.13-base-dev
+        - python-3.14-base-dev
     test:
       pipeline:
         - uses: test/tw/metapackage
@@ -80,6 +73,7 @@ subpackages:
         - py3.11-build-base
         - py3.12-build-base
         - py3.13-build-base
+        - py3.14-build-base
     test:
       pipeline:
         - uses: test/tw/metapackage
@@ -110,6 +104,7 @@ subpackages:
         - py3.11-build-base-dev
         - py3.12-build-base-dev
         - py3.13-build-base-dev
+        - py3.14-build-base-dev
         - py3-supported-python-dev
     test:
       pipeline:

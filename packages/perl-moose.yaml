@@ -1,0 +1,144 @@
+package:
+  name: perl-moose
+  version: "2.4001"
+  epoch: 0 # glibc: 2.43->2.44
+  description: "A postmodern object system for Perl 5"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-class-load
+      - perl-class-load-xs
+      - perl-data-optlist
+      - perl-devel-globaldestruction
+      - perl-devel-overloadinfo
+      - perl-devel-stacktrace
+      - perl-dist-checkconflicts
+      - perl-eval-closure
+      - perl-module-runtime
+      - perl-module-runtime-conflicts
+      - perl-mro-compat
+      - perl-package-deprecationmanager
+      - perl-package-stash
+      - perl-package-stash-xs
+      - perl-params-util
+      - perl-sub-exporter
+      - perl-try-tiny
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - glibc-2.44-dev
+      - perl-class-load
+      - perl-class-load-xs
+      - perl-cpan-meta-check
+      - perl-data-optlist
+      - perl-dev
+      - perl-devel-globaldestruction
+      - perl-devel-overloadinfo
+      - perl-devel-stacktrace
+      - perl-dist-checkconflicts
+      - perl-eval-closure
+      - perl-module-runtime
+      - perl-module-runtime-conflicts
+      - perl-mro-compat
+      - perl-package-deprecationmanager
+      - perl-package-stash
+      - perl-package-stash-xs
+      - perl-params-util
+      - perl-sub-exporter
+      - perl-test-fatal
+      - perl-test-needs
+      - perl-try-tiny
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/moose/Moose
+      tag: ${{package.version}}
+      expected-commit: 9c06ed94a1e698fedeef818acdbef62ec02b94af
+
+  # Moose can't use the generic perl/dzil pipeline. The upstream build
+  # uses an in-tree inc::MakeMaker dzil plugin that extends
+  # Dist::Zilla::Plugin::MakeMaker::Awesome (not packaged in wolfi) and
+  # is needed to wire up the xs/*.xs subdirectory files plus the
+  # top-level mop.c source. The generic [MakeMaker] plugin sees no
+  # top-level *.xs and produces a Makefile that links a non-existent
+  # Moose.o. Instead, write a minimal Makefile.PL that pulls XS / OBJECT
+  # args directly from inc::MMHelper, which is the same module the
+  # upstream Makefile.PL ends up calling at release time.
+  - name: Generate Makefile.PL using upstream inc::MMHelper
+    runs: |
+      # Synthesize a Makefile.PL that mirrors what dzil's [=inc::MakeMaker]
+      # plugin would have generated upstream. inc::MMHelper is shipped in
+      # the source tree and contains the XS file map (xs/*.xs -> xs/*.o,
+      # plus top-level mop.c) and a `package MY` block that rewrites the
+      # xs_c / c_o / const_cccmd / postamble rules so MakeMaker builds XS
+      # objects from a subdirectory layout. The package MY block must be
+      # spliced in literally (not eval'd) so MakeMaker sees the overridden
+      # methods during Makefile generation.
+      cat >Makefile.PL <<'MAKEFILE_PL_HEAD'
+      use strict;
+      use warnings;
+      use ExtUtils::MakeMaker;
+      # Add cwd to @INC so the inc::* package namespace resolves to inc/*.pm
+      # (Perl 5.26+ removed '.' from default @INC).
+      use lib '.';
+      use inc::MMHelper;
+
+      WriteMakefile(
+          NAME             => 'Moose',
+          VERSION_FROM     => 'lib/Moose.pm',
+          ABSTRACT         => 'A postmodern object system for Perl 5',
+          AUTHOR           => 'Moose contributors',
+          LICENSE          => 'perl_5',
+          MIN_PERL_VERSION => '5.008003',
+          CCFLAGS          => inc::MMHelper::ccflags_static(),
+          inc::MMHelper::mm_args(),
+      );
+
+      MAKEFILE_PL_HEAD
+      perl -I. -Minc::MMHelper \
+        -e 'print inc::MMHelper::my_package_subs()' >>Makefile.PL
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make
+    with:
+      opts: test
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Moose
+
+update:
+  enabled: true
+  github:
+    identifier: moose/Moose
+    use-tag: true

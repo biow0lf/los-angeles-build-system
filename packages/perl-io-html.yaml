@@ -1,0 +1,62 @@
+package:
+  name: perl-io-html
+  version: "1.004"
+  epoch: 8
+  description: Open an HTML file with automatic charset detection
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/madsen/io-html
+      tag: ${{package.version}}
+      expected-commit: 5e131b2a4aee279a173bf5109171cd1a52dda48d
+
+  - runs: rm -f MANIFEST
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-io-html-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-io-html manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: IO::HTML
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: madsen/io-html
+    use-tag: true

@@ -1,0 +1,88 @@
+package:
+  name: perl-libwww
+  version: "6.83"
+  epoch: 5 # go/wolfi-rsc/perl-libwww
+  description: The World-Wide Web library for Perl
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl-encode-locale
+      - perl-file-listing
+      - perl-html-parser
+      - perl-http-cookies
+      - perl-http-date
+      - perl-http-message
+      - perl-http-negotiate
+      - perl-lwp-mediatypes
+      - perl-net-http
+      - perl-try-tiny
+      - perl-uri
+      - perl-www-robotrules
+  resources:
+    cpu: "1"
+    memory: 3Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-encode-locale
+      - perl-file-listing
+      - perl-html-parser
+      - perl-http-cookies
+      - perl-http-date
+      - perl-http-message
+      - perl-http-negotiate
+      - perl-lwp-mediatypes
+      - perl-net-http
+      - perl-try-tiny
+      - perl-uri
+      - perl-www-robotrules
+
+pipeline:
+  - uses: fetch
+    with:
+      expected-sha512: 23d62d7319ae055f8bd3b103fd2b2d5f9a4d0f5d24e9a60448fba15f323d1b209c30ae2e276c7f5c295b41acee928af40316ae2c111a3f022aba7718e483ac62
+      uri: https://cpan.metacpan.org/authors/id/O/OA/OALDERS/libwww-perl-${{package.version}}.tar.gz
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-libwww-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-libwww manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 3024
+
+test:
+  pipeline:
+    - runs: |
+        echo "hello from lwp-download test" > /tmp/lwp-test-source.txt
+        lwp-download "file:///tmp/lwp-test-source.txt" /tmp/lwp-test-dest.txt
+        grep -F "hello from lwp-download test" /tmp/lwp-test-dest.txt
+        output=$(lwp-dump expect-400 2>&1) || true
+        echo "$output" | grep -F "400 URL must be absolute"
+        output=$(lwp-request localhost 2>&1) || true
+        echo "$output" | grep -iE "Connection refused|Can't connect"

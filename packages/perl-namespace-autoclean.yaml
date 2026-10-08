@@ -1,0 +1,88 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-namespace-autoclean/APKBUILD
+package:
+  name: perl-namespace-autoclean
+  version: "0.31"
+  epoch: 4 # toolchain rebuild for  perl-dev-5.44.0
+  description: Keep imports out of your namespace
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-b-hooks-endofscope
+      - perl-namespace-clean
+      - perl-sub-identify
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - perl
+      - perl-b-hooks-endofscope
+      - perl-dev
+      - perl-dist-zilla
+      - perl-namespace-clean
+      - perl-sub-identify
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/moose/namespace-autoclean
+      tag: ${{package.version}}
+      expected-commit: ef8692b536d27dcd31caf23eb9afc9810414f066
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-namespace-autoclean-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-namespace-autoclean manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: moose/namespace-autoclean
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: namespace::autoclean
+    - name: "Basic Functionality Test"
+      runs: |
+        tee test_autoclean.pl <<'EOF'
+        #!/usr/bin/perl
+        use strict;
+        use warnings;
+        use Test::More tests => 1;
+        use List::Util qw(sum);
+        use namespace::autoclean;
+
+        {
+            package MyPackage;
+            sub new { return bless {}, shift; }
+            sub calculate { return sum(1, 2, 3); }
+        }
+
+        my $obj = MyPackage->new();
+        ok(!MyPackage->can('sum'), 'sum is no longer available after namespace::autoclean');
+        EOF
+
+        perl test_autoclean.pl
+    - uses: test/no-docs

@@ -1,0 +1,75 @@
+package:
+  name: perl-type-tiny
+  version: "2.010001"
+  epoch: 3
+  description: "Tiny, yet Moo(se)-compatible type constraint"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-exporter-tiny
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - perl
+      - perl-exporter-tiny
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/tobyink/p5-type-tiny
+      tag: ${{package.version}}
+      expected-commit: 88d96e8cbea071b0ecaca1383b5dccfd83471120
+
+  - runs: |
+      cat > Makefile.PL <<'MKPL'
+      use strict;
+      use ExtUtils::MakeMaker;
+      WriteMakefile(
+        NAME         => 'Type::Tiny',
+        VERSION      => '${{package.version}}',
+        PREREQ_PM    => { 'Exporter::Tiny' => '1.006000' },
+        TEST_REQUIRES => { 'Test::More' => '0.96' },
+        ABSTRACT     => 'tiny, yet Moo(se)-compatible type constraint',
+        LICENSE      => 'perl_5',
+      );
+      MKPL
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Type::Tiny Types::Standard
+
+update:
+  enabled: true
+  github:
+    identifier: tobyink/p5-type-tiny
+    use-tag: true
+    tag-filter-prefix: "2."

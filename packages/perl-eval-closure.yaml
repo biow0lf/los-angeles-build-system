@@ -1,0 +1,64 @@
+package:
+  name: perl-eval-closure
+  version: "0.14"
+  epoch: 7 # go/wolfi-rsc/perl-eval-closure
+  description: safely and cleanly create closures via string eval
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/doy/eval-closure
+      tag: ${{package.version}}
+      expected-commit: 4fd904717d738d893bef6a3793d56bec8f11ded7
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-eval-closure-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-eval-closure manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: Eval::Closure
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: doy/eval-closure
+    use-tag: true

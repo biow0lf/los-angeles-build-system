@@ -1,0 +1,77 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-specio/APKBUILD
+package:
+  name: perl-specio
+  version: "0.53"
+  epoch: 5 # toolchain rebuild for  perl-dev-5.44.0
+  description: Type constraints and coercions for Perl
+  copyright:
+    - license: Artistic-2.0
+  dependencies:
+    runtime:
+      - perl
+      - perl-clone
+      - perl-devel-stacktrace
+      - perl-eval-closure
+      - perl-module-runtime
+      - perl-mro-compat
+      - perl-role-tiny
+      - perl-sub-quote
+      - perl-test-fatal
+      - perl-try-tiny
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-devel-stacktrace
+      - perl-eval-closure
+      - perl-module-runtime
+      - perl-mro-compat
+      - perl-role-tiny
+      - perl-sub-quote
+      - perl-test-fatal
+      - perl-try-tiny
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/houseabsolute/Specio
+      tag: v${{package.version}}
+      expected-commit: 8c500a1c1262a80b35a2132e1e0536f701626e1e
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-specio-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-specio manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: houseabsolute/Specio
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

@@ -1,0 +1,92 @@
+package:
+  name: perl-moosex-oneargnew
+  version: "0.007"
+  epoch: 4
+  description: "Teach ->new to accept single, non-hashref arguments"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-moose
+      - perl-moosex-role-parameterized
+      - perl-namespace-autoclean
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-dist-zilla
+      - perl-moose
+      - perl-moosex-role-parameterized
+      - perl-namespace-autoclean
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/rjbs/MooseX-OneArgNew
+      tag: ${{package.version}}
+      expected-commit: 1399bf004c25cd7db4a1551890040ee3935f4592
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: MooseX::OneArgNew
+    - name: Test single non-hashref argument accepted by ->new
+      runs: |
+        perl <<'EOF'
+        {
+          package MyClass;
+          use Moose;
+          with 'MooseX::OneArgNew' => {
+            type     => 'Str',
+            init_arg => 'name',
+          };
+          has name => (is => 'ro', isa => 'Str');
+        }
+
+        # Single string argument should be accepted and mapped to 'name'
+        my $obj = MyClass->new('hello');
+        die "Expected name 'hello', got: " . $obj->name
+          unless $obj->name eq 'hello';
+
+        # Hash-style construction should still work
+        my $obj2 = MyClass->new(name => 'world');
+        die "Expected name 'world', got: " . $obj2->name
+          unless $obj2->name eq 'world';
+
+        print "MooseX::OneArgNew functional tests passed\n";
+        EOF
+
+update:
+  enabled: true
+  github:
+    identifier: rjbs/MooseX-OneArgNew
+    use-tag: true

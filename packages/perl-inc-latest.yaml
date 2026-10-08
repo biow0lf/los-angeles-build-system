@@ -1,0 +1,64 @@
+package:
+  name: perl-inc-latest
+  version: "0.500"
+  epoch: 9 # go/wolfi-rsc/perl-inc-latest
+  description: use modules bundled in inc/ if they are newer than installed ones
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/dagolden/inc-latest
+      tag: release-${{package.version}}
+      expected-commit: 6c8c9363988e6eaaa87829a62dac4f2552ad0d99
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-inc-latest-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-inc-latest manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: dagolden/inc-latest
+    strip-prefix: release-
+    tag-filter-prefix: release-
+    use-tag: true

@@ -1,0 +1,101 @@
+package:
+  name: perl-sub-exporter-globexporter
+  version: "0.006"
+  epoch: 4
+  description: "Export shared globs with Sub::Exporter collectors"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-sub-exporter
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-dist-zilla
+      - perl-sub-exporter
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/rjbs/Sub-Exporter-GlobExporter
+      tag: ${{package.version}}
+      expected-commit: 9ba2b8389a660ba03bd77b1c026722cdbadb88f3
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Sub::Exporter::GlobExporter
+    - name: Test glob_exporter creates a working glob collector
+      runs: |
+        perl <<'EOF'
+        use strict;
+        use warnings;
+        use Sub::Exporter::GlobExporter qw(glob_exporter);
+
+        # Create a package that exports a shared glob using glob_exporter
+        # glob_exporter must be used as a Sub::Exporter collector, not an export
+        {
+          package MyGlobPkg;
+          our $Handle = "shared_value";
+          use Sub::Exporter -setup => {
+            collectors => {
+              'Handle' => Sub::Exporter::GlobExporter::glob_exporter(
+                'Handle', \*MyGlobPkg::Handle
+              ),
+            },
+          };
+        }
+
+        # Import the glob into a consumer package
+        {
+          package MyConsumer;
+          MyGlobPkg->import('Handle');
+        }
+
+        # Verify the glob was shared: both packages reference the same scalar
+        die "glob not shared: expected 'shared_value', got '$MyConsumer::Handle'"
+          unless $MyConsumer::Handle eq "shared_value";
+
+        # Verify it's truly shared (same reference)
+        $MyGlobPkg::Handle = "updated_value";
+        die "glob not aliased: consumer did not see update"
+          unless $MyConsumer::Handle eq "updated_value";
+
+        print "glob_exporter works correctly\n";
+        EOF
+
+update:
+  enabled: true
+  github:
+    identifier: rjbs/Sub-Exporter-GlobExporter
+    use-tag: true

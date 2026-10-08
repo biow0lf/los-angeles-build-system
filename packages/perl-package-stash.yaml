@@ -1,0 +1,166 @@
+package:
+  name: perl-package-stash
+  version: "0.40"
+  epoch: 8
+  description: Routines for manipulating stashes
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-dist-checkconflicts
+      - perl-module-implementation
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-checkconflicts
+      - perl-dist-zilla
+      - perl-module-implementation
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/moose/Package-Stash
+      tag: v${{package.version}}
+      expected-commit: b139d1265dd6f2067de5de9c19f73a7a911c9167
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+  - name: Install generated Conflicts.pm and conflicts script
+    runs: |
+      PERL_VENDORLIB=$(perl -MConfig -e 'print $Config{vendorlib}')
+      install -dm755 "${{targets.destdir}}${PERL_VENDORLIB}/Package/Stash"
+      cat >"${{targets.destdir}}${PERL_VENDORLIB}/Package/Stash/Conflicts.pm" <<'PERL'
+      package # hide from PAUSE
+          Package::Stash::Conflicts;
+
+      use strict;
+      use warnings;
+
+      # this module was generated with Dist::Zilla::Plugin::Conflicts 0.19
+
+      use Dist::CheckConflicts
+          -dist      => 'Package::Stash',
+          -conflicts => {
+              'Class::MOP'                   => '1.08',
+              'MooseX::Method::Signatures'   => '0.36',
+              'MooseX::Role::WithOverloading' => '0.08',
+              'namespace::clean'             => '0.18',
+          },
+          -also => [ qw(
+              B
+              Carp
+              Dist::CheckConflicts
+              Getopt::Long
+              Module::Implementation
+              Scalar::Util
+              Symbol
+              constant
+              strict
+              warnings
+          ) ],
+      ;
+
+      1;
+      PERL
+
+      install -dm755 "${{targets.destdir}}"/usr/bin
+      cat >"${{targets.destdir}}"/usr/bin/package-stash-conflicts <<'SCRIPT'
+      #!/usr/bin/perl
+
+      use strict;
+      use warnings;
+
+      # this script was generated with Dist::Zilla::Plugin::Conflicts 0.19
+
+      use Getopt::Long;
+      use Package::Stash::Conflicts;
+
+      my $verbose;
+      GetOptions( 'verbose|v' => \$verbose );
+
+      if ($verbose) {
+          Package::Stash::Conflicts->check_conflicts;
+      }
+      else {
+          my @conflicts = Package::Stash::Conflicts->calculate_conflicts;
+          print "$_\n" for map { $_->{package} } @conflicts;
+          exit scalar @conflicts;
+      }
+      SCRIPT
+      chmod 755 "${{targets.destdir}}"/usr/bin/package-stash-conflicts
+
+subpackages:
+  - name: perl-package-stash-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-package-stash manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: moose/Package-Stash
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/perl-module-check
+      with:
+        modules: Package::Stash
+    - name: Test stash creation and symbol manipulation
+      runs: |
+        perl -e '
+          use Package::Stash;
+
+          # Create a stash for a test package
+          my $stash = Package::Stash->new("TestPkg");
+
+          # Add a scalar symbol and verify it exists
+          $stash->add_symbol("\$scalar", \42);
+          die "scalar not found" unless $stash->has_symbol("\$scalar");
+
+          # Retrieve the scalar and check its value
+          my $ref = $stash->get_symbol("\$scalar");
+          die "scalar value mismatch" unless $$ref == 42;
+
+          # Add a subroutine symbol
+          $stash->add_symbol("&mysub", sub { return "hello" });
+          die "sub not found" unless $stash->has_symbol("&mysub");
+
+          # List all CODE symbols and verify mysub is present
+          my @subs = $stash->list_all_symbols("CODE");
+          die "mysub not in list" unless grep { $_ eq "mysub" } @subs;
+
+          # Remove the scalar and verify it is gone
+          $stash->remove_symbol("\$scalar");
+          die "scalar still present after removal" if $stash->has_symbol("\$scalar");
+
+          print "Package::Stash stash manipulation OK\n";
+        '
+    - name: Test package-stash-conflicts CLI (no conflicts expected)
+      runs: |
+        # Run without arguments; exits 0 when no conflicts are found
+        package-stash-conflicts
+    - uses: test/no-docs

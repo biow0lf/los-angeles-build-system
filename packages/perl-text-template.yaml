@@ -1,0 +1,61 @@
+package:
+  name: perl-text-template
+  version: "1.61"
+  epoch: 2
+  description: "Expand template text with embedded Perl"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 36e1ba994b4ada7d8dada39d207cee6bfaf70b12
+      repository: https://github.com/mschout/perl-text-template
+      tag: v${{package.version}}
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make
+    with:
+      opts: test
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Text::Template
+
+update:
+  enabled: true
+  github:
+    identifier: mschout/perl-text-template
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

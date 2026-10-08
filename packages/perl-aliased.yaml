@@ -1,0 +1,60 @@
+package:
+  name: perl-aliased
+  version: "0.34"
+  epoch: 3
+  description: "Use shorter versions of class names"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-dist-zilla
+      - perl-module-build-tiny
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/karenetheridge/aliased
+      tag: v${{package.version}}
+      expected-commit: fff44e2ad948a416ad4a01aaa7748664aefa1a69
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - name: Smoke test
+      runs: perl -e "use Test::More tests => 1; use aliased 'List::Util' => 'LU'; ok(LU->max(1..10) == 10, 'Smoke test passed');"
+
+update:
+  enabled: true
+  github:
+    identifier: karenetheridge/aliased
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

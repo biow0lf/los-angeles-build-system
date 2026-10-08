@@ -1,0 +1,94 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-scope-guard/APKBUILD
+package:
+  name: perl-scope-guard
+  version: "0.21"
+  epoch: 10 # add tests
+  description: Scope::Guard perl module
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/chocolateboy/Scope-Guard
+      tag: v${{package.version}}
+      expected-commit: abf307bffd8a9b83549bbe79b0567b668a62bd4a
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+subpackages:
+  - name: perl-scope-guard-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-scope-guard manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - name: Verify module loads
+      runs: perl -e 'use Scope::Guard; print "ok\n"'
+    - name: Callback fires on scope exit
+      runs: |
+        perl -e '
+          use Scope::Guard;
+          my $fired = 0;
+          {
+            my $guard = Scope::Guard->new(sub { $fired = 1 });
+          }
+          die "callback did not fire on scope exit" unless $fired == 1;
+          print "ok\n";
+        '
+    - name: Callback does not fire after dismiss
+      runs: |
+        perl -e '
+          use Scope::Guard;
+          my $fired = 0;
+          {
+            my $guard = Scope::Guard->new(sub { $fired = 1 });
+            $guard->dismiss();
+          }
+          die "callback fired after dismiss" if $fired;
+          print "ok\n";
+        '
+    - name: Guard with scope() function
+      runs: |
+        perl -e '
+          use Scope::Guard qw(scope_guard);
+          my $fired = 0;
+          {
+            my $guard = scope_guard(sub { $fired = 1 });
+          }
+          die "scope_guard callback did not fire" unless $fired == 1;
+          print "ok\n";
+        '
+
+update:
+  enabled: true
+  # use git backend because GitHub backend fails with non-semver Perl decimal versions
+  ignore-regex-patterns:
+    - _ # exclude Perl dev/trial releases
+  github:
+    identifier: chocolateboy/Scope-Guard
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

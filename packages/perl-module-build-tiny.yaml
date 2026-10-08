@@ -1,0 +1,75 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-module-build-tiny/APKBUILD
+package:
+  name: perl-module-build-tiny
+  version: "0.053"
+  epoch: 3 # go/wolfi-rsc/perl-module-build-tiny
+  description: A tiny replacement for Module::Build
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-extutils-config
+      - perl-extutils-helpers
+      - perl-extutils-installpaths
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-zilla
+      - perl-extutils-config
+      - perl-extutils-helpers
+      - perl-extutils-installpaths
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Perl-Toolchain-Gang/module-build-tiny
+      tag: v${{package.version}}
+      expected-commit: ff312b6e1475cc0a7bd920669fcb22d016a5bb55
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-module-build-tiny-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-module-build-tiny manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: Perl-Toolchain-Gang/module-build-tiny
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: Module::Build::Tiny
+    - uses: test/no-docs

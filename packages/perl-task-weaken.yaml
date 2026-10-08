@@ -1,0 +1,62 @@
+package:
+  name: perl-task-weaken
+  version: "1.06"
+  epoch: 4 # go/wolfi-rsc/perl-task-weaken
+  description: "Ensure that a platform has weaken support"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/karenetheridge/Task-Weaken
+      tag: v${{package.version}}
+      expected-commit: 2904530a708af259c3dcdf4c517b43aaf7735c41
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Task::Weaken
+
+update:
+  enabled: true
+  github:
+    identifier: karenetheridge/Task-Weaken
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

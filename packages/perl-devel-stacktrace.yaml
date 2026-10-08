@@ -1,0 +1,98 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-devel-stacktrace/APKBUILD
+package:
+  name: perl-devel-stacktrace
+  version: "2.05"
+  epoch: 10 # toolchain rebuild for  perl-dev-5.44.0
+  description: An object representing a stack trace
+  copyright:
+    - license: Artistic-2.0
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/houseabsolute/Devel-StackTrace
+      tag: v${{package.version}}
+      expected-commit: 8a0bc67b9f8b1c5ccde5728be3240b6d6656398d
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+test:
+  pipeline:
+    - runs: |
+        perl -e "
+          use Devel::StackTrace;
+
+          # Create a stack trace object
+          my \$trace = Devel::StackTrace->new;
+          die 'Failed to create Devel::StackTrace object' unless defined \$trace;
+
+          # Verify frame count is at least 1
+          my \$count = \$trace->frame_count;
+          die \"Expected at least 1 frame, got \$count\" unless \$count >= 1;
+
+          # Inspect the first frame
+          my \$frame = \$trace->frame(0);
+          die 'Failed to get frame 0' unless defined \$frame;
+
+          # Verify frame has a package name
+          my \$pkg = \$frame->package;
+          die 'Frame package is empty' unless defined \$pkg && length \$pkg;
+
+          # Verify frame has a line number
+          my \$line = \$frame->line;
+          die 'Frame line is not a positive integer' unless defined \$line && \$line > 0;
+
+          # Verify frame has a subroutine name
+          my \$sub = \$frame->subroutine;
+          die 'Frame subroutine is empty' unless defined \$sub && length \$sub;
+
+          # Test as_string produces non-empty output
+          my \$str = \$trace->as_string;
+          die 'as_string returned empty output' unless defined \$str && length \$str;
+
+          print \"All Devel::StackTrace tests passed\n\";
+        "
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+
+subpackages:
+  - name: perl-devel-stacktrace-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-devel-stacktrace manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: houseabsolute/Devel-StackTrace
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

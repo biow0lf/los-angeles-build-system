@@ -1,0 +1,59 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-test-nowarnings/APKBUILD
+package:
+  name: perl-test-nowarnings
+  version: "1.06"
+  epoch: 9 # fix test/tw/docs in doc subpackage
+  description: Test::NoWarnings perl module
+  copyright:
+    - license: LGPL-2.1-only
+  resources:
+    cpu: "1"
+    memory: 3Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/haarg/Test-NoWarnings
+      tag: v${{package.version}}
+      expected-commit: 5259eb9491257d9943f1eda01aa0a957f041cd0e
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-test-nowarnings-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-test-nowarnings manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: haarg/Test-NoWarnings
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/no-docs

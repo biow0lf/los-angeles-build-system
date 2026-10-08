@@ -1,0 +1,70 @@
+package:
+  name: perl-class-inspector
+  version: "1.36"
+  epoch: 8 # go/wolfi-rsc/perl-class-inspector
+  description: Class::Inspector perl module
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-module-install
+  resources:
+    cpu: "2"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-zilla
+      - perl-module-install
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/uperl/Class-Inspector
+      tag: v${{package.version}}
+      expected-commit: ae180de40e81ab0f2623e47344085f30dd625e93
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-class-inspector-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-class-inspector manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: Class::Inspector
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - _ # exclude Perl dev/trial releases (e.g. v1.105_001)
+  github:
+    identifier: uperl/Class-Inspector
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

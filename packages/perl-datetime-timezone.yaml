@@ -1,0 +1,75 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-datetime-timezone/APKBUILD
+package:
+  name: perl-datetime-timezone
+  version: "2.71"
+  epoch: 0 # go/wolfi-rsc/perl-datetime-timezone
+  description: Time zone object base class and factory
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-class-singleton
+      - perl-module-runtime
+      - perl-namespace-autoclean
+      - perl-params-validationcompiler
+      - perl-specio
+      - perl-try-tiny
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-class-singleton
+      - perl-module-runtime
+      - perl-namespace-autoclean
+      - perl-params-validationcompiler
+      - perl-specio
+      - perl-try-tiny
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/houseabsolute/DateTime-TimeZone
+      tag: v${{package.version}}
+      expected-commit: 07e713ce2a807b2ec3c11e8381a0c0d66a98e33b
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-datetime-timezone-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-datetime-timezone manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: houseabsolute/DateTime-TimeZone
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

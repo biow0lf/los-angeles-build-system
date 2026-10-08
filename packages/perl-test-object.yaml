@@ -1,0 +1,60 @@
+package:
+  name: perl-test-object
+  version: "0.08"
+  epoch: 3
+  description: "Thoroughly testing objects via registered handlers"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/karenetheridge/Test-Object
+      tag: v${{package.version}}
+      expected-commit: c0abc1b07db7b8c521b916d2e127bbfd37c68730
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Test::Object
+
+update:
+  enabled: true
+  github:
+    identifier: karenetheridge/Test-Object
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

@@ -1,0 +1,66 @@
+package:
+  name: perl-module-path
+  version: "0.19"
+  epoch: 2
+  description: "Get the full path to a locally installed module"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - perl
+
+pipeline:
+  # blocked-no-github: Dist::Zilla-managed; CPAN tarball has generated Makefile.PL absent from GitHub tags
+  - uses: fetch
+    with:
+      uri: https://cpan.metacpan.org/authors/id/N/NE/NEILB/Module-Path-${{package.version}}.tar.gz
+      expected-sha256: b33179ce4dd73dfcde7d46808804b9ffbb11db0245fe455a7d001747562feaca
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - name: Smoke tests
+      runs: |
+        expected_list_util_mpath=/usr/lib/perl5/core_perl/List/Util.pm
+        cat >test.pl <<EOF
+        use Module::Path qw(module_path);
+        use Test::More tests => 1;
+        ok(module_path('List::Util') eq '$expected_list_util_mpath', 'Smoke test passed');
+        EOF
+        perl test.pl
+        list_util_mpath="$(mpath List::Util)"
+        if [ "$list_util_mpath" != "$expected_list_util_mpath" ]; then
+          echo "mpath said '$list_util_mpath', expected '$expected_list_util_mpath'" >&2
+          exit 1
+        fi
+
+update:
+  enabled: true
+  github:
+    identifier: neilb/Module-Path
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

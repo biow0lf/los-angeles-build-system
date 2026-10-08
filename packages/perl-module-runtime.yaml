@@ -1,0 +1,102 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-module-runtime/APKBUILD
+package:
+  name: perl-module-runtime
+  version: "0.018"
+  epoch: 10
+  description: runtime module handling
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-module-build
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - perl
+      - perl-module-build
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/haarg/Module-Runtime
+      tag: v${{package.version}}
+      expected-commit: 50938f9c9af50357d79c3c42e9a2c7d00fc8262c
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-module-runtime-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-module-runtime manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  # use git backend because GitHub backend fails with non-semver Perl decimal versions
+  ignore-regex-patterns:
+    - _ # exclude Perl dev/trial releases (e.g. v0.018_001)
+  github:
+    identifier: haarg/Module-Runtime
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - name: Test Module::Runtime loads
+      runs: perl -e 'use Module::Runtime; print "loaded\n"'
+    - name: Test module_notional_filename
+      runs: |
+        perl -e '
+          use Module::Runtime qw(module_notional_filename);
+          my $f = module_notional_filename("Foo::Bar");
+          die "expected Foo/Bar.pm, got $f" unless $f eq "Foo/Bar.pm";
+          print "module_notional_filename: ok\n";
+        '
+    - name: Test is_module_name
+      runs: |
+        perl -e '
+          use Module::Runtime qw(is_module_name);
+          die "Foo::Bar should be valid" unless is_module_name("Foo::Bar");
+          die "123Bad should be invalid" if is_module_name("123Bad");
+          print "is_module_name: ok\n";
+        '
+    - name: Test check_module_name
+      runs: |
+        perl -e '
+          use Module::Runtime qw(check_module_name);
+          check_module_name("Foo::Bar");
+          print "check_module_name valid: ok\n";
+        '
+    - name: Test require_module
+      runs: |
+        perl -e '
+          use Module::Runtime qw(require_module);
+          require_module("Scalar::Util");
+          print "require_module: ok\n";
+        '
+    - name: Test use_module
+      runs: |
+        perl -e '
+          use Module::Runtime qw(use_module);
+          use_module("Scalar::Util");
+          print "use_module: ok\n";
+        '
+    - uses: test/no-docs

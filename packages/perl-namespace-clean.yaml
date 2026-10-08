@@ -1,0 +1,89 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-namespace-clean/APKBUILD
+package:
+  name: perl-namespace-clean
+  version: "0.27"
+  epoch: 10 # toolchain rebuild for  perl-dev-5.44.0
+  description: Keep imports and functions out of your namespace
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-b-hooks-endofscope
+      - perl-package-stash
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-b-hooks-endofscope
+      - perl-dev
+      - perl-package-stash
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/p5sagit/namespace-clean
+      tag: ${{package.version}}
+      expected-commit: 77b619d773e7bfa03d01003d6e17c9f6e2f7beeb
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-namespace-clean-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-namespace-clean manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: p5sagit/namespace-clean
+    use-tag: true
+
+test:
+  pipeline:
+    - runs: |
+        perl -e 'use namespace::clean; print "namespace::clean loaded\n"'
+    - runs: |
+        perl -e '
+          package Foo;
+          use POSIX qw(floor);
+          use namespace::clean;
+          # floor should be cleaned from Foo namespace after namespace::clean
+          my $obj = bless {}, "Foo";
+          if (Foo->can("floor")) {
+            die "ERROR: floor should have been removed from Foo namespace\n";
+          }
+          print "namespace::clean correctly removed imported symbol\n";
+        '
+    - runs: |
+        perl -e '
+          package Bar;
+          use POSIX qw(ceil);
+          use namespace::clean -except => ["ceil"];
+          # ceil should NOT be cleaned because of -except
+          if (!Bar->can("ceil")) {
+            die "ERROR: ceil should have been kept via -except\n";
+          }
+          print "namespace::clean -except works correctly\n";
+        '

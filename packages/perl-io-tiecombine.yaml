@@ -1,0 +1,58 @@
+package:
+  name: perl-io-tiecombine
+  version: "1.005"
+  epoch: 3
+  description: "Produce tied (and other) separate but combined variables"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/rjbs/IO-TieCombine
+      tag: ${{package.version}}
+      expected-commit: 94a1292a8a490675a3c702d425d6d1a0564bd62a
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: IO::TieCombine
+
+update:
+  enabled: true
+  github:
+    identifier: rjbs/IO-TieCombine
+    use-tag: true

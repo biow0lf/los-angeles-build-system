@@ -1,0 +1,82 @@
+package:
+  name: perl-carp-clan
+  version: "6.08"
+  epoch: 5
+  description: Report errors from perspective of caller of a "clan" of modules
+  copyright:
+    - license: Artistic-1.0-Perl
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/karenetheridge/Carp-Clan
+      tag: v${{package.version}}
+      expected-commit: 5ad35233e88e2c5bd1c454a9801312f8cc453393
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - runs: make test
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+update:
+  enabled: true
+  github:
+    identifier: karenetheridge/Carp-Clan
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: ${{package.name}} docs
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  environment:
+    contents:
+      packages:
+        - perl
+        - perl-dist-zilla
+  pipeline:
+    - name: Smoke test
+      runs: |
+        perl <<'EOF'
+        use Carp::Clan;
+        # Test basic confess functionality
+        eval {
+            Carp::Clan::confess("Test error message");
+        };
+        my $error = $@;
+        die "confess didn't throw error" unless $error;
+        die "Error message not found" unless $error =~ /Test error message/;
+        # Test clan-aware croak - errors from clan modules skip to caller
+        package MyApp::Internal;
+        use Carp::Clan qw(^MyApp::);
+        sub helper {
+            croak("clan error");
+        }
+        package main;
+        eval { MyApp::Internal::helper(); };
+        my $clan_error = $@;
+        die "Clan croak didn't throw error" unless $clan_error;
+        die "Clan error message not found" unless $clan_error =~ /clan error/;
+        # Verify error includes the helper function name (proving clan-aware behavior)
+        # With Carp::Clan qw(^MyApp::), the error shows which clan module threw it
+        die "Clan-aware error reporting failed" unless $clan_error =~ /helper/;
+        # Note: Full clan stack trace behavior is tested by upstream 'make test'
+        print "Carp::Clan functional tests passed\n";
+        EOF

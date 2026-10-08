@@ -1,0 +1,58 @@
+package:
+  name: perl-sub-install
+  version: "0.929"
+  epoch: 2
+  description: "Install subroutines into packages easily"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/rjbs/Sub-Install
+      tag: ${{package.version}}
+      expected-commit: c634abd76f980f0a332422469d6c3b6d2f5337d4
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Sub::Install
+
+update:
+  enabled: true
+  github:
+    identifier: rjbs/Sub-Install
+    use-tag: true

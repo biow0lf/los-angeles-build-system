@@ -1,0 +1,69 @@
+package:
+  name: perl-module-runtime-conflicts
+  version: "0.003"
+  epoch: 4 # go/wolfi-rsc/perl-module-runtime-conflicts
+  description: "Provide information on conflicts for Module::Runtime"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-dist-checkconflicts
+      - perl-module-runtime
+  resources:
+    cpu: "1"
+    memory: 3Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-dist-checkconflicts
+      - perl-dist-zilla
+      - perl-module-runtime
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/karenetheridge/Module-Runtime-Conflicts
+      tag: v${{package.version}}
+      expected-commit: 0cd6b3c451eff59719199a25dacc6eec2c834473
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - name: Smoke test
+      runs: perl -e 'use Module::Runtime::Conflicts; Module::Runtime::Conflicts->check_conflicts;'
+
+update:
+  enabled: true
+  github:
+    identifier: karenetheridge/Module-Runtime-Conflicts
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

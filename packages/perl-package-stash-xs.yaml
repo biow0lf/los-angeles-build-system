@@ -1,0 +1,72 @@
+package:
+  name: perl-package-stash-xs
+  version: "0.32"
+  epoch: 0 # glibc: 2.43->2.44
+  description: "Faster and more correct implementation of the Package::Stash API"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - glibc-2.44-dev
+      - perl-dev
+      - perl-test-fatal
+      - perl-test-needs
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/moose/Package-Stash-XS
+      tag: v${{package.version}}
+      expected-commit: 74d75b3e9ea3573770bb8bf9140c11316bf6cc9c
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make
+    with:
+      opts: test
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  environment:
+    contents:
+      packages:
+        - perl-package-stash
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/tw/ldd-check
+    - uses: test/perl-module-check
+      with:
+        modules: Package::Stash Package::Stash::XS
+
+update:
+  enabled: true
+  github:
+    identifier: moose/Package-Stash-XS
+    use-tag: true

@@ -29,4 +29,12 @@ pipeline:
 
   - uses: strip
 
+subpackages:
+  - name: md4c-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - md4c
+    description: md4c dev
 

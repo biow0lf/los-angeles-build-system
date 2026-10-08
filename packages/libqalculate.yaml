@@ -1,0 +1,43 @@
+package:
+  name: libqalculate
+  version: 5.13.1
+  epoch: 0
+  description: "A multi-purpose cross-platform desktop calculator"
+  url: https://qalculate.github.io/
+  copyright:
+    - license: GPL-2.0
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - curl-dev
+      - gettext-dev
+      - gmp-dev
+      - icu-dev
+      - libxml2-dev
+      - mpfr-dev
+      - pkgconf-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Qalculate/libqalculate
+      tag: v${{package.version}}
+      expected-commit: b245c4194a1a8dc14ba7ecf1e811e6d0b60592aa
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: Qalculate/libqalculate
+    strip-prefix: v
+

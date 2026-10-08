@@ -1,0 +1,126 @@
+package:
+  name: libwebp
+  version: "1.6.0"
+  epoch: 6 # glibc: 2.43->2.44
+  description: Libraries for working with WebP images
+  copyright:
+    - license: BSD-3-Clause
+
+environment:
+  contents:
+    packages:
+      - autoconf # remove when switching back to released tarball
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - giflib-dev
+      - glibc-2.44-dev
+      - libjpeg-turbo-dev
+      - libpng-dev
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/webmproject/libwebp
+      tag: v${{package.version}}
+      expected-commit: 4fa21912338357f89e4fd51cf2368325b59e9bd9
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --with-pic
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libwebp-static
+    pipeline:
+      - uses: split/static
+    description: libwebp static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: libwebp-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libwebp
+    description: libwebp dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libwebp-doc
+    pipeline:
+      - uses: split/manpages
+    description: libwebp manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: libwebp-tools
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+          mv ${{targets.destdir}}/usr/bin/* ${{targets.subpkgdir}}/usr/bin/
+    description: The WebP command line tools
+    test:
+      pipeline:
+        - name: Test cwebp encoding and dwebp decoding
+          runs: |
+            # Create a minimal 4x4 PPM image (P6 binary format)
+            # Header: magic P6, dimensions 4x4, max value 255
+            # Body: 16 pixels * 3 bytes RGB = 48 bytes (red pixels)
+            printf 'P6\n4 4\n255\n' > /tmp/test.ppm
+            i=0; while [ $i -lt 16 ]; do printf '\377\000\000'; i=$((i+1)); done >> /tmp/test.ppm
+
+            # Encode PPM to WebP
+            cwebp /tmp/test.ppm -o /tmp/test.webp
+            test -s /tmp/test.webp
+
+            # Decode WebP back to PNG
+            dwebp /tmp/test.webp -o /tmp/test_out.png
+            test -s /tmp/test_out.png
+        - name: Test webpinfo on encoded file
+          runs: |
+            # Create a minimal 4x4 PPM image (P6 binary format, green pixels)
+            printf 'P6\n4 4\n255\n' > /tmp/info_test.ppm
+            i=0; while [ $i -lt 16 ]; do printf '\000\377\000'; i=$((i+1)); done >> /tmp/info_test.ppm
+
+            cwebp /tmp/info_test.ppm -o /tmp/info_test.webp
+            # webpinfo should report information about the file
+            webpinfo -summary /tmp/info_test.webp
+        - name: Test webpmux container operations
+          runs: |
+            # Create a small PPM file to test with (blue pixels)
+            printf 'P6\n4 4\n255\n' > /tmp/frame1.ppm
+            i=0; while [ $i -lt 16 ]; do printf '\000\000\377'; i=$((i+1)); done >> /tmp/frame1.ppm
+
+            cwebp /tmp/frame1.ppm -o /tmp/frame1.webp
+            # Use webpmux to get info about the WebP file
+            webpmux -info /tmp/frame1.webp
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: webmproject/libwebp
+    strip-prefix: v
+    use-tag: true
+  ignore-regex-patterns:
+    - ^webp-rfc.*

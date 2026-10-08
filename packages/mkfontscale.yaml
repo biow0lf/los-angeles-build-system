@@ -1,0 +1,100 @@
+package:
+  name: mkfontscale
+  version: "1.2.4"
+  epoch: 2 # glibc: 2.43->2.44
+  description: Scalable font index generator for X
+  copyright:
+    - license: MIT
+  scriptlets:
+    trigger:
+      paths:
+        - /usr/share/fonts/*
+      script: |
+        #!/bin/sh
+        for i in "$@"; do
+            mkfontscale "$i"
+            mkfontdir "$i"
+        done
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - freetype-dev
+      - glibc-2.44-dev
+      - libfontenc-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xorgproto
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/app/mkfontscale
+      tag: mkfontscale-${{package.version}}
+      expected-commit: d01cb89de429b4ed124399008dcec5e6de8e83af
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: mkfontscale-doc
+    pipeline:
+      - uses: split/manpages
+    description: mkfontscale manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 15043
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        mkfontdir --version
+        mkfontscale --version
+        mkfontdir --help
+        mkfontscale --help
+    - name: Test mkfontscale generates fonts.scale
+      runs: |
+        # Create a test font directory
+        mkdir -p /tmp/fontdir
+
+        # Run mkfontscale on the directory
+        mkfontscale /tmp/fontdir
+
+        # Verify fonts.scale was created
+        stat /tmp/fontdir/fonts.scale
+
+        # Verify the file has content (at minimum a count line)
+        test -s /tmp/fontdir/fonts.scale
+    - name: Test mkfontdir generates fonts.dir
+      runs: |
+        # Create a test font directory
+        mkdir -p /tmp/fontdir2
+
+        # Run mkfontdir on the directory
+        mkfontdir /tmp/fontdir2
+
+        # Verify fonts.dir was created
+        stat /tmp/fontdir2/fonts.dir
+
+        # Verify the file has content (at minimum a count line)
+        test -s /tmp/fontdir2/fonts.dir

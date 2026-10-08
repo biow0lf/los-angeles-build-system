@@ -1,0 +1,83 @@
+package:
+  name: nasm
+  version: "3.02"
+  epoch: 1 # glibc: 2.43->2.44
+  description: 80x86 assembler designed for portability and modularity
+  copyright:
+    - license: BSD-2-Clause
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - asciidoc
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - docbook-xml
+      - glibc-2.44-dev
+      - groff-base
+      - xmlto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 4a56d66ed9626d5a3ded5414c9d8b7f1a48ce065
+      repository: https://github.com/netwide-assembler/nasm
+      tag: nasm-${{package.version}}
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make
+    with:
+      opts: manpages
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: nasm-doc
+    pipeline:
+      - uses: split/manpages
+    description: nasm manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: netwide-assembler/nasm
+    strip-prefix: nasm-
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Verify nasm and ndisasm versions
+      runs: |
+        nasm --version
+        ndisasm -v
+    - name: Assemble a minimal x86-64 binary and disassemble it
+      runs: |
+        set -euo pipefail
+        # Write a minimal flat binary: mov eax, 1 / ret
+        cat > /tmp/test.asm << 'EOF'
+        BITS 64
+        mov eax, 1
+        ret
+        EOF
+        nasm -f bin -o /tmp/test.bin /tmp/test.asm
+        # Verify the output file was created and is non-empty
+        test -s /tmp/test.bin
+        # Disassemble and verify ndisasm produces output
+        ndisasm -b 64 /tmp/test.bin | grep -i "mov"

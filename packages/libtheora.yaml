@@ -1,0 +1,114 @@
+package:
+  name: libtheora
+  version: 1.2.0
+  epoch: 7 # glibc: 2.43->2.44
+  description: An open video codec developed by the Xiph.org
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "3"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - doxygen
+      - glibc-2.44-dev
+      - libogg-dev
+      - libtool
+      - libvorbis-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/xiph/theora
+      tag: v${{package.version}}
+      expected-commit: 8e4808736e9c181b971306cc3f05df9e61354004
+
+  - runs: ./autogen.sh
+
+  - runs: |
+      CFLAGS="${CFLAGS/-Os/-O3}" CPPFLAGS="${CPPFLAGS/-Os/-O3}" ./configure \
+      --build=$CBUILD \
+      --host=$CHOST \
+      --prefix=/usr \
+      --enable-shared \
+      --enable-static
+      make -j 1 -C lib
+      make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  # This has to come before -dev
+  - name: ${{package.name}}-static
+    description: ${{package.name}} static libraries
+    dependencies:
+      runtime:
+        - libogg-static
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: ${{package.name}}-dev
+    pipeline:
+      - uses: split/dev
+    description: ${{package.name}} dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: libtheora-dev
+
+  - name: ${{package.name}}-doc
+    description: ${{package.name}} documentation
+    pipeline:
+      - uses: split/alldocs
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - libtheora-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation and usage
+      runs: |
+        tee test.c <<'EOF'
+        #include <theora/theora.h>
+        #include <stdio.h>
+
+        int main() {
+            theora_info ti;
+            theora_info_init(&ti);
+            printf("libtheora initialized successfully\n");
+            printf("version: %d\n", theora_version_number());
+            theora_info_clear(&ti);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags theora) test.c -o test $(pkg-config --libs theora)
+        ./test

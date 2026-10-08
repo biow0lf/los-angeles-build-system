@@ -1,0 +1,77 @@
+package:
+  name: libxv
+  version: 1.0.13
+  epoch: 6
+  description: "X11 Video extension library"
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - attr-dev
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - libtool
+      - libx11-dev
+      - libxext-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - wolfi-base
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxv
+      tag: libXv-${{package.version}}
+      expected-commit: e1cde54538060c4fd3a3d02e3d2e2b7e5da7bff9
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      install -D -m644 COPYING "${{targets.destdir}}"/usr/share/licenses/${{package.name}}/COPYING
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    description: headers for ${{package.name}}
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: libxv-dev
+    dependencies:
+      runtime:
+        - libxv
+
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    description: ${{package.name}} manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1795

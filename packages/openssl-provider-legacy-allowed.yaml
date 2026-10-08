@@ -1,0 +1,146 @@
+package:
+  name: openssl-provider-legacy-allowed
+  version: "4.0.2"
+  epoch: 3 # interoperability with pyca
+  description: "the OpenSSL legacy provider with non-approved but allowed algorithms only"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+  resources:
+    cpu: "10"
+    memory: 7Gi
+  test-resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/openssl/openssl
+      tag: openssl-${{package.version}}
+      expected-commit: f089acdf4bc7ba94a79f4bf6eb7362c3e7d14aa9
+
+  - uses: patch
+    with:
+      patches: |
+        4.0-0001-Build-the-legacy-provider-as-a-small-freestanding-mo.patch
+        4.0-0002-Offer-DES-CBC-and-DES-EDE3-CBC-from-the-freestanding.patch
+        4.0-0003-Offer-DES-CBC-and-DES-EDE3-CBC-from-the-freestanding.patch
+
+  - name: Configure and build
+    runs: |
+      perl ./Configure \
+         linux-${{build.arch}} \
+         --prefix=/usr \
+         --libdir=lib \
+         --openssldir=/etc/ssl \
+         no-asm no-quic no-secure-memory \
+         shared \
+         enable-pie \
+         no-zlib \
+         no-async \
+         no-comp \
+         no-idea \
+         no-sm2 \
+         no-sm4 \
+         no-seed \
+         no-tls \
+         no-dtls \
+         no-docs \
+         no-weak-ssl-ciphers \
+         no-rc4 \
+         -Wa,--noexecstack
+      perl configdata.pm --dump
+
+  - name: Build
+    runs: |
+      # Create generated .c from .c.in
+      make build_all_generated
+
+      # Continue building everything
+      make providers/legacy.so libssl.so
+      make apps/openssl test/evp_test test/provider_test
+      make build_modules_nodep util/wrap.pl link-utils
+
+  - name: Test
+    runs: |
+      # Test the algorithms we built
+      export LD_LIBRARY_PATH=$PWD
+      make run_tests TESTS='test_legacy_okay test_provider'
+
+      export LD_LIBRARY_PATH=$PWD OPENSSL_MODULES=$PWD/providers
+      D=test/recipes/30-test_evp_data
+      C=test/default-and-legacy.cnf
+      ./test/evp_test -config $C $D/evpmd_md.txt             # MD4, MD5
+      ./test/evp_test -config $C $D/evpmd_sha.txt            # SHA1
+      ./test/evp_test -config $C $D/evpciph_aes_common.txt   # AES-ECB
+
+      # Ensure no libcrypto.so
+      if readelf -d providers/legacy.so | grep 'NEEDED.*libcrypto.so'; then
+         echo Undesired libcrypto.so runtime dep present
+         exit 1
+      fi
+
+  - name: Install
+    runs: |
+      mkdir -p ${{targets.contextdir}}/usr/lib/ossl-modules
+      mv providers/legacy.so ${{targets.contextdir}}/usr/lib/ossl-modules
+
+  - uses: strip
+
+test:
+  environment:
+    contents:
+      packages:
+        - openssl
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/hardening-check
+    - name: MD4
+      runs: OPENSSL_CONF=./test-openssl.cnf openssl list -propquery 'provider=legacy,fips=yes' -provider legacy -digest-algorithms -select MD4 | grep -q MD4
+    - name: MD5
+      runs: OPENSSL_CONF=./test-openssl.cnf openssl list -propquery 'provider=legacy,fips=yes' -provider legacy -digest-algorithms -select MD5 | grep -q MD5
+    - name: SHA1
+      runs: OPENSSL_CONF=./test-openssl.cnf openssl list -propquery 'provider=legacy,fips=yes' -provider legacy -digest-algorithms -select SHA-1 | grep -q SHA-1
+    - name: AES-128-ECB
+      runs: OPENSSL_CONF=./test-openssl.cnf openssl list -propquery 'provider=legacy,fips=yes' -provider legacy -cipher-algorithms -select AES-128-ECB | grep -q AES-128-ECB
+    - name: AES-256-ECB
+      runs: OPENSSL_CONF=./test-openssl.cnf openssl list -propquery 'provider=legacy,fips=yes' -provider legacy -cipher-algorithms -select AES-256-ECB | grep -q AES-256-ECB
+    - name: DES-CBC
+      runs: CHAINGUARD_LEGACY_ENABLE_DES=1 OPENSSL_CONF=./test-openssl.cnf openssl list -propquery 'provider=legacy,fips=no' -provider legacy -cipher-algorithms -select DES-CBC | grep -q DES-CBC
+    - name: DES-EDE3-CBC
+      runs: CHAINGUARD_LEGACY_ENABLE_DES=1 OPENSSL_CONF=./test-openssl.cnf openssl list -propquery 'provider=legacy,fips=no' -provider legacy -cipher-algorithms -select DES-EDE3-CBC | grep -q DES-EDE3-CBC
+    - name: Provider optout
+      runs: |
+        if CHAINGUARD_LEGACY_ALLOWED=0 OPENSSL_CONF=./test-openssl.cnf openssl list -propquery 'provider=legacy,fips=yes' -digest-algorithms -select MD4 | grep -q MD4; then
+          echo Disabling legacy allowed with environment variable failed
+          exit 1
+        fi
+    - name: DES optout
+      runs: |
+        if CHAINGUARD_LEGACY_ENABLED_DES=0 OPENSSL_CONF=./test-openssl.cnf openssl list -propquery 'provider=legacy,fips=no' -provider legacy -cipher-algorithms -select DES-CBC | grep -q DES-EDE3-CBC; then
+          echo Disabling legacy DES with environment variable failed
+          exit 1
+        fi
+    - name: pycryptography compat
+      runs: |
+        if CHAINGUARD_LEGACY_ALLOWED=0 OPENSSL_CONF=./test-openssl.cnf openssl list -propquery 'provider=legacy,fips=yes' -provider legacy -provparam legacy:activate=1 -digest-algorithms -select MD5 | grep -q MD5; then
+          echo Disabling leagcy allowed, bypassed with direct provider activate
+          exit 1
+        fi
+
+update:
+  enabled: true
+  github:
+    identifier: openssl/openssl
+    strip-prefix: openssl-
+    tag-filter-prefix: openssl-4.

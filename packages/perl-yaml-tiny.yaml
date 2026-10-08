@@ -1,0 +1,60 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-yaml-tiny/APKBUILD
+package:
+  name: perl-yaml-tiny
+  version: "1.76"
+  epoch: 4
+  description: Read/Write YAML files with as little code as possible
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Perl-Toolchain-Gang/YAML-Tiny.git
+      tag: v${{package.version}}
+      expected-commit: 2aa351a7da2599863672f8ce774a4f144389cd9b
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-yaml-tiny-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-yaml-tiny manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: Perl-Toolchain-Gang/YAML-Tiny
+    use-tag: true
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: YAML::Tiny
+    - uses: test/no-docs

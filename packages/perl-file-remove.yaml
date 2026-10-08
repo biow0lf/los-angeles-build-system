@@ -1,0 +1,63 @@
+package:
+  name: perl-file-remove
+  version: "1.61"
+  epoch: 8
+  description: Remove files and directories
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-module-build
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-zilla
+      - perl-module-build
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/shlomif/File-Remove
+      tag: ${{package.version}}
+      expected-commit: fadd3254690c937d11875b1a4f76856070fec9f2
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: File::Remove
+    - uses: test/no-docs
+
+subpackages:
+  - name: perl-file-remove-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-file-remove manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: shlomif/File-Remove
+    use-tag: true

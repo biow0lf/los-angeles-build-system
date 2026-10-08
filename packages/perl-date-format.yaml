@@ -1,0 +1,132 @@
+package:
+  name: perl-date-format
+  version: "2.35"
+  epoch: 4
+  description: Perl - Date formatting subroutines
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/atoomic/perl-TimeDate
+      tag: v${{package.version}}
+      expected-commit: 080fe0d3fd9d79046db3c61e60ffe64ff02e1adb
+
+  - runs: |
+      PERL_MM_USE_DEFAULT=1 perl Makefile.PL INSTALLDIRS=vendor
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+subpackages:
+  - name: perl-date-format-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-date-format manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - name: Verify module exports and basic functionality
+      runs: |
+        perl <<'EOF'
+        use Date::Format qw(time2str strftime ctime);
+        # Verify time2str is callable and returns a non-empty string
+        my $result = time2str('%Y', 0, 'UTC');
+        die "time2str returned empty string" unless length($result) > 0;
+        die "time2str('%Y', 0, 'UTC') should return '1970', got '$result'" unless $result eq '1970';
+        print "module exports and basic functionality: OK\n";
+        EOF
+    - name: Test time2str date formatting
+      runs: |
+        perl <<'EOF'
+        use Date::Format qw(time2str);
+        # 2021-01-01 00:00:00 UTC
+        my $time = 1609459200;
+        my $result = time2str('%Y-%m-%d', $time, 'UTC');
+        die "Expected '2021-01-01', got '$result'" unless $result eq '2021-01-01';
+        print "time2str date formatting: OK\n";
+        EOF
+    - name: Test time2str time formatting
+      runs: |
+        perl <<'EOF'
+        use Date::Format qw(time2str);
+        # 2021-01-01 12:30:45 UTC
+        my $time = 1609504245;
+        my $result = time2str('%H:%M:%S', $time, 'UTC');
+        die "Expected '12:30:45', got '$result'" unless $result eq '12:30:45';
+        print "time2str time formatting: OK\n";
+        EOF
+    - name: Test time2str combined format
+      runs: |
+        perl <<'EOF'
+        use Date::Format qw(time2str);
+        # 2021-06-15 00:00:00 UTC
+        my $time = 1623715200;
+        my $result = time2str('%Y/%m/%d', $time, 'UTC');
+        die "Expected '2021/06/15', got '$result'" unless $result eq '2021/06/15';
+        print "time2str combined format: OK\n";
+        EOF
+    - name: Test strftime function
+      runs: |
+        perl <<'EOF'
+        use Date::Format qw(strftime);
+        # gmtime(1609459200) = (0,0,0,1,0,121,5,0,0) = 2021-01-01 00:00:00 UTC
+        my @t = (0, 0, 0, 1, 0, 121, 5, 0, 0);
+        my $result = strftime('%Y-%m-%d', @t);
+        die "Expected '2021-01-01', got '$result'" unless $result eq '2021-01-01';
+        print "strftime: OK\n";
+        EOF
+    - name: Test ctime function
+      runs: |
+        perl <<'EOF'
+        use Date::Format qw(ctime);
+        my $result = ctime(0);
+        die "ctime returned empty string" unless length($result) > 0;
+        # ctime(0) should contain "1970" (epoch)
+        die "ctime(0) should contain '1970', got '$result'" unless $result =~ /1970/;
+        print "ctime: OK\n";
+        EOF
+    - name: Test format specifiers
+      runs: |
+        perl <<'EOF'
+        use Date::Format qw(time2str);
+        # 2000-03-05 00:00:00 UTC (Sunday)
+        my $time = 952214400;
+        # Test day-of-week
+        my $dow = time2str('%A', $time, 'UTC');
+        die "Expected 'Sunday', got '$dow'" unless $dow eq 'Sunday';
+        # Test abbreviated month
+        my $mon = time2str('%b', $time, 'UTC');
+        die "Expected 'Mar', got '$mon'" unless $mon eq 'Mar';
+        # Test day of month with zero padding
+        my $day = time2str('%d', $time, 'UTC');
+        die "Expected '05', got '$day'" unless $day eq '05';
+        print "format specifiers: OK\n";
+        EOF
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - _
+  github:
+    identifier: atoomic/perl-TimeDate
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

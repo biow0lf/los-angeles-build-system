@@ -1,0 +1,67 @@
+package:
+  name: perl-devel-ppport
+  version: "3.68"
+  epoch: 10 # glibc: 2.43->2.44
+  description: Devel::PPPort - Perl/Pollution/Portability
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+    memory: 3Gi
+  test-resources:
+    cpu: "1"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - perl
+      - perl-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Dual-Life/Devel-PPPort
+      tag: v${{package.version}}
+      expected-commit: 6b65deb02f1bf9eda443fae1b267b501f41d8cba
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-devel-ppport-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-devel-ppport manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: Dual-Life/Devel-PPPort
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - runs: perl -e "use Devel::PPPort"
+    - uses: test/tw/ldd-check

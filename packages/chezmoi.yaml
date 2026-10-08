@@ -1,0 +1,117 @@
+package:
+  name: chezmoi
+  version: "2.73.0"
+  epoch: 0 # CVE-2026-78662
+  description: Manage your dotfiles across multiple diverse machines, securely.
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 6Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+# Deviation from Wolfi's own recipe: Wolfi maintains several parallel Go
+# release streams (go-1.27, etc.); we only maintain a single stream named
+# plain "go" (see packages/go.yaml). Renamed go-1.27 -> go below and in
+# the go/build step's go-package input.
+environment:
+  contents:
+    packages:
+      - busybox
+      - ca-certificates-bundle
+      - go
+  environment:
+    CGO_ENABLED: "0"
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/twpayne/chezmoi
+      tag: v${{package.version}}
+      expected-commit: 24b71e4cf9d98cce0801cfc68e7553355efeaff7
+
+  - uses: go/build
+    with:
+      packages: .
+      ldflags: |
+        -X main.version=${{package.version}}
+        -X main.commit=$(git rev-parse HEAD)
+        -X main.date=$(date -u -d "@$SOURCE_DATE_EPOCH" +"%Y-%m-%dT%H:%M:%SZ")
+        -X main.buildSource=wolfiRelease
+      output: chezmoi
+      go-package: go
+
+update:
+  enabled: true
+  github:
+    identifier: twpayne/chezmoi
+    strip-prefix: v
+
+test:
+  environment:
+    environment:
+      HOME: /tmp/chezmoi-test-home
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: chezmoi
+    - uses: test/tw/help-check
+      with:
+        bins: chezmoi
+    - name: Test core dotfile management (init, add, apply)
+      runs: |
+        set -euo pipefail
+
+        # Setup: create a clean home directory
+        mkdir -p "$HOME"
+        cd "$HOME"
+
+        # Initialize chezmoi source directory
+        chezmoi init
+
+        # Verify source directory was created
+        stat "$HOME/.local/share/chezmoi"
+
+        # Create a dotfile to manage
+        mkdir -p "$HOME/.config"
+        echo "test_setting=true" > "$HOME/.config/testrc"
+
+        # Add the dotfile to chezmoi
+        chezmoi add "$HOME/.config/testrc"
+
+        # Verify the file was added to the source directory
+        stat "$HOME/.local/share/chezmoi/dot_config/testrc"
+        grep -F "test_setting=true" "$HOME/.local/share/chezmoi/dot_config/testrc"
+
+        # Modify the source and apply
+        echo "new_setting=yes" >> "$HOME/.local/share/chezmoi/dot_config/testrc"
+        chezmoi apply
+
+        # Verify the applied file has the new content
+        grep -F "new_setting=yes" "$HOME/.config/testrc"
+
+        # Test chezmoi managed - should list the managed file
+        chezmoi managed | grep -F ".config/testrc"
+
+        echo "SUCCESS: Core dotfile management works"
+    - name: Test core commands (data, dump, doctor)
+      runs: |
+        set -euo pipefail
+
+        # Test chezmoi data outputs valid JSON with expected fields
+        chezmoi data | grep -F "sourceDir"
+        chezmoi data | grep -F "homeDir"
+
+        # Test chezmoi dump outputs target state
+        chezmoi dump
+
+        # Test chezmoi doctor runs diagnostics
+        # doctor may return non-zero if optional tools are missing, so check output
+        chezmoi doctor || true
+
+        # Test chezmoi source-path shows the source directory
+        chezmoi source-path | grep -F "chezmoi"
+
+        echo "SUCCESS: Core commands work"

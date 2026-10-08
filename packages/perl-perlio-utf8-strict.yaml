@@ -1,0 +1,68 @@
+package:
+  name: perl-perlio-utf8-strict
+  version: "0.010"
+  epoch: 3 # glibc: 2.43->2.44
+  description: "Get linewise readers for strings and filenames"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - glibc-2.44-dev
+      - perl-dev
+      - perl-test-exception
+
+pipeline:
+  # Cannot build this one with git-checkout + perl/dzil. dzil build loads
+  # PerlIO::utf8_strict, so once this XS module is stale for the running perl it
+  # aborts the interpreter uncatchably and dzil never gets to write a Makefile.PL.
+  # Building with dzil therefore deadlocks on itself after every perl version bump.
+  # The CPAN tarball ships a generated Makefile.PL and ppport.h, so neither dzil
+  # nor the Devel::PPPort call that stood in for its [PPPort] plugin is needed.
+  # blocked-bootstrap-complex: package sits inside Dist::Zilla's own dependency closure
+  - uses: fetch
+    with:
+      expected-sha256: bcd2848b72df290b5e984fae8b1a6ca96f6d072003cf222389a8c9e8e1c570cd
+      uri: https://cpan.metacpan.org/authors/id/L/LE/LEONT/PerlIO-utf8_strict-${{package.version}}.tar.gz
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make
+    with:
+      opts: test
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - name: Smoke tests
+      runs: perl -e 'open my $fh, "<:utf8_strict", "/dev/null";'
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 3231

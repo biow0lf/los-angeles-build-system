@@ -1,0 +1,66 @@
+package:
+  name: perl-exporter-tiny
+  version: "1.006003"
+  epoch: 2
+  description: "Tiny, yet Moo(se)-compatible type constraint"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: b37d9d3db007810c1a785caaf11be2c736f82072
+      repository: https://github.com/tobyink/p5-exporter-tiny
+      tag: ${{package.version}}
+
+  # Dist::Inkt project — no Makefile.PL in git; generate a minimal one
+  - runs: |
+      cat >Makefile.PL <<'MKPL'
+      use ExtUtils::MakeMaker;
+      WriteMakefile(
+          NAME         => 'Exporter::Tiny',
+          VERSION_FROM => 'lib/Exporter/Tiny.pm',
+          INSTALLDIRS  => 'vendor',
+      );
+      MKPL
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Exporter::Tiny
+
+update:
+  enabled: true
+  github:
+    identifier: tobyink/p5-exporter-tiny
+    use-tag: true

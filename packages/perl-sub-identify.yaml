@@ -1,0 +1,73 @@
+#nolint:git-checkout-must-use-github-updates,valid-pipeline-git-checkout-tag,valid-pipeline-git-checkout-tag-or-branch
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-sub-identify/APKBUILD
+package:
+  name: perl-sub-identify
+  version: "0.14"
+  epoch: 10 # glibc: 2.43->2.44
+  description: Retrieve names of code references
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - perl
+      - perl-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/rgs/Sub-Identify
+      expected-commit: 93d5239771539f35d10293cb67748245fc603b20
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-sub-identify-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-sub-identify manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 11902
+
+test:
+  pipeline:
+    - runs: |
+        perl -e '
+          use Sub::Identify qw(sub_name sub_fullname stash_name);
+          sub my_func { 1 }
+          my $name = sub_name(\&my_func);
+          die "sub_name failed: expected my_func, got $name" unless $name eq "my_func";
+          my $full = sub_fullname(\&my_func);
+          die "sub_fullname failed: got $full" unless $full =~ /my_func$/;
+          my $pkg = stash_name(\&my_func);
+          die "stash_name failed: got $pkg" unless $pkg eq "main";
+          print "Sub::Identify OK\n";
+        '
+    - uses: test/tw/ldd-check

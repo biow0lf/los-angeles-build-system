@@ -1,0 +1,66 @@
+package:
+  name: perl-test2-plugin-nowarnings
+  version: "0.10"
+  epoch: 9 # toolchain rebuild for  perl-dev-5.44.0
+  description: Test2::Plugin::NoWarnings perl module
+  copyright:
+    - license: Artistic-2.0
+  dependencies:
+    runtime:
+      - perl
+      - perl-ipc-run3
+      - perl-test-simple
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-ipc-run3
+      - perl-test-simple
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/houseabsolute/Test2-Plugin-NoWarnings
+      tag: v${{package.version}}
+      expected-commit: 0bcdc54c4436d744844ac14294315980e606d898
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-test2-plugin-nowarnings-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-test2-plugin-nowarnings manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: houseabsolute/Test2-Plugin-NoWarnings
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

@@ -1,0 +1,66 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-module-implementation/APKBUILD
+package:
+  name: perl-module-implementation
+  version: "0.09"
+  epoch: 6
+  description: Loads one of several alternate underlying implementations for a module
+  copyright:
+    - license: Artistic-2.0
+  dependencies:
+    runtime:
+      - perl
+      - perl-module-runtime
+      - perl-try-tiny
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/autarch/Module-Implementation
+      tag: v${{package.version}}
+      expected-commit: 6ae945be1631c207406cfede327f3b118e2d5c41
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-module-implementation-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-module-implementation manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: autarch/Module-Implementation
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: Module::Implementation
+    - uses: test/no-docs

@@ -1,0 +1,68 @@
+package:
+  name: perl-b-hooks-endofscope
+  version: "0.28"
+  epoch: 6
+  description: Execute code after a scope finished compilation
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-module-implementation
+      - perl-sub-exporter-progressive
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-zilla
+      - perl-module-implementation
+      - perl-sub-exporter-progressive
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/karenetheridge/B-Hooks-EndOfScope
+      tag: ${{package.version}}
+      expected-commit: f62d2ef4402954bd7d7dfd9054372a932bd4a19c
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    description: ${{package.name}} manpages
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: B::Hooks::EndOfScope
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: karenetheridge/B-Hooks-EndOfScope
+    use-tag: true

@@ -1,0 +1,73 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-module-install/APKBUILD
+package:
+  name: perl-module-install
+  version: "1.21"
+  epoch: 10 # go/wolfi-rsc/perl-module-install
+  description: Standalone, extensible Perl module installer
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      - perl-devel-ppport
+      - perl-file-remove
+      - perl-module-build
+      - perl-module-scandeps
+      - perl-yaml-tiny
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-devel-ppport
+      - perl-file-remove
+      - perl-module-build
+      - perl-module-scandeps
+      - perl-yaml-tiny
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Perl-Toolchain-Gang/Module-Install
+      tag: v${{package.version}}
+      expected-commit: 2f4e7842794393ae0e2c9404de810dff944b68e1
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-module-install-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-module-install manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: Perl-Toolchain-Gang/Module-Install
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/no-docs

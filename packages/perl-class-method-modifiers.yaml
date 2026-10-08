@@ -1,0 +1,66 @@
+package:
+  name: perl-class-method-modifiers
+  version: "2.15"
+  epoch: 3 # go/wolfi-rsc/perl-class-method-modifiers
+  description: "Provides Moose-like method modifiers"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+  resources:
+    cpu: "1"
+    memory: 2Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/moose/Class-Method-Modifiers
+      tag: v${{package.version}}
+      expected-commit: 3dd9fb0604954b65468e8b3498584fa7b72fa88d
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/perl-module-check
+      with:
+        modules: Class::Method::Modifiers
+
+update:
+  enabled: true
+  github:
+    identifier: moose/Class-Method-Modifiers
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

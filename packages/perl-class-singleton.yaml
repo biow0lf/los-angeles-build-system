@@ -1,0 +1,63 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/perl-class-singleton/APKBUILD
+package:
+  name: perl-class-singleton
+  version: "1.6"
+  epoch: 8
+  description: "Implementation of a Singleton class "
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/steve-m-hay/Class-Singleton
+      tag: v${{package.version}}
+      expected-commit: 426430c1d9391131d5235cf46ad013e61c1e8e0e
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-class-singleton-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-class-singleton manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - runs: |
+        perl -e "
+          use Class::Singleton;
+          my \$a = Class::Singleton->instance;
+          my \$b = Class::Singleton->instance;
+          die 'Singleton failed: different objects returned' unless \$a eq \$b;
+          print \"Singleton works: both calls returned the same instance (\$a)\n\";
+        "
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: steve-m-hay/Class-Singleton
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

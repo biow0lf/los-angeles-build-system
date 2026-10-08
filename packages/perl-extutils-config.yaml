@@ -1,0 +1,66 @@
+package:
+  name: perl-extutils-config
+  version: "0.010"
+  epoch: 8
+  description: A wrapper for perl's configuration
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 8Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+      - perl-dev
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Perl-Toolchain-Gang/extutils-config
+      tag: v${{package.version}}
+      expected-commit: e3ba2a840c8ea7e225e6f9b81e3c58c189ca8c64
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-extutils-config-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-extutils-config manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/perl-module-check
+      with:
+        modules: ExtUtils::Config
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: Perl-Toolchain-Gang/extutils-config
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

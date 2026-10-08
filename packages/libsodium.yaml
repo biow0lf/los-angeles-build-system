@@ -1,0 +1,110 @@
+package:
+  name: libsodium
+  version: "1.0.22"
+  epoch: 1 # glibc: 2.43->2.44
+  description: P(ortable|ackageable) NaCl-based crypto library
+  copyright:
+    - license: ISC
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/jedisct1/libsodium.git
+      tag: ${{package.version}}-RELEASE
+      expected-commit: 77e1ce5d6dee871c49ef211222ba18ef0c486bda
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libsodium-static
+    pipeline:
+      - uses: split/static
+    description: libsodium static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: libsodium-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libsodium
+    description: libsodium dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: jedisct1/libsodium
+    tag-filter-contains: -RELEASE
+    strip-suffix: -RELEASE
+
+test:
+  environment:
+    contents:
+      packages:
+        - libsodium-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test libsodium compilation and core functionality
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <sodium.h>
+        #include <stdio.h>
+
+        int main() {
+            /* Initialize libsodium */
+            if (sodium_init() < 0) {
+                fprintf(stderr, "FAIL: sodium_init() failed\n");
+                return 1;
+            }
+
+            /* Test secret key generation */
+            unsigned char key[crypto_secretbox_KEYBYTES];
+            crypto_secretbox_keygen(key);
+
+            /* Verify key is not all zeros (extremely unlikely with random) */
+            int all_zero = 1;
+            for (size_t i = 0; i < crypto_secretbox_KEYBYTES; i++) {
+                if (key[i] != 0) {
+                    all_zero = 0;
+                    break;
+                }
+            }
+            if (all_zero) {
+                fprintf(stderr, "FAIL: generated key is all zeros\n");
+                return 1;
+            }
+
+            printf("SUCCESS: libsodium crypto functions work correctly\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libsodium) test.c -o test $(pkg-config --libs libsodium)
+        ./test

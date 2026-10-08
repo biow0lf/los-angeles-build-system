@@ -35,6 +35,15 @@ pipeline:
 
   - uses: strip
 
+subpackages:
+  - name: libqalculate-dev
+    description: libqalculate dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libqalculate
+
 update:
   enabled: true
   github:

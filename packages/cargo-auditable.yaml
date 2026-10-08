@@ -1,0 +1,80 @@
+package:
+  name: cargo-auditable
+  version: "0.7.7"
+  epoch: 1 # rust: 1.98->1.99
+  description: Cargo wrapper for embedding auditing data
+  copyright:
+    - license: MIT OR Apache-2.0
+  resources:
+    cpu: "3"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  rust-version: "1.99"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - glibc-2.44-dev
+      - rust-${{vars.rust-version}}
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/rust-secure-code/cargo-auditable
+      tag: v${{package.version}}
+      expected-commit: 3d3bb574f97dc09a264cfc666ec5d40790f6b3ba
+
+  - name: cargo deps bump
+    runs: |
+      cargo update --verbose time
+
+  - runs: |
+      # Build cargo-auditable
+      cargo fetch --locked
+      cargo build --release --frozen
+
+      # Rebuild cargo-auditable with cargo-auditable
+      PATH="$PATH:$PWD/target/release" \
+      cargo auditable build --release --frozen
+
+      # Install cargo-auditable
+      install -Dm755 target/release/cargo-auditable -t "${{targets.destdir}}"/usr/bin/
+      install -Dm644 cargo-auditable/cargo-auditable.1 -t "${{targets.destdir}}"/usr/share/man/man1/
+
+      # Install cargo wrapper
+      install -Dm755 cargo -t "${{targets.destdir}}"/usr/local/bin
+
+  - uses: strip
+
+subpackages:
+  - name: cargo-auditable-doc
+    pipeline:
+      - uses: split/manpages
+    description: cargo-auditable manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - '.*rust.*'
+  github:
+    identifier: rust-secure-code/cargo-auditable
+    use-tag: true
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Verify cargo wrapper is installed and executable
+      runs: |
+        # Verify the cargo wrapper script is present and executable
+        test -x /usr/local/bin/cargo
+    - uses: test/no-docs

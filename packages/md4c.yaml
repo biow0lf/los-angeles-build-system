@@ -1,0 +1,32 @@
+package:
+  name: md4c
+  version: 0.6.0
+  epoch: 0
+  description: "Fast, compact, dependency-free Markdown parser for C"
+  url: https://github.com/mity/md4c
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - cmake
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/mity/md4c
+      tag: v${{package.version}}
+      expected-commit: 7fc1815a5eeba2af7d6120a76202bf59f3b6e6e4
+
+  - uses: cmake/configure
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+

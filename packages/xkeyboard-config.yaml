@@ -1,0 +1,75 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/xkeyboard-config/APKBUILD
+package:
+  name: xkeyboard-config
+  version: "2.48"
+  epoch: 2 # fix xkeyboard-config-dev test: use contains-files instead of devpackage
+  description: X keyboard configuration files
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - gettext
+      - libxslt
+      - meson
+      - perl
+      - python3
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config
+      tag: xkeyboard-config-${{package.version}}
+      expected-commit: cf8d1151bb4c9ef5b895828d0e6dd7860c0833e0
+
+  - runs: |
+      meson --prefix=/usr . output
+      meson compile -C output
+      DESTDIR="${{targets.destdir}}" meson install --no-rebuild -C output
+
+  - uses: strip
+
+subpackages:
+  - name: xkeyboard-config-dev
+    pipeline:
+      - uses: split/dev
+    description: xkeyboard-config dev
+    test:
+      pipeline:
+        - uses: test/tw/contains-files
+          with:
+            dir: /usr/share/pkgconfig
+            name: "*.pc"
+        - uses: test/pkgconf
+
+  - name: xkeyboard-config-doc
+    pipeline:
+      - uses: split/manpages
+    description: xkeyboard-config manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/tw/contains-files
+      with:
+        dir: /usr/share/xkeyboard-config-2
+    - uses: test/tw/contains-files
+      with:
+        dir: /usr/share/X11
+        name: xkb
+        type: l
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 5191

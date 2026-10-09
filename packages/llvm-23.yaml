@@ -111,6 +111,7 @@ pipeline:
         -DCMAKE_PREFIX_PATH=${{vars.llvm-prefix}} \
         -DENABLE_LINKER_BUILD_ID=ON \
         -DFFI_INCLUDE_DIR="${ffi_include_dir}" \
+        -DLLVM_TARGETS_TO_BUILD="X86;AMDGPU" \
         -DLLVM_BINUTILS_INCDIR=/usr/include \
         -DLLVM_BUILD_DOCS=OFF \
         -DLLVM_BUILD_EXAMPLES=OFF \
@@ -447,7 +448,8 @@ subpackages:
           mkdir -p ${{targets.contextdir}}/${{vars.llvm-prefix}}/bin
           mv ${{targets.destdir}}/${{vars.llvm-prefix}}/bin/*clang* ${{targets.contextdir}}/${{vars.llvm-prefix}}/bin/
           mv ${{targets.destdir}}/${{vars.llvm-prefix}}/bin/amdgpu-arch ${{targets.contextdir}}/${{vars.llvm-prefix}}/bin/
-          mv ${{targets.destdir}}/${{vars.llvm-prefix}}/bin/nvptx-arch ${{targets.contextdir}}/${{vars.llvm-prefix}}/bin/
+          # TODO: enable NVPTX arch later
+          # mv ${{targets.destdir}}/${{vars.llvm-prefix}}/bin/nvptx-arch ${{targets.contextdir}}/${{vars.llvm-prefix}}/bin/
 
           mkdir -p ${{targets.contextdir}}/usr/bin
           for path in ${{targets.contextdir}}/${{vars.llvm-prefix}}/bin/*; do
@@ -515,7 +517,7 @@ subpackages:
               clang-cpp
               clang-include-cleaner
               clang-linker-wrapper
-              nvptx-arch
+              # nvptx-arch
         - uses: test/tw/help-check
           with:
             bins: |
@@ -527,7 +529,7 @@ subpackages:
               clang-include-cleaner
               clang-linker-wrapper
               clang-nvlink-wrapper
-              nvptx-arch
+              # nvptx-arch
 
   - name: ${{package.name}}-bpf
     description: Low-level virtual machine ${{vars.major-version}} - core frameworks - BPF variant
@@ -665,7 +667,8 @@ subpackages:
           mkdir -p ${{targets.contextdir}}/usr/bin
           mv ${{targets.destdir}}/${{vars.llvm-prefix}}/bin/lld* ${{targets.contextdir}}/usr/bin/
           mv ${{targets.destdir}}/${{vars.llvm-prefix}}/bin/*lld ${{targets.contextdir}}/usr/bin/
-          mv ${{targets.destdir}}/${{vars.llvm-prefix}}/bin/wasm-ld ${{targets.contextdir}}/usr/bin/
+          # TODO: enable wasm later
+          # mv ${{targets.destdir}}/${{vars.llvm-prefix}}/bin/wasm-ld ${{targets.contextdir}}/usr/bin/
     test:
       pipeline:
         - uses: test/tw/ver-check
@@ -674,13 +677,15 @@ subpackages:
               ld.lld
               ld64.lld
               lld-link
-              wasm-ld
+              # TODO: enable wasm later
+              # wasm-ld
         - uses: test/tw/help-check
           with:
             bins: |
               ld.lld
               ld64.lld
-              wasm-ld
+              # TODO: enable wasm later
+              # wasm-ld
 
   - name: lld-${{vars.major-version}}-static
     description: LLVM linker static libraries

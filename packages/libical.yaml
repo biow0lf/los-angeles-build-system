@@ -1,0 +1,79 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/libical/APKBUILD
+package:
+  name: libical
+  version: "4.0.6"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Reference implementation of the iCalendar format
+  copyright:
+    - license: LGPL-2.1-only OR MPL-2.0
+  resources:
+    cpu: "1"
+    memory: 6Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake
+      - glib-dev
+      - glib-gir
+      - glibc-2.44-dev
+      - gobject-introspection-dev
+      - icu-dev
+      - libxml2-dev
+      - perl
+      - samurai
+      - vala
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libical/libical
+      tag: v${{package.version}}
+      expected-commit: 9cfca65c122fa23b9680a28e0c9225a2fd015fc5
+
+  - uses: cmake/configure
+    with:
+      opts: |
+        -DENABLE_GTK_DOC=false \
+        -DLIBICAL_JAVA_BINDINGS=false \
+        -DLIBICAL_GLIB_BUILD_DOCS=false \
+        -DGOBJECT_INTROSPECTION=true \
+        -DICAL_GLIB_VAPI=true
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: libical-dev
+    pipeline:
+      - uses: split/dev
+    description: libical dev
+    dependencies:
+      runtime:
+        - glib-dev
+        - gobject-introspection-dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: libical/libical
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

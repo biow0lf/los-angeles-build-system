@@ -1,0 +1,97 @@
+package:
+  name: s-lang
+  version: 2.3.3
+  epoch: 9 # glibc: 2.43->2.44
+  description: Library for creating multi-platform software
+  copyright:
+    - license: GPL-2.0-or-later
+  resources:
+    cpu: "2"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - glibc-2.44-dev
+      - libpng-dev
+      - oniguruma-dev
+      - pcre2-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: git://git.jedsoft.org/git/slang.git
+      tag: v${{package.version}}
+      expected-commit: a0f675ffdd5ac07789ee65900b4f88a9ba60e67c
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --with-pnglib="usr/lib" \
+        --with-pnginc="usr/include"
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    description: headers for ${{package.name}}
+    pipeline:
+      - uses: split/dev
+    test:
+      environment:
+        contents:
+          packages:
+            - ${{package.name}}-dev
+            - build-base
+            - pkgconf
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: ${{subpkg.name}}
+        - name: Compile and link against libslang
+          runs: |
+            set -euo pipefail
+
+            tee test.c <<'EOF'
+            #include <slang.h>
+            int main() {
+                int ret = SLang_init_all();
+                return (ret == 0) ? 0 : 1;
+            }
+            EOF
+
+            gcc $(pkg-config --cflags slang) test.c -o test $(pkg-config --libs slang)
+            ./test
+    dependencies:
+      runtime:
+        - s-lang
+
+  - name: s-lang-doc
+    description: s-lang docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v
+
+test:
+  pipeline:
+    - runs: |
+        set -euo pipefail
+        slsh -e 'message("Hello World!");' | grep -qF "Hello World!"
+        slsh --version
+    - uses: test/tw/ldd-check

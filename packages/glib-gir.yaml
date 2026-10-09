@@ -1,0 +1,80 @@
+# Bootstrapping .typelib for glib whilst build-depending on both
+# glib-dev and gobject-introspection-dev
+package:
+  name: glib-gir
+  version: "2.90.1"
+  epoch: 0
+  description: Common C routines used by Gtk+ and other libs
+  copyright:
+    - license: LGPL-2.1-or-later
+  resources:
+    cpu: "7"
+    memory: 8Gi
+
+vars:
+  # build uses rst2man from py3-docutils and also invokes 'python3'
+  # installed /usr/bin/gtester-report gets correct shbang (/usr/bin/python3.XX)
+  python-version: 3.13
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - bzip2-dev
+      - ca-certificates-bundle
+      - docbook-xml
+      - gettext-dev
+      - glib-dev
+      - gobject-introspection-dev
+      - libffi-dev
+      - libmount
+      - libxml2-utils
+      - libxslt
+      - libxslt-dev
+      - meson
+      - pcre2-dev
+      - py${{vars.python-version}}-docutils-bin
+      - python-${{vars.python-version}}
+      - util-linux-dev
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.gnome.org/GNOME/glib
+      tag: ${{package.version}}
+      expected-commit: e05063ccc6c8f222465a1080927f4c14349f3de6
+
+  - uses: meson/configure
+    with:
+      opts: |
+        --default-library=both \
+        -Dman=true \
+        -Dtests=false
+
+  - uses: meson/compile
+
+  - runs: |
+      mkdir -p ${{targets.contextdir}}/usr/lib/girepository-1.0/
+      cp output/girepository/introspection/*.typelib ${{targets.contextdir}}/usr/lib/girepository-1.0/
+      mkdir -p ${{targets.contextdir}}/usr/share/gir-1.0/
+      cp output/girepository/introspection/*.gir ${{targets.contextdir}}/usr/share/gir-1.0/
+
+  - uses: strip
+
+test:
+  environment:
+    contents:
+      packages:
+        - gobject-introspection-bin
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: List shared libraries
+      runs: g-ir-inspect --print-shlibs Gio | grep -F "libgio"
+    - name: List other typelibs required
+      runs: g-ir-inspect --print-typelibs Gio | grep -F "GLib"
+
+update:
+  enabled: true
+  git: {}

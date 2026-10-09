@@ -1,0 +1,173 @@
+package:
+  name: libjpeg-turbo
+  version: "3.2.0"
+  epoch: 4 # split/manpages
+  description: "Accelerated baseline JPEG compression and decompression library"
+  copyright:
+    - license: BSD-3-Clause AND IJG AND Zlib
+  resources:
+    cpu: "1"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - ca-certificates-bundle
+      - cmake
+      - glibc-2.44-dev
+      - nasm
+      - samurai
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libjpeg-turbo/libjpeg-turbo
+      tag: ${{package.version}}
+      expected-commit: c85e6b905bf237038faa936dab160ebfc5da0344
+
+  - runs: |
+      cmake -B build -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=/usr/lib \
+        -DBUILD_SHARED_LIBS=True \
+        -DCMAKE_BUILD_TYPE=MinSizeRel \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DWITH_JPEG8=1 \
+        -DCMAKE_C_STANDARD_LIBRARIES="-lm"
+      cmake --build build -- -v
+
+  - runs: |
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: strip
+
+subpackages:
+  - name: "libjpeg-turbo-dev"
+    description: "headers for libjpeg-turbo"
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: "libjpeg-turbo-doc"
+    description: "libjpeg-turbo documentation"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/share/doc/libjpeg-turbo
+          mv doc/* "${{targets.subpkgdir}}"/usr/share/doc/libjpeg-turbo
+      - uses: split/manpages
+    dependencies:
+      runtime:
+        - libjpeg-turbo-dev
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: "libjpeg-turbo-static"
+    description: "Statically linked libjpeg-turbo"
+    dependencies:
+      runtime:
+        - ${{package.name}}-dev=${{package.full-version}}
+    pipeline:
+      - uses: split/static
+        with:
+          package: "libjpeg-turbo-dev"
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: "libjpeg-turbo-utils"
+    description: "Utilities for manipulating JPEG images"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/* "${{targets.subpkgdir}}"/usr/bin
+    # test added by a robot (binary)
+    test:
+      pipeline:
+        - runs: |
+            stat /usr/bin/cjpeg
+            stat /usr/bin/djpeg
+            stat /usr/bin/jpegtran
+            stat /usr/bin/rdjpgcom
+            stat /usr/bin/tjbench
+            stat /usr/bin/wrjpgcom
+
+update:
+  enabled: true
+  github:
+    identifier: libjpeg-turbo/libjpeg-turbo
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - coreutils
+        - gcc
+        - libjpeg-turbo-dev
+        - libjpeg-turbo-utils
+  pipeline:
+    - name: "Verify shared library presence"
+      runs: |
+        test -f /usr/lib/libjpeg.so
+        test -f /usr/lib/libturbojpeg.so
+    - uses: test/tw/ldd-check
+    - name: "Test library linking"
+      runs: |
+        cat > test.c << 'EOF'
+        #include <stdio.h>
+        #include <jpeglib.h>
+        int main() {
+          struct jpeg_decompress_struct cinfo;
+          struct jpeg_error_mgr jerr;
+          cinfo.err = jpeg_std_error(&jerr);
+          jpeg_create_decompress(&cinfo);
+          return 0;
+        }
+        EOF
+        gcc test.c -ljpeg -o test
+        ./test
+    - name: "Create test image"
+      runs: |
+        cat > test.ppm << 'EOF'
+        P6
+        32 32
+        255
+        EOF
+        dd if=/dev/urandom bs=3072 count=1 >> test.ppm
+    - name: "Test compression (cjpeg)"
+      runs: |
+        cjpeg -quality 85 test.ppm > test.jpg
+        test -f test.jpg
+    - name: "Test decompression (djpeg)"
+      runs: |
+        djpeg test.jpg > output.ppm
+        test -f output.ppm
+    - name: "Test jpegtran operations"
+      runs: |
+        jpegtran -rotate 90 test.jpg > rotated.jpg
+        test -f rotated.jpg
+        jpegtran -grayscale test.jpg > gray.jpg
+        test -f gray.jpg
+    - name: "Test TurboJPEG API linking"
+      runs: |
+        cat > turbojpeg_test.c << 'EOF'
+        #include <stdio.h>
+        #include <turbojpeg.h>
+        int main() {
+          tjhandle handle = tjInitCompress();
+          if (handle == NULL) return 1;
+          tjDestroy(handle);
+          return 0;
+        }
+        EOF
+        gcc turbojpeg_test.c -lturbojpeg -o turbojpeg_test
+        ./turbojpeg_test

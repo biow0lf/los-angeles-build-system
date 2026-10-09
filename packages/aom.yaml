@@ -1,0 +1,122 @@
+# source is googlesource so we can't use github updates to get expected commit
+# let's still auto create the PR, it will fail as expected commit will be wrong
+# however it will be easy to fix
+#nolint:git-checkout-must-use-github-updates
+package:
+  name: aom
+  version: "3.15.1"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Alliance for Open Media (AOM) AV1 codec SDK
+  copyright:
+    - license: BSD-2-Clause
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake
+      - glibc-2.44-dev
+      - perl
+      - samurai
+      - yasm
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://aomedia.googlesource.com/aom
+      tag: v${{package.version}}
+      expected-commit: 44d0a57786f432d933ff64b653347c66f4d0fa1d
+      destination: aom
+
+  - working-directory: aom
+    uses: cmake/configure
+    with:
+      opts: |
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DBUILD_SHARED_LIBS=True \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DENABLE_TESTS="OFF"
+
+  - working-directory: aom
+    uses: cmake/build
+
+  - working-directory: aom
+    uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: aom-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - aom
+    description: aom dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: aom-libs
+    pipeline:
+      - uses: split/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    description: aom libs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 17628
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          aomdec
+          aomenc
+    - name: Test AV1 encode and decode round-trip
+      runs: |
+        # Generate a small raw YUV420 frame (8x8 pixels)
+        # YUV420: width*height * 1.5 bytes = 8*8*1.5 = 96 bytes
+        dd if=/dev/urandom of=/tmp/input.yuv bs=96 count=1
+
+        # Encode the raw YUV frame to AV1 IVF format
+        aomenc \
+          --codec=av1 \
+          --width=8 \
+          --height=8 \
+          --fps=1/1 \
+          --limit=1 \
+          --cpu-used=8 \
+          --end-usage=q \
+          --cq-level=32 \
+          -o /tmp/output.ivf \
+          /tmp/input.yuv
+
+        # Verify encoded file was created and has content
+        [ -s /tmp/output.ivf ] || { echo "FAIL: Encoded file is empty"; exit 1; }
+
+        # Decode the AV1 IVF file back to raw YUV
+        aomdec --codec=av1 -o /tmp/decoded.yuv /tmp/output.ivf
+
+        # Verify decoded file was created and has content
+        [ -s /tmp/decoded.yuv ] || { echo "FAIL: Decoded file is empty"; exit 1; }
+
+        echo "SUCCESS: AV1 encode/decode round-trip completed"

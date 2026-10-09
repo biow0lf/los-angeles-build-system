@@ -1,0 +1,136 @@
+package:
+  name: rhash
+  version: "1.4.6"
+  epoch: 8 # openssl: 3.6->4.0
+  description: "cross-platform asynchronous I/O library"
+  copyright:
+    - license: 0BSD
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+vars:
+  openssl-version: "4.0"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - openssl-${{vars.openssl-version}}-dev
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/rhash/RHash
+      expected-commit: 6562de382954d9893442b89b0e8b5c513eea6a88
+      tag: v${{package.version}}
+
+  - runs: |
+      ./configure \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --enable-openssl \
+        --disable-openssl-runtime
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      make DESTDIR="${{targets.destdir}}" install-lib-headers install-lib-shared install-lib-so-link
+
+  - uses: strip
+
+subpackages:
+  - name: "rhash-doc"
+    description: "rhash documentation"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: "rhash-dev"
+    description: "rhash development headers"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - librhash0
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/tw/ldd-check
+
+  - name: "librhash0"
+    description: "librhash runtime library"
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/librhash.so.* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: rhash/RHash
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        ed2k-link --version
+        edonr256-hash --version
+        edonr512-hash --version
+        gost12-256-hash --version
+        gost12-512-hash --version
+        has160-hash --version
+        magnet-link --version
+        rhash --version
+        sfv-hash --version
+        tiger-hash --version
+        tth-hash --version
+        whirlpool-hash --version
+        ed2k-link --help
+        edonr256-hash --help
+        edonr512-hash --help
+        gost12-256-hash --help
+        gost12-512-hash --help
+        has160-hash --help
+        magnet-link --help
+        rhash --help
+        sfv-hash --help
+        tiger-hash --help
+        tth-hash --help
+        whirlpool-hash --help
+    - name: Test MD5 hash computation
+      runs: |
+        # Compute MD5 hash of known input and verify output
+        printf "test" > /tmp/testfile.txt
+        output=$(rhash --md5 /tmp/testfile.txt)
+        echo "$output" | grep -Fi "098f6bcd"
+    - name: Test SHA256 hash computation (OpenSSL integration)
+      runs: |
+        # Compute SHA256 hash of known input to verify OpenSSL integration
+        printf "test" > /tmp/testfile.txt
+        output=$(rhash --sha256 /tmp/testfile.txt)
+        echo "$output" | grep -Fi "9f86d081"
+    - name: Test multiple hash algorithms
+      runs: |
+        # Test that rhash can compute multiple hashes at once
+        printf "hello" > /tmp/hello.txt
+        rhash --md5 --sha1 --sha256 /tmp/hello.txt | grep -Fi "5d41402a"
+
+        # Test symlink tools compute their respective hashes
+        output=$(whirlpool-hash /tmp/hello.txt)
+        echo "$output" | grep -Fi "hello.txt"
+
+        output=$(tiger-hash /tmp/hello.txt)
+        echo "$output" | grep -Fi "hello.txt"

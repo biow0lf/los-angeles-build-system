@@ -1,0 +1,133 @@
+package:
+  name: keyutils
+  version: 1.6.3
+  epoch: 40 # glibc: 2.43->2.44
+  description: Linux Key Management Utilities
+  copyright:
+    - license: GPL-2.0-or-later OR LGPL-2.0-or-later
+  dependencies:
+    runtime:
+      - merged-bin
+      - merged-sbin
+      - wolfi-baselayout
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - file
+      - glibc-2.44-dev
+      - linux-headers
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://kernel.googlesource.com/pub/scm/linux/kernel/git/dhowells/keyutils.git
+      tag: v${{package.version}}
+      expected-commit: cb3bb194cca88211cbfcdde2f10c0f43c3fb8ec3
+
+  - uses: autoconf/make
+    with:
+      opts: |
+        -j1 \
+          NO_ARLIB=1 \
+          LIBDIR=/usr/lib \
+          USRLIBDIR=/usr/lib \
+          VERSION=${{package.version}} \
+          RELEASE=-r${{package.epoch}} \
+          CFLAGS="$CFLAGS"
+
+  - runs: |
+      make DESTDIR="${{targets.destdir}}" \
+        NO_ARLIB=1 \
+        LIBDIR=/usr/lib \
+        USRLIBDIR=/usr/lib \
+        SBINDIR=/usr/bin \
+        BINDIR=/usr/bin \
+        install
+
+      # Work around a bug in melange with absolute symlinks:
+      # https://github.com/chainguard-dev/melange/issues/1775
+      rm "${{targets.destdir}}/usr/lib/libkeyutils.so"
+      ln -s libkeyutils.so.1 "${{targets.destdir}}/usr/lib/libkeyutils.so"
+
+  - uses: strip
+
+subpackages:
+  - name: keyutils-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - keyutils-libs
+        - merged-bin
+        - merged-sbin
+        - wolfi-baselayout
+    description: keyutils dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: keyutils-doc
+    pipeline:
+      - uses: split/manpages
+    description: keyutils manpages
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      runtime:
+        - merged-bin
+        - merged-sbin
+        - wolfi-baselayout
+
+  - name: keyutils-libs
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv ${{targets.destdir}}/usr/lib/* ${{targets.subpkgdir}}/usr/lib
+    description: keyutils library
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    dependencies:
+      runtime:
+        - merged-bin
+        - merged-sbin
+        - wolfi-baselayout
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 17740
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        keyctl --version
+        key.dns_resolver --version
+        request-key --version
+    - name: Test keyctl basic key operations
+      runs: |
+        # Add a key to the session keyring and verify it was created
+        KEY_ID=$(keyctl add user testkey "hello-keyutils" @s)
+        echo "Created key with ID: $KEY_ID"
+        # Read back the key value and verify it matches
+        VALUE=$(keyctl print "$KEY_ID")
+        test "$VALUE" = "hello-keyutils"
+        # List keys in the session keyring and verify our key appears
+        keyctl list @s | grep -q "testkey"
+        # Show key description and verify it contains our key name
+        keyctl describe "$KEY_ID" | grep -q "testkey"
+        # Revoke the key to clean up
+        keyctl revoke "$KEY_ID"
+    - uses: test/no-docs

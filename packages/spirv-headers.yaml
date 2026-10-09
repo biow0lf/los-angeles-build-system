@@ -1,0 +1,49 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/spirv-headers/APKBUILD
+package:
+  name: spirv-headers
+  version: "1.4.363.0"
+  epoch: 0
+  description: Machine-readable files for the SPIR-V Registry
+  copyright:
+    - license: GPL-3.0-or-later
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake
+      - samurai
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 496543121ce6419f23d6fa5d7194ba66c36212d2
+      repository: https://github.com/KhronosGroup/SPIRV-Headers
+      tag: vulkan-sdk-${{package.version}}
+
+  - runs: |
+      cmake -B build -G Ninja \
+          -DCMAKE_INSTALL_PREFIX=/usr \
+          -DBUILD_SHARED_LIBS=True \
+          -DCMAKE_BUILD_TYPE=MinSizeRel \
+          -DCMAKE_INSTALL_LIBDIR=lib
+      cmake --build build
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: KhronosGroup/SPIRV-Headers
+    use-tag: true
+    strip-prefix: vulkan-sdk-
+    tag-filter: vulkan-sdk-
+
+test:
+  pipeline:
+    - uses: test/pkgconf

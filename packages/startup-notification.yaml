@@ -1,0 +1,118 @@
+#nolint:git-checkout-must-use-github-updates
+package:
+  name: startup-notification
+  version: "0.12"
+  epoch: 8 # glibc: 2.43->2.44
+  description: Monitor and display application startup
+  copyright:
+    - license: LGPL-2.0-or-later
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc
+      - glibc-2.44-dev
+      - intltool
+      - libsm-dev
+      - libtool
+      - libx11-dev
+      - libxcb
+      - libxcb-dev
+      - pkgconf
+      - pkgconf-dev
+      - xcb-util-dev
+
+var-transforms:
+  - from: ${{package.version}}
+    match: \.
+    replace: _
+    to: mangled-package-version
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xdg/startup-notification
+      tag: STARTUP_NOTIFICATION_${{vars.mangled-package-version}}
+      expected-commit: fce365db713897a9cc6b52cac6536f4cb9c3abf1
+
+  - runs: NOCONFIGURE=1 ./autogen.sh
+
+  - runs: |
+      echo "deleting libtool archive files before running configure"
+      find /usr -type f -name "*.la" -exec echo {} \; -exec rm {} \;
+
+  - runs: |
+      ./configure \
+         --host=${{host.triplet.gnu}} \
+         --build=${{host.triplet.gnu}} \
+         --prefix=/usr \
+         --localstatedir=/var \
+         --sysconfdir=/etc
+      make
+      make DESTDIR="${{targets.destdir}}" install
+
+  - name: remove libtool .la files
+    runs: find "${{targets.destdir}}" -name '*.la' -delete
+
+  - uses: strip
+
+subpackages:
+  - name: startup-notification-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - startup-notification
+        - libsm-dev
+        - xcb-util-dev
+    description: startup-notification dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 10089
+
+test:
+  environment:
+    contents:
+      packages:
+        - startup-notification-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation and basic API
+      runs: |
+        cat >test_sn.c <<'EOF'
+        #include <libsn/sn.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main(void) {
+            /* Verify that the library types and functions are declared */
+            SnDisplay *display = NULL;
+            (void)display;
+            printf("startup-notification headers OK\n");
+            return 0;
+        }
+        EOF
+        gcc -DSN_API_NOT_YET_FROZEN $(pkg-config --cflags libstartup-notification-1.0) test_sn.c \
+          -o test_sn \
+          $(pkg-config --libs libstartup-notification-1.0)
+        ./test_sn

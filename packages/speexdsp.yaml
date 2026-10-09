@@ -1,0 +1,108 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/speexdsp/APKBUILD
+package:
+  name: speexdsp
+  version: 1.2.1
+  epoch: 12 # glibc: 2.43->2.44
+  description: A voice compression format (DSP)
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 3Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - pkgconf
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.xiph.org/xiph/speexdsp.git
+      tag: SpeexDSP-${{package.version}}
+      expected-commit: 1b28a0f61bc31162979e1f26f3981fc3637095c8
+
+  - runs: |
+      autoreconf -fiv
+      # Theres a bug in the generated configure script here related to fft and pkg-config
+      sed -i 's|PKG_CHECK_MODULES(FFT, fftw3f)||g' configure
+      sed -i 's|@FFT_CFLAGS@||g' libspeexdsp/Makefile.am
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-static \
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: speexdsp-libs
+    pipeline:
+      - uses: split/lib
+    description: speexdsp shared libraries
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: speexdsp-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - speexdsp-libs
+    description: speexdsp dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  git:
+    strip-prefix: SpeexDSP-
+    tag-filter-prefix: SpeexDSP-
+
+test:
+  environment:
+    contents:
+      packages:
+        - speexdsp-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test compile and link against libspeexdsp
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <speex/speex_preprocess.h>
+        #include <stdlib.h>
+        int main() {
+            /* Initialize a preprocess state with frame_size=160, sampling_rate=8000 */
+            SpeexPreprocessState *st = speex_preprocess_state_init(160, 8000);
+            if (st == NULL) {
+                return 1;
+            }
+            speex_preprocess_state_destroy(st);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags speexdsp) test.c -o test $(pkg-config --libs speexdsp)
+        ./test

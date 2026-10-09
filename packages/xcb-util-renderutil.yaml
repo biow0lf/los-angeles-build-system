@@ -1,0 +1,90 @@
+# Generated from https://git.alpinelinux.org/aports/plain/community/xcb-util-renderutil/APKBUILD
+package:
+  name: xcb-util-renderutil
+  version: 0.3.10
+  epoch: 7 # glibc: 2.43->2.44
+  description: X C-language Binding - Convenience functions for XRender extension
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - m4
+      - pkgconf-dev
+      - util-macros-dev
+      - xcb-util-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxcb-render-util
+      tag: xcb-util-renderutil-${{package.version}}
+      expected-commit: 5293d8b6165f23b9f7a8bcc903da0e4d7a75984c
+
+  - uses: patch
+    with:
+      patches: |
+        0001-Update-submodule-URL-from-anongit-to-gitlab.patch
+
+  - runs: git submodule update --init
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: xcb-util-renderutil-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - xcb-util-renderutil
+        - xcb-util-dev
+    description: xcb-util-renderutil dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 5169
+
+test:
+  environment:
+    contents:
+      packages:
+        - xcb-util-renderutil-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Test library compilation and linking
+      runs: |
+        tee test.c <<'EOF'
+        #include <xcb/xcb_renderutil.h>
+        int main() {
+            /* Verify xcb_render_util_query_version symbol is available */
+            const xcb_render_query_version_reply_t *(*fn)(xcb_connection_t *) =
+                xcb_render_util_query_version;
+            return fn == 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xcb-renderutil) test.c -o test $(pkg-config --libs xcb-renderutil)
+        ./test

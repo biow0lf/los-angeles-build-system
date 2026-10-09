@@ -1,0 +1,83 @@
+package:
+  name: cargo-c
+  version: "0.10.25"
+  epoch: 6 # rust: 1.98->1.99
+  description: build and install C-compatible libraries
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "15"
+    memory: 13Gi
+
+vars:
+  openssl-version: "4.0"
+
+environment:
+  environment:
+    CFLAGS: -DOPENSSL_NO_ENGINE
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cargo-auditable
+      - glibc-2.44-dev
+      - openssl-${{vars.openssl-version}}-dev
+      - rust-1.99
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/lu-zero/cargo-c
+      tag: v${{package.version}}
+      expected-commit: a228fd974eb1334dc4c8033bc401a4832b3b4ab4
+
+  - runs: |
+      cargo generate-lockfile
+
+  - name: Build cargo-capi
+    uses: cargo/build
+    with:
+      output: cargo-capi
+
+  - name: Build cargo-cbuild
+    uses: cargo/build
+    with:
+      output: cargo-cbuild
+
+  - name: Build cargo-cinstall
+    uses: cargo/build
+    with:
+      output: cargo-cinstall
+
+  - name: Build cargo-ctest
+    uses: cargo/build
+    with:
+      output: cargo-ctest
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: lu-zero/cargo-c
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - binutils
+        - cargo-auditable
+        - rust-1.96
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: cargo-capi cargo-cbuild cargo-cinstall cargo-ctest
+    - uses: test/tw/help-check
+      with:
+        bins: cargo-capi cargo-cbuild cargo-cinstall cargo-ctest
+    - name: Verify OpenSSL dynamic linking
+      runs: |
+        readelf --dynamic /usr/bin/cargo-capi | grep NEEDED | grep -E 'libssl|libcrypto'

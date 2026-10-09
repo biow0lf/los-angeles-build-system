@@ -1,0 +1,140 @@
+package:
+  name: gst-plugins-base
+  version: "1.29.2"
+  epoch: 2 # glibc: 2.43->2.44
+  description: GStreamer streaming media framework base plug-ins
+  copyright:
+    - license: LGPL-2.1
+  resources:
+    cpu: "2"
+    memory: 10Gi
+
+environment:
+  contents:
+    packages:
+      - alsa-lib-dev
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cdparanoia-dev
+      - cmake
+      - expat-dev
+      - gdk-pixbuf
+      - glib-dev
+      - glib-gir
+      - glibc-2.44-dev
+      - gobject-introspection-dev
+      - graphene-dev
+      - gstreamer
+      - gstreamer-dev
+      - gtk-3-dev
+      - libatomic
+      - libdrm-dev
+      - libice-dev
+      - libogg-dev
+      - libsm-dev
+      - libtheora-dev
+      - libvorbis-dev
+      - libxv-dev
+      - mesa-dev
+      - mesa-egl
+      - mesa-gbm
+      - mesa-glx
+      - mesa-libgallium
+      - meson
+      - opus-dev
+      - orc-compiler
+      - orc-dev
+      - perl
+      - python3
+      - wayland-protocols
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/GStreamer/gstreamer
+      tag: ${{package.version}}
+      expected-commit: badd9563b2ac3117ea2a99348bbe46298d6992ec
+
+  - working-directory: subprojects/gst-plugins-base
+    pipeline:
+      - uses: meson/configure
+        with:
+          opts: |
+            -Dalsa=enabled \
+            -Dintrospection=enabled \
+            -Dgl=enabled \
+            -Dgl-graphene=enabled \
+            -Dgl-jpeg=enabled \
+            -Dgl-png=enabled \
+            -Dtests=disabled \
+      - uses: meson/compile
+      - uses: meson/install
+      - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: ${{subpkg.name}}
+    description: ${{package.name}} dev
+
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: ${{package.name}} documentation
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: ${{package.name}}-lang
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/share/locale
+          mv ${{targets.destdir}}/usr/share/locale ${{targets.subpkgdir}}/usr/share/locale
+    description: ${{package.name}} lang
+    test:
+      pipeline:
+        - uses: test/tw/langpackage
+
+update:
+  enabled: true
+  github:
+    identifier: GStreamer/gstreamer
+    use-tag: true
+
+test:
+  pipeline:
+    - name: Verify key base plugin elements are registered
+      runs: |
+        for plugin in audiotestsrc videotestsrc audioconvert videoconvert \
+            vorbisenc vorbisdec oggmux ogg theoraenc theoradec \
+            opusenc opusdec playbin decodebin; do
+          gst-inspect-1.0 "$plugin"
+          echo "✓ $plugin found"
+        done
+    - name: Run audio pipeline using base plugins and inspect output with gst-discoverer-1.0
+      runs: |
+        # Generate a short OGG/Vorbis audio file using gst-plugins-base elements
+        gst-launch-1.0 audiotestsrc num-buffers=100 ! audioconvert ! \
+          vorbisenc ! oggmux ! filesink location=/tmp/test.ogg
+
+        # Use gst-discoverer-1.0 to inspect the generated file and verify it
+        # reports audio stream information (exercises real media discovery)
+        gst-discoverer-1.0 /tmp/test.ogg | grep -i "audio"
+        echo "✓ gst-discoverer-1.0 correctly identified audio stream in OGG file"
+    - name: Run video pipeline using base plugins
+      runs: |
+        # Encode a short Theora video using gst-plugins-base elements
+        gst-launch-1.0 videotestsrc num-buffers=30 ! videoconvert ! \
+          theoraenc ! oggmux ! filesink location=/tmp/test-video.ogg
+
+        # Inspect the video file with gst-discoverer-1.0
+        gst-discoverer-1.0 /tmp/test-video.ogg | grep -i "video"
+        echo "✓ gst-discoverer-1.0 correctly identified video stream in OGG file"
+    - uses: test/tw/ldd-check

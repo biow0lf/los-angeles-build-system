@@ -1,0 +1,96 @@
+#nolint:update-disabled-reason
+# Generated from https://git.alpinelinux.org/aports/plain/community/libasyncns/APKBUILD
+package:
+  name: libasyncns
+  version: "0.8"
+  epoch: 8 # glibc: 2.43->2.44
+  description: Asynchronous Name Service Library
+  copyright:
+    - license: LGPL-2.1
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - lynx
+
+pipeline:
+  - uses: fetch
+    with:
+      # Original git server at git.0pointer.net is no longer available.
+      # Project has had no releases since 2009 and the maintainer considers
+      # it "stable and feature complete". Using Alpine's archive copy.
+      uri: https://dev.alpinelinux.org/archive/libasyncns-${{package.version}}.tar.gz
+      expected-sha512: 2daad3a2d9eb875e0575843d9e9e2787be6cbba89211fd073fa8898ff80e0a891c7da1a7b0ef70f306318cb3a963ecd65d53d24d08b5f6b98e7cd2a3b3bdcda7
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libasyncns-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libasyncns
+    description: libasyncns dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libasyncns-doc
+    description: libasyncns docs
+    pipeline:
+      - uses: split/alldocs
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  release-monitor:
+    identifier: 14598
+
+test:
+  environment:
+    contents:
+      packages:
+        - libasyncns-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Test library compile and link
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <asyncns.h>
+        #include <stdio.h>
+        int main() {
+            asyncns_t *asyncns = asyncns_new(1);
+            if (!asyncns) {
+                fprintf(stderr, "FAIL: asyncns_new returned NULL\n");
+                return 1;
+            }
+            asyncns_free(asyncns);
+            printf("SUCCESS: libasyncns compile and link test passed\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libasyncns) test.c -o test $(pkg-config --libs libasyncns)
+        ./test

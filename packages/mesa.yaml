@@ -1,7 +1,7 @@
 package:
   name: mesa
   version: "26.2.4"
-  epoch: 0 # llvm: 22->23
+  epoch: 1 # bump epoch to override wolfi mesa epoch
   description: Mesa DRI OpenGL library
   copyright:
     - license: MIT AND SGI-B-2.0 AND BSL-1.0
@@ -66,6 +66,14 @@ environment:
       - systemd-dev
       - vulkan-loader
       - wayland-dev
+      # Bootstrap chicken-and-egg: wayland-protocols-dev can't be installed
+      # here because the only mesa-dev candidates apk can currently see
+      # (local cache / published / Wolfi) are the stale epoch-0 build that
+      # itself leaks a pkgconfig/wayland-protocols.pc and provides
+      # pc:wayland-protocols. Use plain wayland-protocols for THIS build
+      # and hand-write the .pc file below; once this epoch-1 mesa is
+      # published clean, future consumers can use wayland-protocols-dev
+      # directly since epoch 1 wins over Wolfi's epoch 0.
       - wayland-protocols
       - xorgproto
       - zlib-dev
@@ -77,6 +85,19 @@ pipeline:
       repository: https://gitlab.freedesktop.org/mesa/mesa
       tag: mesa-${{package.version}}
       expected-commit: 96cb43121031992b85767f9c1be8f3f48e22b1d2
+
+  - name: Write wayland-protocols.pc (see deviation note above wayland-protocols-dev)
+    runs: |
+      mkdir -p /usr/share/pkgconfig
+      cat > /usr/share/pkgconfig/wayland-protocols.pc <<'EOF'
+      prefix=/usr
+      datarootdir=${prefix}/share
+      pkgdatadir=${pc_sysrootdir}${datarootdir}/wayland-protocols
+
+      Name: Wayland Protocols
+      Description: Wayland protocol files
+      Version: 1.49
+      EOF
 
   - runs: |
       export CFLAGS="$CFLAGS -O2 -g1"
@@ -126,6 +147,7 @@ pipeline:
   - name: Remove wayland-protocols spec files (owned by wayland-protocols pkg)
     runs: |
       rm -rf "${{targets.destdir}}/usr/share/wayland-protocols"
+      rm -f "${{targets.destdir}}/usr/share/pkgconfig/wayland-protocols.pc"
 
   - uses: strip
 

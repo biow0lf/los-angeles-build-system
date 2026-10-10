@@ -28,7 +28,7 @@ environment:
       - ca-certificates-bundle
       - flex
       # somehow openssl-config-fipshardened-3.4.0 fails on ARMv9 with gcc-15
-      - gcc-14-default
+      - gcc-16-default
       - gettext-dev
       - glibc-2.44-dev
       - gperf

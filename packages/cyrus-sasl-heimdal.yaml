@@ -42,7 +42,7 @@ environment:
     packages:
       - autoconf
       - automake
-      - gcc-14-default
+      - gcc-16-default
       - gdbm-dev
       - glibc-2.44-dev
       - heimdal-dev

@@ -23,7 +23,7 @@ environment:
       - busybox
       - ca-certificates-bundle
       - cmake
-      - gcc-14-default
+      - gcc-16-default
       - glibc-2.44-dev
       - python3
       - samurai

@@ -15,7 +15,7 @@ environment:
       - build-base
       - busybox
       - ca-certificates-bundle
-      - gcc-14-default
+      - gcc-16-default
       - glibc-2.44-dev
       - ncurses-dev
       - wolfi-base

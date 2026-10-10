@@ -19,7 +19,7 @@ environment:
       - busybox
       - cmake-3
       - coreutils
-      - gcc-14-default
+      - gcc-16-default
       - glibc-2.44-dev
       - nasm
 

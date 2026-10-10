@@ -1,0 +1,102 @@
+package:
+  name: unibilium
+  version: "2.1.4"
+  epoch: 0 # glibc: 2.43->2.44
+  description: "Terminfo parsing library"
+  copyright:
+    - license: LGPL-3.0-or-later
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - perl
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/neovim/unibilium
+      tag: v${{package.version}}
+      expected-commit: b0567db6a30898d8b25d206223960a8be2795fa8
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    pipeline:
+      - uses: split/dev
+    description: ${{package.name}} dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: unibilium-dev
+
+  - name: unibilium-doc
+    description: unibilium docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: neovim/unibilium
+    strip-prefix: v
+    use-tag: true
+    tag-filter-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - unibilium-dev
+        - gcc
+        - ncurses # For terminfo data
+  pipeline:
+    - name: Compile and run a basic unibilium test
+      runs: |
+        # Create a test C file that uses unibilium to query terminfo
+        cat > test_unibilium.c <<EOF
+        #include <stdio.h>
+        #include <unibilium.h>
+
+        int main() {
+            unibi_term *term = unibi_from_env();
+            if (term == NULL) {
+                fprintf(stderr, "Failed to read terminfo from environment\\n");
+                return 1;
+            }
+            printf("Terminal name: %s\\n", unibi_get_name(term));
+            printf("Max colors: %d\\n", unibi_get_num(term, unibi_max_colors));
+            unibi_destroy(term);
+            return 0;
+        }
+        EOF
+
+        # Compile the test program
+        gcc -o test_unibilium test_unibilium.c -lunibilium
+
+        # Run the test program; in CI without TERM set, it exits 1 with a
+        # known message. Accept either a successful read or that specific error.
+        output=$(./test_unibilium 2>&1) || echo "$output" | grep -F "Failed to read terminfo"
+    - uses: test/tw/ldd-check

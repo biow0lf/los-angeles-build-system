@@ -1,0 +1,41 @@
+package:
+  name: libpthread-stubs
+  version: 0.5
+  epoch: 4 # go/wolfi-rsc/libpthread-stubs
+  description: Pthread functions stubs for platforms missing them
+  copyright:
+    - license: X11
+  resources:
+    cpu: "2"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/pthread-stubs
+      tag: libpthread-stubs-${{package.version}}
+      expected-commit: 9c8d612698c78f9775b37c5d901a0748b9e4b4b6
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 13519
+
+test:
+  pipeline:
+    - uses: test/pkgconf

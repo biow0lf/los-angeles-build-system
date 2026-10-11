@@ -28,3 +28,12 @@ pipeline:
 
   - uses: strip
 
+subpackages:
+  - name: libsfdo-dev
+    description: libsfdo dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libsfdo
+

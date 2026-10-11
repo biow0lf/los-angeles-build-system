@@ -30,3 +30,12 @@ pipeline:
 
   - uses: strip
 
+subpackages:
+  - name: seatd-dev
+    description: seatd dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - seatd
+

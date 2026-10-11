@@ -1,0 +1,117 @@
+package:
+  name: opencore-amr
+  version: 0.1.6
+  epoch: 6 # glibc: 2.43->2.44
+  description: Implementation of Adaptive Multi Rate speech codec
+  copyright:
+    - license: Apache-2.0
+  resources:
+    cpu: "2"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gcc
+      - glibc-2.44-dev
+      - libtool
+      - make
+      - pkgconf-dev
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.code.sf.net/p/opencore-amr/code
+      tag: v${{package.version}}
+      expected-commit: 7dba8c32238418ce0b316a852b2224df586ca896
+
+  - uses: autoconf/configure
+    with:
+      opts: --sysconfdir=/etc --mandir=/usr/share/man --localstatedir=/var
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: opencore-amr-dev
+    description: Development files for opencore-amr
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+test:
+  environment:
+    contents:
+      packages:
+        - opencore-amr-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test compile and link against opencore-amrnb
+      runs: |
+        tee test_amrnb.c <<'EOF'
+        #include <opencore-amrnb/interf_dec.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main() {
+            /* Initialize the AMR-NB decoder */
+            void *decoder = Decoder_Interface_init();
+            if (!decoder) {
+                fprintf(stderr, "FAIL: Decoder_Interface_init returned NULL\n");
+                return 1;
+            }
+            printf("SUCCESS: AMR-NB decoder initialized\n");
+
+            /* Clean up */
+            Decoder_Interface_exit(decoder);
+            printf("SUCCESS: AMR-NB decoder cleaned up\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags opencore-amrnb) test_amrnb.c -o test_amrnb $(pkg-config --libs opencore-amrnb)
+        ./test_amrnb
+    - name: Test compile and link against opencore-amrwb
+      runs: |
+        tee test_amrwb.c <<'EOF'
+        #include <opencore-amrwb/dec_if.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main() {
+            /* Initialize the AMR-WB decoder */
+            void *decoder = D_IF_init();
+            if (!decoder) {
+                fprintf(stderr, "FAIL: D_IF_init returned NULL\n");
+                return 1;
+            }
+            printf("SUCCESS: AMR-WB decoder initialized\n");
+
+            /* Clean up */
+            D_IF_exit(decoder);
+            printf("SUCCESS: AMR-WB decoder cleaned up\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags opencore-amrwb) test_amrwb.c -o test_amrwb $(pkg-config --libs opencore-amrwb)
+        ./test_amrwb
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v

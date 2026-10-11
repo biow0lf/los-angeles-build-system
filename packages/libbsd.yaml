@@ -1,0 +1,100 @@
+package:
+  name: libbsd
+  version: 0.12.2
+  epoch: 8 # glibc: 2.43->2.44
+  description: commonly-used BSD functions not implemented by all libcs
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libmd-dev
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/libbsd/libbsd
+      tag: ${{package.version}}
+      expected-commit: 04a24db27ad1572f766bad772cdd9c146e6d9cf0
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libbsd-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libmd-dev
+        - libbsd
+    description: libbsd dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+
+  - name: libbsd-doc
+    pipeline:
+      - uses: split/manpages
+    description: libbsd manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1567
+
+test:
+  environment:
+    contents:
+      packages:
+        - libbsd-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Compile and link against libbsd
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <bsd/string.h>
+        #include <stdio.h>
+
+        int main() {
+            char dst[32];
+            size_t len;
+
+            len = strlcpy(dst, "hello libbsd", sizeof(dst));
+            if (len != 12) {
+                fprintf(stderr, "FAIL: expected len=12, got len=%zu\n", len);
+                return 1;
+            }
+
+            printf("strlcpy returned %zu, dst='%s'\n", len, dst);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libbsd) test.c -o test $(pkg-config --libs libbsd)
+        ./test

@@ -86,4 +86,8 @@ Status: planned
 
 * lazygit
 * lazydocker
+* bat
+* mcfly
+* htop
+* btop
 

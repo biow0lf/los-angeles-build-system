@@ -1,0 +1,99 @@
+package:
+  name: libxtst
+  version: 1.2.5
+  epoch: 8 # glibc: 2.43->2.44
+  description: X11 Testing -- Resource extension library
+  copyright:
+    - license: XFree86-1.1
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - libx11-dev
+      - libxext-dev
+      - libxi-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxtst.git
+      tag: libXtst-${{package.version}}
+      expected-commit: abf3ff74b97c4231d2324d66318bfa1d22e44913
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: --disable-static
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxtst-doc
+    description: libxtst documentation pages
+    pipeline:
+      - uses: split/alldocs
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: libxtst-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libxtst
+        - libxi-dev
+        - xorgproto
+    description: libxtst dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1794
+
+test:
+  environment:
+    contents:
+      packages:
+        - libxtst-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation and linking
+      runs: |
+        tee test.c <<'EOF'
+        #include <X11/extensions/XTest.h>
+        #include <stdio.h>
+
+        int main() {
+            /* Verify we can reference XTest symbols - linking proves the library works */
+            printf("XTestQueryExtension symbol: %p\n", (void *)XTestQueryExtension);
+            printf("XTestFakeKeyEvent symbol: %p\n", (void *)XTestFakeKeyEvent);
+            printf("libXtst compile and link test passed\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xtst) test.c -o test $(pkg-config --libs xtst)
+        ./test

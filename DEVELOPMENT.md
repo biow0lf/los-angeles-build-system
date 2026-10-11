@@ -82,3 +82,8 @@ Goal: docker should works
 
 Status: planned
 
+## Stage 8: TUI
+
+* lazygit
+* lazydocker
+

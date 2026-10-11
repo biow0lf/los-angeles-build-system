@@ -1,0 +1,110 @@
+package:
+  name: libspiro
+  version: "20240903"
+  epoch: 7 # glibc: 2.43->2.44
+  description: Library to simplify the drawing of beautiful curves
+  copyright:
+    - license: GPL-3.0-or-later
+  resources:
+    cpu: "1"
+    memory: 2Gi
+  test-resources:
+    memory: 3Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/fontforge/libspiro
+      expected-commit: a2f38e13e32f6ba54a2647515cdd6d0a61228317
+      tag: ${{package.version}}
+
+  - runs: autoreconf -i -f
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libspiro-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libspiro
+    description: libspiro dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libspiro-doc
+    pipeline:
+      - uses: split/manpages
+    description: libspiro manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: fontforge/libspiro
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - libspiro-dev
+        - posix-libc-utils
+  pipeline:
+    - name: "Compile and run libspiro test"
+      runs: |
+        cat << EOF > test.c
+        #include <spiroentrypoints.h>
+        #include <bezctx.h>
+
+        void moveto(bezctx *bc, double x, double y, int open) {}
+        void lineto(bezctx *bc, double x, double y) {}
+        void quadto(bezctx *bc, double x1, double y1, double x2, double y2) {}
+        void curveto(bezctx *bc, double x1, double y1, double x2, double y2, double x3, double t3) {}
+        void markknot(bezctx *bc, int knot) {}
+
+        int main() {
+          int done;
+          bezctx bc = {moveto, lineto, quadto, curveto, markknot};
+          spiro_cp path[] = {
+            {-100, 0, SPIRO_G4}, {0, 100, SPIRO_G4},
+            {100, 0, SPIRO_G4}, {0, -100, SPIRO_G4}
+          };
+
+          SpiroCPsToBezier1(path, sizeof(path)/sizeof(spiro_cp), 1, &bc, &done);
+          return done == 0;
+        }
+        EOF
+
+        gcc test.c -I/usr/include -L/usr/lib -lspiro -o test
+        ./test
+    - name: "Check libspiro version"
+      runs: |
+        pkg-config --modversion libspiro
+    - name: "Verify library linkage"
+      runs: |
+        ldd test | grep libspiro
+    - uses: test/tw/ldd-check

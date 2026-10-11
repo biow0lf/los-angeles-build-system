@@ -8,6 +8,7 @@ Simple desktop linux.
 
 * glibc based
 * with systemd
+* x86_64 only (for now)
 * apk as package manager
 * apko + melange
 * builded by AI

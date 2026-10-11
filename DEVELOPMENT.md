@@ -76,3 +76,9 @@ Goal: watch videos and play audio.
 
 Status: planned
 
+## Stage 7: Docker client and docker server
+
+Goal: docker should works
+
+Status: planned
+

@@ -1,0 +1,123 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/libepoxy/APKBUILD
+package:
+  name: libepoxy
+  version: 1.5.10
+  epoch: 10 # glibc: 2.43->2.44
+  description: Direct Rendering Manager runtime library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "2"
+    memory: 7Gi
+  test-resources:
+    cpu: "2"
+    memory: 10Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libx11-dev
+      - mesa-dev
+      - meson
+      - python3
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: c84bc9459357a40e46e2fec0408d04fbdde2c973
+      repository: https://github.com/anholt/libepoxy
+      tag: ${{package.version}}
+
+  - runs: |
+      meson \
+        --prefix=/usr \
+        -Ddocs=false \
+        -Degl=yes \
+        -Dglx=yes \
+        -Dx11=true \
+        -Dtests=false \
+        . output
+      meson compile -C output
+      DESTDIR="${{targets.destdir}}" meson install --no-rebuild -C output
+
+  - uses: strip
+
+subpackages:
+  - name: libepoxy-dev
+    pipeline:
+      - uses: split/dev
+    description: libepoxy dev
+    dependencies:
+      runtime:
+        - libx11-dev
+    test:
+      environment:
+        contents:
+          packages:
+            - build-base
+            - pkgconf
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+        - name: Test compile and link against libepoxy
+          runs: |
+            tee test.c <<'EOF'
+            #include <epoxy/gl.h>
+            #include <stdio.h>
+
+            int main() {
+                /* Test a pure string utility function that does not require a GL context */
+                bool result = epoxy_extension_in_string("GL_ARB_texture_storage GL_ARB_compute_shader", "GL_ARB_texture_storage");
+                if (!result) {
+                    fprintf(stderr, "FAIL: epoxy_extension_in_string did not find expected extension\n");
+                    return 1;
+                }
+                printf("SUCCESS: libepoxy compile and link test passed\n");
+                return 0;
+            }
+            EOF
+
+            gcc $(pkg-config --cflags epoxy) test.c -o test $(pkg-config --libs epoxy)
+            ./test
+
+update:
+  enabled: true
+  github:
+    identifier: anholt/libepoxy
+
+test:
+  environment:
+    contents:
+      packages:
+        - libepoxy-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test compile and link against libepoxy
+      runs: |
+        tee test.c <<'EOF'
+        #include <epoxy/gl.h>
+        #include <stdio.h>
+
+        int main() {
+            /* Test a pure string utility function that does not require a GL context */
+            bool result = epoxy_extension_in_string("GL_ARB_texture_storage GL_ARB_compute_shader", "GL_ARB_texture_storage");
+            if (!result) {
+                fprintf(stderr, "FAIL: epoxy_extension_in_string did not find expected extension\n");
+                return 1;
+            }
+            printf("SUCCESS: libepoxy compile and link test passed\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags epoxy) test.c -o test $(pkg-config --libs epoxy)
+        ./test

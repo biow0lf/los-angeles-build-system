@@ -1,0 +1,141 @@
+package:
+  name: zeromq
+  version: 4.3.5
+  epoch: 13 # glibc: 2.43->2.44
+  description: The ZeroMQ messaging library and tools
+  copyright:
+    - license: MPL-2.0
+  resources:
+    cpu: "1"
+    memory: 10Gi
+
+environment:
+  contents:
+    packages:
+      - asciidoc
+      - build-base
+      - cmake-3
+      - docbook-xml
+      - glibc-2.44-dev
+      - libbsd-dev
+      - libsodium-dev
+      - libtool
+      - perl
+      - pkgconf-dev
+      - util-linux-dev
+      - xmlto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/zeromq/libzmq
+      tag: v${{package.version}}
+      expected-commit: 622fc6dde99ee172ebaa9c8628d85a7a1995a21d
+
+  - uses: patch
+    with:
+      patches: 0001-cmake-add-curve_keygen-binary.patch
+
+  - uses: cmake/configure
+    with:
+      opts: -DENABLE_CURVE=ON -DWITH_LIBSODIUM=ON
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  # Install manpages with autoconf
+  - uses: autoconf/configure
+    with:
+      opts: --with-libsodium --disable-Werror
+
+  - uses: autoconf/make
+    with:
+      dir: doc/
+      opts: all install-man DESTDIR="${{targets.contextdir}}"
+
+  - uses: strip
+
+subpackages:
+  - name: libzmq-static
+    pipeline:
+      - uses: split/static
+    description: zeromq static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: zeromq-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - zeromq
+    description: zeromq dev
+    test:
+      environment:
+        contents:
+          packages:
+            - gcc
+            - glibc-dev
+            - zeromq-dev
+            - pkgconf
+            - libsodium-dev
+      pipeline:
+        - uses: test/tw/devpackage
+        - runs: |
+            cat << 'EOF' > test_zeromq.c
+            #include <assert.h>
+            #include <zmq.h>
+
+            int main()
+            {
+              zmq_msg_t query;
+              assert(0 == zmq_msg_init_size(&query, 1));
+              return 0;
+            }
+            EOF
+            gcc -o test_zeromq test_zeromq.c -lzmq
+            ./test_zeromq
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+        - runs: |
+            # Ensure pkg-config can find libzmq
+            pkg-config libzmq --cflags
+            pkg-config libzmq --libs
+
+  - name: zeromq-doc
+    pipeline:
+      - uses: split/manpages
+    description: zeromq manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: zeromq/libzmq
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/help-check
+      with:
+        bins: curve_keygen
+    - name: curve_keygen functional test
+      runs: |
+        # curve_keygen generates a CURVE keypair (public + secret keys in Z85 encoding)
+        output=$(curve_keygen)
+        echo "$output"
+        # Verify the output contains both a public and secret key label
+        # curve_keygen outputs headers like "== CURVE PUBLIC KEY ==" and "== CURVE SECRET KEY =="
+        echo "$output" | grep -q "PUBLIC KEY" || { echo "ERROR: missing PUBLIC KEY in output"; exit 1; }
+        echo "$output" | grep -q "SECRET KEY" || { echo "ERROR: missing SECRET KEY in output"; exit 1; }
+        # Z85-encoded CURVE keys are exactly 40 characters; the key is on the line after the header
+        pub=$(echo "$output" | grep -A1 "PUBLIC KEY" | tail -1)
+        sec=$(echo "$output" | grep -A1 "SECRET KEY" | tail -1)
+        [ ${#pub} -eq 40 ] || { echo "ERROR: public key length ${#pub} != 40"; exit 1; }
+        [ ${#sec} -eq 40 ] || { echo "ERROR: secret key length ${#sec} != 40"; exit 1; }
+        echo "curve_keygen produced valid 40-char Z85 keypair: pub=$pub"

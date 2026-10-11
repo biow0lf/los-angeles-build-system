@@ -1,0 +1,102 @@
+package:
+  name: jsoncpp
+  version: "1.9.8"
+  epoch: 3 # glibc: 2.43->2.44
+  description: "C++ library for parsing JSON"
+  copyright:
+    - license: 'CC-PDDC OR MIT'
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - glibc-2.44-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/open-source-parsers/jsoncpp
+      tag: ${{package.version}}
+      expected-commit: 8519b8381f3c741ad1421f88237b1deda0b11412
+
+  - uses: cmake/configure
+    with:
+      # Build the static library position-independent so it can be linked
+      # into shared objects and PIE executables (e.g. DCGM). This matches
+      # what Alpine and Debian ship (Meson's b_staticpic defaults to true);
+      # CMake leaves static PIC off by default. Only affects jsoncpp_static;
+      # the shared and object libraries are already PIC.
+      opts: -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: jsoncpp-static
+    description: "C++ library for parsing JSON - static libraries"
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: jsoncpp-dev
+    description: "C++ library for parsing JSON - development headers"
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: open-source-parsers/jsoncpp
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - jsoncpp-dev
+        - jsoncpp-static
+  pipeline:
+    - name: Compile and Execute Test
+      runs: |
+        tee test_jsoncpp.cpp <<'EOF'
+        #include <json/json.h>
+        #include <iostream>
+        int main() {
+            const std::string rawJson = R"({"name": "John", "age": 30, "city": "New York"})";
+            Json::CharReaderBuilder builder;
+            Json::CharReader* reader = builder.newCharReader();
+            Json::Value root;
+            std::string errors;
+            bool parsingSuccessful = reader->parse(rawJson.c_str(), rawJson.c_str() + rawJson.size(), &root, &errors);
+            delete reader;
+            if (!parsingSuccessful) {
+                std::cerr << "Failed to parse the JSON string: " << errors << std::endl;
+                return 1;
+            }
+            std::string name = root["name"].asString();
+            int age = root["age"].asInt();
+            std::string city = root["city"].asString();
+            if (name == "John" && age == 30 && city == "New York") {
+                std::cout << "JSON parsing succeeded!" << std::endl;
+                return 0;
+            } else {
+                std::cerr << "JSON parsing failed!" << std::endl;
+                return 1;
+            }
+        }
+        EOF
+
+        g++ test_jsoncpp.cpp -o test_jsoncpp -ljsoncpp
+        ./test_jsoncpp
+    - uses: test/tw/ldd-check

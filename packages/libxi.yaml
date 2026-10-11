@@ -1,0 +1,106 @@
+package:
+  name: libxi
+  version: "1.8.3"
+  epoch: 2 # glibc: 2.43->2.44
+  description: X11 Input extension library
+  copyright:
+    - license: MIT AND X11
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bash
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - libx11-dev
+      - libxext-dev
+      - libxfixes-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xmlto
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxi.git
+      tag: libXi-${{package.version}}
+      expected-commit: f00f7e9140b4707775331950dd67851e55058c40
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --with-xmlto \
+        --without-fop \
+        --disable-static
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxi-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libxi
+        - libxfixes-dev
+        - xorgproto
+    description: libxi dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libxi-doc
+    description: libxi documentation
+    pipeline:
+      - uses: split/alldocs
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1778
+
+test:
+  environment:
+    contents:
+      packages:
+        - libxi-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Test libxi compile and link
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <X11/extensions/XInput2.h>
+        #include <stdio.h>
+
+        int main() {
+            /* Verify XInput2 symbols are available by referencing a function pointer */
+            int (*fn)(Display*, int*, int*) = XIQueryVersion;
+            printf("libxi is usable, XIQueryVersion at %p\n", (void*)fn);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xi) test.c -o test $(pkg-config --libs xi)
+        ./test

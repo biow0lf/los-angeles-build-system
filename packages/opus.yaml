@@ -1,0 +1,124 @@
+package:
+  name: opus
+  version: 1.6.1
+  epoch: 5 # glibc: 2.43->2.44
+  description: Codec designed for interactive speech and audio transmission over the Internet
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - curl
+      - glibc-2.44-dev
+      - meson
+      - python3
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 22244de5a79bd1d6d623c32e72bf1954b56235be
+      tag: v${{package.version}}
+      repository: https://github.com/xiph/opus
+
+  - runs: |
+      # Populate package version for meson's check
+      echo 'PACKAGE_VERSION="${{package.version}}"' > ./package_version;
+
+      # Download the DNN model (required for build)
+      #
+      # This call (and the checksum passed to it) is taken
+      # from https://github.com/xiph/opus/blob/main/autogen.sh
+      #
+      dnn/download_model.sh "a5177ec6fb7d15058e99e57029746100121f68e4890b1467d4094aa336b6013e"
+
+      CFLAGS="${CFLAGS/-Os/-O2}" \
+      CPPFLAGS="${CPPFLAGS/-Os/-O2}" \
+      meson setup \
+         -Db_lto=true \
+         -Dcustom-modes=true \
+         -Dtests="enabled" \
+         --prefix=/usr \
+         . output
+      meson compile -C output
+      DESTDIR="${{targets.destdir}}" meson install --no-rebuild -C output
+      install -Dm644 COPYING "${{targets.destdir}}"/usr/share/licenses/${{package.name}}/LICENSE
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: opus-dev
+    description: ${{package.name}} dev
+
+test:
+  environment:
+    contents:
+      packages:
+        - opus-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Compile and link test for libopus
+      runs: |
+        # Write a test program that calls an opus function
+        tee test_opus.c <<'EOF'
+        #include <opus/opus.h>
+        #include <stdio.h>
+        #include <string.h>
+
+        int main() {
+            /* Test opus_get_version_string to verify library links correctly */
+            const char *version = opus_get_version_string();
+            if (version == NULL) {
+                fprintf(stderr, "FAIL: opus_get_version_string returned NULL\n");
+                return 1;
+            }
+            printf("Opus version: %s\n", version);
+
+            /* Test encoder creation to verify functional API works */
+            int error = 0;
+            OpusEncoder *enc = opus_encoder_create(48000, 2, OPUS_APPLICATION_AUDIO, &error);
+            if (error != OPUS_OK || enc == NULL) {
+                fprintf(stderr, "FAIL: opus_encoder_create failed with error %d\n", error);
+                return 1;
+            }
+            printf("Encoder created successfully\n");
+
+            opus_encoder_destroy(enc);
+            printf("SUCCESS: opus library is functional\n");
+            return 0;
+        }
+        EOF
+
+        # Compile using pkg-config flags
+        gcc $(pkg-config --cflags opus) test_opus.c -o test_opus $(pkg-config --libs opus)
+
+        # Run the test binary
+        ./test_opus
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - draft-*
+    - draft-ietf*
+  github:
+    identifier: xiph/opus
+    strip-prefix: v
+    use-tag: true

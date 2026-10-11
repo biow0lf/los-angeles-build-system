@@ -1,0 +1,79 @@
+package:
+  name: iso-codes
+  version: "4.20.1"
+  epoch: 4 # go/wolfi-rsc/iso-codes
+  description: ISO codes and their translations
+  copyright:
+    - license: LGPL-2.1-or-later
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - gettext
+      - meson
+      - python3
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://salsa.debian.org/iso-codes-team/iso-codes
+      tag: v${{package.version}}
+      expected-commit: 74623235ae99f6e835e1e465017ce4c544ae6b53
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: iso-codes-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - iso-codes
+    description: iso-codes dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v
+
+test:
+  pipeline:
+    - name: "verify we have some .mo files"
+      runs: |
+        dir="/usr/share/locale/"
+        if ! find "${dir}" -name '*.mo' | grep -F . ; then
+          echo "FAIL: no .mo files found at '${dir}', this is unexpected" >&2
+          exit 1
+        fi
+        echo "PASS: we have some .mo files at '${dir}'"
+    - name: "verify we have some .json files"
+      runs: |
+        dir="/usr/share/iso-codes/"
+        if ! find "${dir}" -name '*.json' | grep -F . ; then
+          echo "FAIL: no .json files found at '${dir}', this is unexpected" >&2
+          exit 1
+        fi
+        echo "PASS: we have some .json files at '${dir}'"
+    - name: "verify we have some .xml files"
+      runs: |
+        dir="/usr/share/xml/iso-codes/"
+        if ! find "${dir}" -name '*.xml' | grep -F . ; then
+          echo "FAIL: no .xml files found at '${dir}', this is unexpected" >&2
+          exit 1
+        fi
+        echo "PASS: we have some .xml files at '${dir}'"

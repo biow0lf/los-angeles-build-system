@@ -1,0 +1,764 @@
+package:
+  name: samba
+  version: "4.25.0"
+  epoch: 0 # glibc: 2.43->2.44
+  description: "Tools to access a server's filespace and printers via SMB"
+  copyright:
+    - license: GPL-3.0-or-later AND LGPL-3.0-or-later
+  dependencies:
+    runtime:
+      - merged-lib
+      - merged-usrsbin
+      - merged-varrun
+      - wolfi-baselayout
+  resources:
+    cpu: "10"
+    memory: 10Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+vars:
+  python-version: 3.13
+
+environment:
+  contents:
+    packages:
+      - acl-dev
+      - autoconf
+      - automake
+      - bind-dev
+      - bison
+      - build-base
+      - busybox
+      - cups-dev
+      - dbus-dev
+      - docbook-xml
+      - e2fsprogs-dev
+      - flex
+      - glibc-2.44-dev
+      - gnutls-dev
+      - iniparser-dev
+      - jansson-dev
+      - libarchive-dev
+      - libcap-dev
+      - libtirpc-dev
+      - liburing-dev
+      - linux-pam-dev
+      - lmdb-dev
+      - ncurses-dev
+      - ncurses-terminfo
+      - ncurses-terminfo-base
+      - openldap-dev
+      - perl
+      - perl-json
+      - perl-parse-yapp
+      - pkgconf-dev
+      - popt-dev
+      - py${{vars.python-version}}-dnspython
+      - py${{vars.python-version}}-markdown
+      - py${{vars.python-version}}-talloc-dev
+      - py${{vars.python-version}}-tdb
+      - py${{vars.python-version}}-tevent
+      - python3-dev
+      - rpcgen
+      - subunit-dev
+      - talloc-dev
+      - tdb
+      - tdb-dev
+      - tevent-dev
+      - zlib-dev
+  environment:
+    IDMAP_MODULES: idmap_ad,idmap_rid,idmap_adex,idmap_hash,idmap_tdb2
+    PDB_MODULES: pdb_tdbsam,pdb_ldap,pdb_ads,pdb_smbpasswd,pdb_wbc_sam,pdb_samba4
+    AUTH_MODULES: auth_unix,auth_wbc,auth_server,auth_netlogond,auth_script,auth_samba4
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/samba-team/samba
+      tag: samba-${{package.version}}
+      expected-commit: b439e3ec13425de85e03eb4ac394ad15273decf7
+
+  - uses: patch
+    with:
+      patches: tinfo.patch disable-quic.patch
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --prefix=/usr \
+        --sbindir=/usr/bin \
+        --sysconfdir=/etc/${{package.name}} \
+        --with-configdir=/etc/${{package.name}} \
+        --localstatedir=/var \
+        --libexecdir=/usr/lib \
+        --enable-fhs \
+        --with-lockdir=/var/cache/${{package.name}} \
+        --with-piddir=/run/${{package.name}} \
+        --with-logfilebase=/var/log/${{package.name}} \
+        --with-pam \
+        --without-systemd \
+        --with-ads \
+        --with-shared-modules="$IDMAP_MODULES,$PDB_MODULES,$AUTH_MODULES,vfs_io_uring" \
+        --enable-cups \
+        --without-gettext \
+        --bundled-libraries=NONE,ntdb,roken,wind,hx509,asn1,heimbase,hcrypto,krb5,gssapi,heimntlm,hdb,kdc,cmocka \
+        --disable-rpath-install \
+        --without-gpgme \
+        --disable-fault-handling \
+        --private-libraries='!ldb,!samba-credentials' \
+        --without-regedit
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      install -d -m755 "${{targets.destdir}}"/usr/lib/tmpfiles.d
+      sed 's, /var/run/samba , /run/samba ,' packaging/systemd/samba.conf.tmp >"${{targets.destdir}}"/usr/lib/tmpfiles.d/samba.conf
+      # We only need /run/samba, not /var/run/samba; merged-varrun ensures
+      # they refer to the same directory.
+      rmdir "${{targets.destdir}}"/var/run/samba
+
+  - uses: strip
+
+subpackages:
+  - name: samba-common
+    description: Samba common files for both client an servers
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/etc
+          mv "${{targets.destdir}}"/etc/* "${{targets.contextdir}}"/etc
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: samba-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - samba
+        - samba-libs-py3
+        - samba-server-libs
+        - wolfi-baselayout
+    description: samba dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: samba-libs-py3
+    description: Samba libraries that require libpython
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsamba-net*private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsamba-python*private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: samba-common-tools
+    description: Tools for Samba servers and clients
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/bin
+
+          mv "${{targets.destdir}}"/usr/bin/net "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/pdbedit "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/profiles "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbcontrol "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbpasswd "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/testparm "${{targets.contextdir}}"/usr/bin
+    test:
+      pipeline:
+        - uses: test/tw/ver-check
+          with:
+            bins: |
+              pdbedit
+              profiles
+              testparm
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              pdbedit
+              profiles
+              testparm
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+
+  - name: samba-common-server-libs
+    description: Samba libraries shared by common-tools and servers
+    dependencies:
+      runtime:
+        - libauth-samba
+        - samba-libs
+        - samba-util-libs
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib/samba
+
+          mv "${{targets.destdir}}"/usr/lib/libdcerpc-server-core.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libnetapi.so.* "${{targets.contextdir}}"/usr/lib
+
+          mv "${{targets.destdir}}"/usr/lib/samba/libRPC-SERVER-LOOP-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libdfs-server-ad-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libprinting-migrate-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsmbd-base-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsmbldaphelper-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/pdb "${{targets.contextdir}}"/usr/lib/samba
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+          with:
+            extra-library-paths: "/usr/lib/samba/"
+
+  - name: libsmbclient
+    description: The SMB client library
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libsmbclient.so.* "${{targets.contextdir}}"/usr/lib
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: samba-client
+    description: Samba client programs
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/bin
+
+          mv "${{targets.destdir}}"/usr/bin/cifsdd "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/dumpmscat "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/dbwrap_tool "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/mdsearch "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/mvxattr "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/nmblookup "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/oLschema2ldif "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/regdiff "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/regpatch "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/regshell "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/regtree "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/rpcclient "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/sharesec "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbcacls "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbclient "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbcquotas "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbget "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbspool "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbtar "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbtree "${{targets.contextdir}}"/usr/bin
+
+          mkdir -p "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/samba/smbspool_krb5_wrapper "${{targets.contextdir}}"/usr/lib
+    test:
+      environment:
+        contents:
+          packages:
+            - samba-server # needed for Test Samba client
+            - libauth-samba # needed for Test Samba client
+      pipeline:
+        - uses: test/tw/ver-check
+          with:
+            bins: |
+              dbwrap_tool
+              nmblookup
+              oLschema2ldif
+              sharesec
+              smbcacls
+              smbclient
+              smbcquotas
+              smbget
+              smbtree
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              dbwrap_tool
+              mvxattr
+              nmblookup
+              oLschema2ldif
+              sharesec
+              smbcacls
+              smbclient
+              smbcquotas
+              smbget
+              smbtree
+        - name: Test Samba client
+          runs: |
+            mkdir -p /var/lib/samba/private/ /var/log/samba /etc/samba
+            cat > /etc/samba/smb.conf <<'EOF'
+            [global]
+                # Set charset to avoid CP850 error
+                dos charset = ASCII
+                unix charset = UTF-8
+            EOF
+            smbd
+            sleep 2
+            smbclient -L 127.0.0.1 -N
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+
+  - name: samba-server-libs
+    description: Samba libraries shared by server and windbind
+    dependencies:
+      runtime:
+        - samba-common-server-libs
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libdcerpc-samba4-private-samba.so "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/samba/libidmap-private-samba.so "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/samba/libnss-info-private-samba.so "${{targets.contextdir}}"/usr/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: winbind
+    description: Samba user and group resolver
+    dependencies:
+      runtime:
+        - libauth-samba
+        - samba-server-libs
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib/samba
+          mkdir -p "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/winbindd "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/lib/samba/idmap "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/nss_info "${{targets.contextdir}}"/usr/lib/samba
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: samba-util-libs
+    description: Samba utility libraries
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib/samba
+
+          mv "${{targets.destdir}}"/usr/lib/libsamba-util.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/samba/libgenrand-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsocket-blocking-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsamba-debug-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libtime-basic-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsys-rw-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libiov-buf-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcom-err-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libreplace-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libstable-sort-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: libwbclient
+    description: Samba winbind client libraries
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libwbclient.so.* "${{targets.contextdir}}"/usr/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: samba-winbind-clients
+    description: Samba winbind client tools
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/ntlm_auth "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/wbinfo "${{targets.contextdir}}"/usr/bin
+    test:
+      pipeline:
+        - uses: test/tw/ver-check
+          with:
+            bins: |
+              ntlm_auth
+              wbinfo
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              ntlm_auth
+              wbinfo
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+
+  - name: samba-libnss-winbind
+    description: Samba winbind NSS plugin
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libnss_winbind.so* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libnss_wins.so* "${{targets.contextdir}}"/usr/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: samba-winbind-krb5-locator
+    description: Samba winbind krb5 locator
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/krb5 "${{targets.contextdir}}"/usr/lib/samba
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: samba-pam-winbind
+    description: PAM module for winbind
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib/security
+          mv "${{targets.destdir}}"/usr/lib/security/* "${{targets.contextdir}}"/usr/lib/security
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: samba-server
+    description: Samba server
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/bin
+          mkdir -p "${{targets.contextdir}}"/usr/lib/samba
+
+          mv "${{targets.destdir}}"/usr/bin/nmbd "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbd "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/eventlogadm "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbstatus "${{targets.contextdir}}"/usr/bin
+
+          mv "${{targets.destdir}}"/usr/lib/samba/auth "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libREG-FULL-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libRPC-WORKER-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libxattr-tdb-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/rpcd_* "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/samba-bgqd "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/samba-dcerpcd "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/vfs "${{targets.contextdir}}"/usr/lib/samba
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - samba-common
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              eventlogadm
+              nmbd
+        - name: Test smbd starts and serves shares
+          runs: |
+            mkdir -p /var/lib/samba/private/ /var/log/samba /etc/samba /tmp/samba-share
+            cat > /etc/samba/smb.conf <<'EOF'
+            [global]
+                dos charset = ASCII
+                unix charset = UTF-8
+            [testshare]
+                path = /tmp/samba-share
+                read only = yes
+                guest ok = yes
+            EOF
+            smbd
+            sleep 2
+            # Verify smbd is running by checking its PID file
+            test -f /run/samba/smbd.pid && kill -0 "$(cat /run/samba/smbd.pid)"
+
+  - name: py${{vars.python-version}}-samba
+    description: Samba python libraries
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/python* "${{targets.contextdir}}"/usr/lib
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - py${{vars.python-version}}-tdb
+        - samba-libs-py3
+        - samba-server
+        - samba-server-libs
+        - wolfi-baselayout
+      provides:
+        - py3-samba
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: samba-test
+    description: Samba server and client testing tools
+    dependencies:
+      runtime:
+        - py${{vars.python-version}}-tdb
+        - samba-libs-py3
+        - samba-server-libs
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/bin
+          mkdir -p "${{targets.contextdir}}"/usr/lib
+
+          mv "${{targets.destdir}}"/usr/bin/gentest "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/locktest "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/masktest "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/ndrdump "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/smbtorture "${{targets.contextdir}}"/usr/bin
+
+          mv "${{targets.destdir}}"/usr/lib/samba/libdlz-bind9-for-torture-private-samba.so "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/samba/libtorture-private-samba.so "${{targets.contextdir}}"/usr/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/ver-check
+          with:
+            bins: |
+              gentest
+              locktest
+              masktest
+              ndrdump
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              gentest
+              locktest
+              masktest
+
+  - name: libauth-samba
+    description: Samba auth library shared by common-tools, server and clients
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libauth-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: samba-libs
+    description: Samba core libraries shared by common-tools, server and clients
+    dependencies:
+      runtime:
+        - merged-lib
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/lib/samba
+
+          mv "${{targets.destdir}}"/usr/lib/samba/libasn1-private-samba.so* "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libgssapi-private-samba.so* "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libhcrypto-private-samba.so* "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libheimbase-private-samba.so* "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libheimntlm-private-samba.so* "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libhx509-private-samba.so* "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libkrb5-private-samba.so* "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libroken-private-samba.so* "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libwind-private-samba.so* "${{targets.contextdir}}"/usr/lib/samba
+
+          mv "${{targets.destdir}}"/usr/lib/samba/libCHARSET3-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libMESSAGING-SEND-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libMESSAGING-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libaddns-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libads-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libasn1util-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libauthkrb5-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcli-cldap-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcli-ldap-common-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcli-ldap-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcli-nbt-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcli-smb-common-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcli-spoolss-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcliauth-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libclidns-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcluster-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcmdline-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcmocka-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libcommon-auth-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libdbwrap-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libdcerpc-pkt-auth-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libdcerpc-samba-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libevents-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libflag-mapping-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libgensec-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libgse-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libinterfaces-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libkrb5samba-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libldbsamba-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/liblibcli-lsa3-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/liblibcli-netlogon3-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/liblibsmb-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libmessages-dgm-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libmessages-util-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libmsghdr-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libmsrpc3-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libndr-samba-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libndr-samba4-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libnetif-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libnpa-tstream-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsamba-cluster-support-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsamba-modules-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsamba-security-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsamba-security-trusts-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsamba-sockets-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsamba3-util-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsamdb-common-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsecrets3-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libserver-id-db-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libserver-role-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libsmbd-shim-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libtalloc-report-printf-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libtalloc-report-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libtdb-wrap-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libutil-reg-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libutil-setid-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+          mv "${{targets.destdir}}"/usr/lib/samba/libutil-tdb-private-samba.so "${{targets.contextdir}}"/usr/lib/samba
+
+          mv "${{targets.destdir}}"/usr/lib/libdcerpc-binding.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libndr-krb5pac.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libndr-nbt.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libndr-standard.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libndr.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libsamba-credentials.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libsamba-errors.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libsamba-hostconfig.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libsamba-passdb.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libsamdb.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libsmbconf.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libsmbldap.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libtevent-util.so.* "${{targets.contextdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libldb.so.* "${{targets.contextdir}}"/usr/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: samba-team/samba
+    strip-prefix: samba-
+    tag-filter-prefix: samba-
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - libauth-samba
+        - samba-libs
+        - samba-libs-py3
+        - samba-server
+        - samba-server-libs
+  pipeline:
+    - uses: test/tw/ldd-check
+      with:
+        extra-library-paths: /usr/lib/samba/
+    - name: "Check Installed Binaries"
+      runs: |
+        find /usr -name smbd
+        find /usr -name nmbd
+    - name: "Check smbd Installation"
+      runs: |
+        if [ -f /usr/bin/smbd ]; then
+          echo "smbd found in /usr/bin."
+        else
+          echo "smbd could not be found in /usr/bin!" && exit 1
+        fi
+    - name: "Check nmbd Installation"
+      runs: |
+        if [ -f /usr/bin/nmbd ]; then
+          echo "nmbd found in /usr/bin."
+        else
+          echo "nmbd could not be found in /usr/bin!" && exit 1
+        fi
+    - name: "Test smbd Version"
+      uses: test/tw/ver-check
+      with:
+        bins: smbd
+    - name: "Test smbd Service Start"
+      runs: |
+        TMP_CONF=$(mktemp)
+        cat > "$TMP_CONF" <<'EOF'
+        [global]
+        log file = /dev/stdout
+        [public]
+        path = /tmp
+        read only = no
+        EOF
+        smbd -i -s "$TMP_CONF" &
+        SMBD_PID=$!
+        sleep 2
+        if kill -0 $SMBD_PID; then
+          echo "smbd started successfully."
+          kill $SMBD_PID
+        else
+          echo "smbd failed to start!" && exit 1
+        fi
+        rm "$TMP_CONF"

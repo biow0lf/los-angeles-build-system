@@ -1,0 +1,175 @@
+package:
+  name: tevent
+  version: "0.17.2"
+  epoch: 1 # glibc: 2.43->2.44
+  description: The tevent library
+  copyright:
+    - license: LGPL-3.0-or-later
+  resources:
+    cpu: "2"
+    memory: 7Gi
+
+vars:
+  configure-common-opts: |
+    --bundled-libraries=NONE
+  pypi-package: tevent
+  import: tevent
+
+data:
+  - name: py-versions
+    items:
+      3.10: "310"
+      3.11: "311"
+      3.12: "312"
+      3.13: "313"
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmocka-dev
+      - glibc-2.44-dev
+      - libtirpc-dev
+      - py3-supported-build-base-dev
+      - py3-supported-talloc-dev
+      - python3
+      - talloc-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      depth: 1
+      expected-commit: 3ac7d059e6bf26ce823783d360415f2a346e20fd
+      repository: https://gitlab.com/samba-team/samba.git
+      tag: tevent-${{package.version}}
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-python \
+        ${{vars.configure-common-opts}}
+    working-directory: lib/tevent
+
+  - uses: autoconf/make
+    working-directory: lib/tevent
+
+  - uses: autoconf/make-install
+    working-directory: lib/tevent
+
+  - uses: strip
+
+subpackages:
+  - name: tevent-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - tevent
+    description: tevent dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: python${{range.key}} version of ${{vars.pypi-package}}
+    dependencies:
+      provider-priority: ${{range.value}}
+    pipeline:
+      - runs: |
+          PYTHON=python${{range.key}}  PYTHON3=python${{range.key}}  ./configure \
+            --host=${{host.triplet.gnu}} \
+            --build=${{host.triplet.gnu}} \
+            --prefix=/usr \
+            --sysconfdir=/etc \
+            --libdir=/usr/lib \
+            --mandir=/usr/share/man \
+            --infodir=/usr/share/info \
+            --localstatedir=/var \
+            ${{vars.configure-common-opts}}
+        working-directory: lib/tevent
+      - uses: autoconf/make
+        working-directory: lib/tevent
+      - uses: autoconf/make-install
+        working-directory: lib/tevent
+      - runs: |
+          savedir="${{targets.contextdir}}.sav"
+          mkdir -p "$savedir/usr/lib"
+          mv "${{targets.contextdir}}"/usr/lib/python${{range.key}} "$savedir/usr/lib"
+          rm -rf "${{targets.contextdir}}"
+          mv "$savedir" "${{targets.contextdir}}"
+      - uses: strip
+    test:
+      pipeline:
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.import}}
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+        - uses: python/import
+          with:
+            python: python3.10
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.11
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.12
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.13
+            import: ${{vars.import}}
+
+test:
+  environment:
+    contents:
+      packages:
+        - tevent-dev
+        - talloc-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation and linking
+      runs: |
+        tee test.c <<'EOF'
+        #include <tevent.h>
+        int main() {
+            struct tevent_context *ev;
+            ev = tevent_context_init(NULL);
+            if (ev == NULL) {
+                return 1;
+            }
+            talloc_free(ev);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags tevent) test.c -o test $(pkg-config --libs tevent)
+        ./test
+
+update:
+  enabled: true
+  git:
+    strip-prefix: tevent-
+    tag-filter-prefix: tevent-

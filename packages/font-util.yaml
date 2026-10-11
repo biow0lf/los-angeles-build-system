@@ -1,0 +1,76 @@
+package:
+  name: font-util
+  version: "1.4.2"
+  epoch: 1 # glibc: 2.43->2.44
+  description: X.org font utilities
+  copyright:
+    - license: LicenseRef-xorg-font-util
+      license-path: COPYING
+  resources:
+    cpu: "16"
+    memory: 32Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - perl
+      - util-macros-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/font/util
+      tag: font-util-${{package.version}}
+      expected-commit: 5c92c11482e017fa7210a71b6f44e40042816209
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --mandir=/usr/share/man
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+subpackages:
+  - name: font-util-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+
+  - name: font-util-doc
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 15055
+
+test:
+  environment:
+    contents:
+      packages:
+        - git
+  pipeline:
+    - runs: |
+        # TODO: To actually test this, we'd need some bdf fonts, from somewhere like: https://github.com/IT-Studio-Rech/bdf-fonts
+        output=$(bdftruncate 2>&1 || true)
+        echo "$output" | grep "^Usage:"
+        output=$(ucs2any 2>&1 || true)
+        echo "$output" | grep "^Usage:"
+        # Fetch some bdf fonts and operate on them (using the examples in the helper usage)
+        git clone --depth=1 https://github.com/IT-Studio-Rech/bdf-fonts
+        ucs2any bdf-fonts/6x13.bdf /usr/share/fonts/X11/util/map-ISO8859-1 iso8859-1
+        bdftruncate 0x3200 <bdf-fonts/6x13.bdf >bdf-fonts/6x13t.bdf

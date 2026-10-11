@@ -1,0 +1,77 @@
+# Generated from https://git.alpinelinux.org/aports/plain/community/mtdev/APKBUILD
+package:
+  name: mtdev
+  version: 1.1.7
+  epoch: 6 # glibc: 2.43->2.44
+  description: Multitouch Protocol Translation Library Development Package
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - linux-headers
+
+pipeline:
+  - uses: fetch
+    with:
+      expected-sha256: a55bd02a9af4dd266c0042ec608744fff3a017577614c057da09f1f4566ea32c
+      uri: https://bitmath.org/code/mtdev/mtdev-${{package.version}}.tar.gz
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: mtdev-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - mtdev
+        - linux-headers
+    description: mtdev dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 8868
+
+test:
+  environment:
+    contents:
+      packages:
+        - mtdev-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation and linking
+      runs: |
+        tee test.c <<'EOF'
+        #include <mtdev.h>
+        int main() {
+            struct mtdev dev;
+            /* Verify struct size is non-zero, proving header defines the type */
+            if (sizeof(dev) == 0) return 1;
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags mtdev) test.c -o test $(pkg-config --libs mtdev)
+        ./test

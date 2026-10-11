@@ -1,0 +1,254 @@
+#nolint:unused-var-transform
+package:
+  name: mosquitto
+  version: "2.1.2"
+  epoch: 6 # provider-priority over mosquitto-fips
+  description: open source MQTT broker
+  copyright:
+    - license: EPL-1.0
+  dependencies:
+    provider-priority: 10
+    runtime:
+      - merged-usrsbin
+      - wolfi-baselayout
+  resources:
+    cpu: "2"
+    memory: 5Gi
+
+vars:
+  openssl-version: "4.0"
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - c-ares-dev
+      - ca-certificates-bundle
+      - cjson-dev
+      - docbook-xml
+      - glibc-2.44-dev
+      - libmicrohttpd-dev
+      - libwebsockets-dev
+      - libxslt
+      - openssl-${{vars.openssl-version}}-dev
+      - util-linux-dev
+
+var-transforms:
+  - from: ${{package.version}}
+    match: ^(\d+\.\d+)\.\d+$
+    replace: "$1"
+    to: major-minor-version
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 99fa50f30e325609394c324c8ff71cfbbe95d8ab
+      repository: https://github.com/eclipse/mosquitto
+      tag: v${{package.version}}
+
+  - runs: |
+      make \
+        CFLAGS="$CFLAGS -Wall -O2 -I/build/lws/include -I/build" \
+        LDFLAGS="$LDFLAGS -L/build/lws/lib" \
+        WITH_MEMORY_TRACKING=no \
+        WITH_WEBSOCKETS=yes \
+        WITH_CJSON=yes \
+        WITH_SRV=yes \
+        WITH_ADNS=no \
+        WITH_DOCS=no \
+        WITH_SHARED_LIBRARIES=yes \
+        WITH_TLS_PSK=no \
+        prefix=/usr
+
+  - runs: |
+      make prefix=/usr \
+        DESTDIR="${{targets.destdir}}" \
+        WITH_CJSON=yes \
+        install
+
+      mkdir -p "${{targets.destdir}}"/usr/bin
+      mv "${{targets.destdir}}"/usr/sbin/* "${{targets.destdir}}"/usr/bin
+      rmdir "${{targets.destdir}}"/usr/sbin
+
+  - uses: strip
+
+subpackages:
+  - name: mosquitto-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      provider-priority: 10
+      runtime:
+        - cjson-dev
+        - merged-usrsbin
+        - mosquitto-libs
+        - mosquitto-libs++
+        - wolfi-baselayout
+    description: mosquitto dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: mosquitto-doc
+    pipeline:
+      - uses: split/manpages
+    description: mosquitto manpages
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      provider-priority: 10
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: mosquitto-libs++
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib/libmosquittopp.so.* ${{targets.subpkgdir}}/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    description: C++ wrapper for libmosquitto
+    dependencies:
+      provider-priority: 10
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: mosquitto-libs
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib/libmosquitto.so.* ${{targets.subpkgdir}}/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    description: mosquitto libs
+    dependencies:
+      provider-priority: 10
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: mosquitto-clients
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+          mv ${{targets.destdir}}/usr/bin/mosquitto_[ps]ub ${{targets.subpkgdir}}/usr/bin/
+    description: Mosquitto command line MQTT clients
+    dependencies:
+      provider-priority: 10
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+    # test added by a robot (binary)
+    test:
+      pipeline:
+        - runs: |
+            stat /usr/bin/mosquitto_pub
+            stat /usr/bin/mosquitto_sub
+
+  - name: ${{package.name}}-compat
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}
+          mkdir -p ${{targets.contextdir}}/mosquitto/config
+          mkdir -p ${{targets.contextdir}}/mosquitto/data
+          mkdir -p ${{targets.contextdir}}/mosquitto/log
+          install -Dm755 docker/generic/docker-entrypoint.sh ${{targets.contextdir}}/docker-entrypoint.sh
+          install -Dm644 docker/generic/mosquitto-no-auth.conf ${{targets.contextdir}}/mosquitto-no-auth.conf
+    dependencies:
+      provider-priority: 10
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/contains-files
+          with:
+            files: /docker-entrypoint.sh
+        - uses: test/tw/contains-files
+          with:
+            dir: /mosquitto
+            name: config
+            type: d
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - -test
+  github:
+    identifier: eclipse/mosquitto
+    strip-prefix: v
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - libwebsockets
+        - mosquitto-libs++
+        - mosquitto-libs
+        - mosquitto-clients
+        - ${{package.name}}-compat
+        - posix-libc-utils
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        #!/bin/bash
+
+        # Define the topic and message
+        TOPIC="test/topic"
+        MESSAGE="Hello, Mosquitto!"
+
+        # Create the mosquitto group and user if they do not already exist
+        if ! getent group mosquitto > /dev/null; then
+            addgroup -S mosquitto
+        fi
+
+        if ! id -u mosquitto > /dev/null 2>&1; then
+            adduser -S -G mosquitto mosquitto
+        fi
+
+        # Create a minimal Mosquitto configuration
+        cat <<EOF > /etc/mosquitto/mosquitto.conf
+        allow_anonymous true
+        listener 1883
+        EOF
+
+        # Switch to the mosquitto user and start the Mosquitto broker
+        /docker-entrypoint.sh /usr/bin/mosquitto -c /etc/mosquitto/mosquitto.conf > /dev/null 2>&1 &
+
+        # Wait for a moment to ensure Mosquitto has started
+        sleep 2
+
+        # Subscribe to the topic in the background and save the output to a file
+        mosquitto_sub -h localhost -t $TOPIC -C 1 > output.txt 2>&1 &
+
+        # Wait for a moment to ensure the subscriber is ready
+        sleep 1
+
+        # Publish a message to the topic
+        mosquitto_pub -h localhost -t $TOPIC -m "$MESSAGE"
+
+        # Wait a moment to allow the subscriber to receive the message
+        sleep 1
+
+        # Check if the message was received
+        RECEIVED_MESSAGE=$(cat output.txt)
+
+        if [ "$RECEIVED_MESSAGE" == "$MESSAGE" ]; then
+            echo "Test Passed: Message received correctly."
+        else
+            echo "Test Failed: Message not received correctly."
+            exit 1
+        fi
+
+        # Clean up
+        rm output.txt

@@ -1,0 +1,112 @@
+package:
+  name: libssh2
+  version: 1.11.1
+  epoch: 11 # openssl-hardened: 3.6->4.0
+  description: "A library implementing the SSH2 protocol as defined by Internet Drafts"
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+vars:
+  openssl-version: "4.0"
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - openssl-hardened-${{vars.openssl-version}}-dev
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libssh2/libssh2.git
+      tag: libssh2-${{package.version}}
+      expected-commit: a312b43325e3383c865a87bb1d26cb52e3292641
+      cherry-picks: |
+        master/256d04b60d80bf1190e96b0ad1e91b2174d744b1: [CVE-2026-7598]
+        master/17626857d20b3c9a1addfa45979dadcee1cd84a4: [CVE-2026-55199]
+
+  - uses: patch
+    with:
+      patches: fix-CVE-2026-55200.patch CVE-2025-15661.patch
+
+  - runs: autoreconf -vfi
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "libssh2-dev"
+    description: "headers for libssh2"
+    dependencies:
+      runtime:
+        - openssl-${{vars.openssl-version}}-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libssh2-doc
+    description: libssh2 documentation
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - "^RELEASE.*"
+    - "^beforenb.*"
+    - "^start$"
+  github:
+    identifier: libssh2/libssh2
+    strip-prefix: libssh2-
+
+test:
+  environment:
+    contents:
+      packages:
+        - libssh2-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test libssh2 compile and link
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <libssh2.h>
+        #include <stdio.h>
+        int main() {
+            int rc = libssh2_init(0);
+            if (rc != 0) {
+                fprintf(stderr, "libssh2_init failed: %d\n", rc);
+                return 1;
+            }
+            printf("libssh2 initialized successfully\n");
+            libssh2_exit();
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libssh2) test.c -o test $(pkg-config --libs libssh2)
+        ./test

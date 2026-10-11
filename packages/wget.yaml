@@ -1,7 +1,7 @@
 package:
   name: wget
   version: 1.25.0
-  epoch: 19
+  epoch: 20 # rebuild
   description: "GNU wget"
   url: https://gitlab.com/gnuwget/wget
   copyright:

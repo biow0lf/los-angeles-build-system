@@ -1,0 +1,70 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/yaml/APKBUILD
+package:
+  name: yaml
+  version: 0.2.5
+  epoch: 10 # glibc: 2.43->2.44
+  description: YAML 1.1 parser and emitter written in C
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "2"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/yaml/libyaml
+      expected-commit: 2c891fc7a770e8ba2fec34fc6b545c672beb37e6
+      tag: ${{package.version}}
+
+  - runs: |
+      ./bootstrap
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: yaml-static
+    pipeline:
+      - uses: split/static
+    description: yaml static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: yaml-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - yaml
+    description: yaml dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: yaml/libyaml

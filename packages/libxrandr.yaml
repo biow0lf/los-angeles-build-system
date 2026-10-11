@@ -1,0 +1,99 @@
+package:
+  name: libxrandr
+  version: "1.5.5"
+  epoch: 6 # go/wolfi-rsc/libxrandr
+  description: X11 RandR extension library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - libx11-dev
+      - libxext-dev
+      - libxrender-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxrandr
+      tag: libXrandr-${{package.version}}
+      expected-commit: 540c3ceef2be3e513b18002a858c7a9591dd749a
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxrandr-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libx11-dev
+        - libxrandr
+        - libxext-dev
+        - xorgproto
+    description: libxrandr dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libxrandr-doc
+    pipeline:
+      - uses: split/manpages
+    description: libxrandr manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1788
+
+test:
+  environment:
+    contents:
+      packages:
+        - libxrandr-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <X11/extensions/Xrandr.h>
+        #include <stdio.h>
+        int main() {
+            /* Verify XRandR API symbols are available */
+            printf("XRRQueryExtension: %p\n", (void *)XRRQueryExtension);
+            printf("XRRGetScreenInfo: %p\n", (void *)XRRGetScreenInfo);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xrandr) test.c -o test $(pkg-config --libs xrandr)
+        ./test

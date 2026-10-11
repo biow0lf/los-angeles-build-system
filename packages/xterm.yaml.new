@@ -1,0 +1,37 @@
+package:
+  name: xterm
+  version: 411
+  epoch: 0
+  description: "Terminal emulator for the X Window System"
+  url: https://invisible-island.net/xterm/
+  copyright:
+    - license: ""
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - libx11-dev
+      - libice-dev
+      - libsm-dev
+      - libxt-dev
+      - libxaw-dev
+      - libxinerama-dev
+      - freetype-dev
+      - libxft-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://invisible-island.net/archives/xterm/${{package.name}}-${{package.version}}.tgz
+      expected-sha256: 969be283670deadd66934865c4de6c5ab045e3a3facc2b228decf91a20d8c36c
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+

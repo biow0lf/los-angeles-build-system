@@ -1,0 +1,92 @@
+package:
+  name: libxdamage
+  version: "1.1.7"
+  epoch: 4 # glibc: 2.43->2.44
+  description: X11 damaged region extension library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - libx11-dev
+      - libxfixes-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxdamage
+      tag: libXdamage-${{package.version}}
+      expected-commit: 4ff0f0e76c974faf920e476abccc65a4990a637c
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --build=$CBUILD \
+        --host=$CHOST \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --disable-static
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libxfixes-dev
+        - xorg-server-dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: libxdamage-dev
+
+test:
+  environment:
+    contents:
+      packages:
+        - libxdamage-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation with pkg-config
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <X11/extensions/Xdamage.h>
+        int main() {
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xdamage) test.c -o test $(pkg-config --libs xdamage)
+        ./test
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1771

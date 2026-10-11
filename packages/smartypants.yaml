@@ -1,0 +1,89 @@
+package:
+  name: smartypants
+  version: "2.0.2"
+  epoch: 6 # remove redundant set -euo pipefail from test pipeline
+  description: Translate plain ASCII punctuation characters into “smart” typographic punctuation HTML entities
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+vars:
+  python-version: "3.13"
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - py${{vars.python-version}}-docutils
+      - py${{vars.python-version}}-pygments
+      - py${{vars.python-version}}-setuptools
+      - py${{vars.python-version}}-sphinx-bin
+      - py${{vars.python-version}}-sphinxext-opengraph
+      - python-${{vars.python-version}}
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/leohemsted/smartypants.py
+      expected-commit: f1266cfbe42c7f85d96c329d4b8a1dba017f3efa
+      tag: v${{package.version}}
+
+  - name: Python Build
+    uses: python/build
+
+  - name: Python Install
+    uses: python/install
+
+  # generate manpages
+  - runs: make -C docs man
+
+  - uses: strip
+
+subpackages:
+  - name: smartypants-doc
+    pipeline:
+      - uses: split/manpages
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/share/man/man1
+          mv docs/_build/man/smartypants.1 "${{targets.contextdir}}"/usr/share/man/man1/smartypants.1
+    description: smartypants manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: leohemsted/smartypants.py
+    strip-prefix: v
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: smartypants
+        version: ${{package.version}}
+    - uses: test/tw/help-check
+      with:
+        bins: smartypants
+    - name: Test smart typographic conversion
+      runs: |
+        # Test double quotes are converted to smart quotes
+        output=$(echo '"Hello world"' | smartypants)
+        echo "$output" | grep -F '&#8220;'
+        echo "$output" | grep -F '&#8221;'
+
+        # Test double dashes are converted to em dashes
+        output=$(echo 'hello -- world' | smartypants)
+        echo "$output" | grep -F '&#8212;'
+
+        # Test ellipsis conversion
+        output=$(echo 'wait...' | smartypants)
+        echo "$output" | grep -F '&#8230;'

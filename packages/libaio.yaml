@@ -1,0 +1,118 @@
+package:
+  name: libaio
+  version: 0.3.113
+  epoch: 10 # glibc: 2.43->2.44
+  description: "Asynchronous input/output library"
+  copyright:
+    - license: LGPL-2.1-or-later
+  resources:
+    cpu: "2"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44
+      - glibc-2.44-dev
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://pagure.io/libaio.git
+      depth: -1 # pagure.io only serves dumb HTTP, which cannot shallow-clone
+      tag: libaio-${{package.version}}
+      expected-commit: 1b18bfafc6a2f7b9fa2c6be77a95afed8b7be448
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "libaio-dev"
+    description: "headers for libaio"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libaio
+    test:
+      environment:
+        contents:
+          packages:
+            - gcc
+            - glibc-dev
+            - libaio-dev
+      pipeline:
+        - uses: test/tw/devpackage
+        - name: Basic libaio function test
+          runs: |
+            cat << 'EOF' > test_libaio.c
+            #include <libaio.h>
+            #include <stdio.h>
+
+            int main() {
+              io_context_t ctx = 0;
+              if (io_setup(128, &ctx) != 0) {
+                fprintf(stderr, "io_setup failed\n");
+                return 1;
+              }
+
+              if (io_destroy(ctx) != 0) {
+                fprintf(stderr, "io_destroy failed\n");
+                return 1;
+              }
+
+              printf("libaio basic function test passed.\n");
+              return 0;
+            }
+            EOF
+
+            gcc -o test_libaio test_libaio.c -laio
+            ./test_libaio
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1557
+
+test:
+  environment:
+    contents:
+      packages:
+        - gcc
+        - glibc-dev
+        - libaio-dev
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Functional libaio test
+      runs: |
+        cat << 'EOF' > test_libaio.c
+        #include <libaio.h>
+        #include <stdio.h>
+
+        int main() {
+          io_context_t ctx = 0;
+          if (io_setup(128, &ctx) != 0) {
+            fprintf(stderr, "io_setup failed\n");
+            return 1;
+          }
+
+          if (io_destroy(ctx) != 0) {
+            fprintf(stderr, "io_destroy failed\n");
+            return 1;
+          }
+
+          printf("libaio functional test passed.\n");
+          return 0;
+        }
+        EOF
+
+        gcc -o test_libaio test_libaio.c -laio
+        ./test_libaio

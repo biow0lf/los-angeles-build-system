@@ -1,0 +1,124 @@
+package:
+  name: libxinerama
+  version: "1.1.6"
+  epoch: 6 # glibc: 2.43->2.44
+  description: X11 Xinerama extension library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - libx11-dev
+      - libxext-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxinerama
+      tag: libXinerama-${{package.version}}
+      expected-commit: cc4ac9cf36fdf3815381b791e47a90b8aebc7e78
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxinerama-libs
+    pipeline:
+      - uses: split/lib
+    description: libxinerama shared libraries
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: libxinerama-dev
+    pipeline:
+      - uses: split/dev
+    description: libxinerama dev
+    dependencies:
+      runtime:
+        - libx11-dev
+        - libxinerama-libs
+    test:
+      environment:
+        contents:
+          packages:
+            - build-base
+            - pkgconf
+            - libx11-dev
+            - libxext-dev
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+        - name: Test dev compile and link
+          runs: |
+            tee test.c <<'EOF'
+            #include <X11/extensions/Xinerama.h>
+            #include <stdio.h>
+            int main() {
+                /* Verify Xinerama API symbols are available */
+                printf("XineramaQueryExtension: %p\n", (void *)XineramaQueryExtension);
+                printf("XineramaIsActive: %p\n", (void *)XineramaIsActive);
+                return 0;
+            }
+            EOF
+
+            gcc $(pkg-config --cflags xinerama) test.c -o test $(pkg-config --libs xinerama)
+            ./test
+
+  - name: libxinerama-doc
+    pipeline:
+      - uses: split/manpages
+    description: libxinerama manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1779
+
+test:
+  environment:
+    contents:
+      packages:
+        - libxinerama-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <X11/extensions/Xinerama.h>
+        #include <stdio.h>
+        int main() {
+            /* Verify Xinerama API symbols are available */
+            printf("XineramaQueryExtension: %p\n", (void *)XineramaQueryExtension);
+            printf("XineramaIsActive: %p\n", (void *)XineramaIsActive);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xinerama) test.c -o test $(pkg-config --libs xinerama)
+        ./test

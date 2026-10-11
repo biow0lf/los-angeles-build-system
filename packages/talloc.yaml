@@ -1,0 +1,291 @@
+package:
+  name: talloc
+  version: "2.5.0"
+  epoch: 2 # glibc: 2.43->2.44
+  description: Memory pool management library
+  copyright:
+    - license: GPL-3.0-or-later
+
+vars:
+  configure-common-opts: |
+    --bundled-libraries=NONE \
+    --builtin-libraries=replace \
+    --disable-rpath \
+    --disable-rpath-install \
+    --without-gettext \
+  pypi-package: talloc
+  import: talloc
+
+data:
+  - name: py-versions
+    items:
+      3.10: "310"
+      3.11: "311"
+      3.12: "312"
+      3.13: "313"
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - docbook-xml
+      - glibc-2.44-dev
+      - libxslt
+      - py3-supported-build-base-dev
+      - python3
+
+pipeline:
+  - uses: git-checkout
+    with:
+      depth: 1
+      expected-commit: d227642a01bbfef7fa883b61357960357afa0938
+      repository: https://gitlab.com/samba-team/samba.git
+      tag: talloc-${{package.version}}
+
+  - uses: autoconf/configure
+    with:
+      opts: ${{vars.configure-common-opts}} --disable-python
+    working-directory: lib/talloc
+
+  - uses: autoconf/make
+    working-directory: lib/talloc
+
+  - uses: autoconf/make-install
+    working-directory: lib/talloc
+
+  - runs: |
+      # These will be provided by the py3.x-talloc subpackages
+      rm -rf "${{targets.destdir}}"/usr/lib/libpytalloc*.so*
+      rm -rf "${{targets.destdir}}"/usr/lib/python*
+      rm -f  "${{targets.destdir}}"/usr/lib/pkgconfig/pytalloc-util.*.pc
+
+  - uses: strip
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - talloc-dev
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Check talloc library
+      runs: |
+        # Verify the shared library exists
+        if [ ! -f /usr/lib/libtalloc.so.2 ]; then
+          echo "ERROR: libtalloc.so.2 library not found"
+          exit 1
+        fi
+
+        echo "talloc library test passed"
+        cat > /tmp/talloc_test.c << 'EOF'
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <talloc.h>
+
+        int main(void) {
+            /* Create a top-level context */
+            void *root_ctx = talloc_new(NULL);
+            if (!root_ctx) {
+                fprintf(stderr, "Failed to create talloc context\n");
+                return 1;
+            }
+
+            /* Allocate a string as a child of the context */
+            char *str = talloc_strdup(root_ctx, "Hello Talloc World");
+            if (!str) {
+                fprintf(stderr, "Failed to allocate string\n");
+                talloc_free(root_ctx);
+                return 1;
+            }
+
+            /* Get the parent of the string */
+            void *parent = talloc_parent(str);
+            if (parent != root_ctx) {
+                fprintf(stderr, "Parent mismatch\n");
+                talloc_free(root_ctx);
+                return 1;
+            }
+
+            printf("Successfully allocated string: %s\n", str);
+            printf("Parent relationship verified\n");
+
+            /* Free the entire hierarchy */
+            talloc_free(root_ctx);
+
+            printf("Memory successfully freed\n");
+            return 0;
+        }
+        EOF
+
+        # Compile and run the test program
+        gcc -o /tmp/talloc_test /tmp/talloc_test.c -ltalloc
+        if [ $? -ne 0 ]; then
+          echo "ERROR: Failed to compile talloc test program"
+          exit 1
+        fi
+
+        # Run the test
+        /tmp/talloc_test
+        if [ $? -ne 0 ]; then
+          echo "ERROR: Talloc test program failed"
+          exit 1
+        fi
+
+        echo "talloc library test passed"
+
+subpackages:
+  - name: talloc-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - talloc
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: "talloc-doc"
+    description: "talloc documentation"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: python${{range.key}} version of ${{vars.pypi-package}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}
+    pipeline:
+      - runs: |
+          PYTHON=python${{range.key}}  PYTHON3=python${{range.key}}  ./configure \
+            --host=${{host.triplet.gnu}} \
+            --build=${{host.triplet.gnu}} \
+            --prefix=/usr \
+            --sysconfdir=/etc \
+            --libdir=/usr/lib \
+            --mandir=/usr/share/man \
+            --infodir=/usr/share/info \
+            --localstatedir=/var \
+            ${{vars.configure-common-opts}}
+        working-directory: lib/talloc
+      - uses: autoconf/make
+        working-directory: lib/talloc
+      - uses: autoconf/make-install
+        working-directory: lib/talloc
+      - runs: |
+          ## split out -dev files into holding areas
+          devdir_common="pytalloc-common-dev.sav"
+          mkdir -p "$devdir_common"/usr/include
+          mv "${{targets.contextdir}}"/usr/include/pytalloc* \
+            "$devdir_common/usr/include"
+          devdir_versioned="pytalloc-dev-${{range.key}}.sav"
+          mkdir -p "$devdir_versioned/usr/lib/pkgconfig"
+          mv "${{targets.contextdir}}"/usr/lib/pkgconfig/pytalloc-util.*.pc \
+            "$devdir_versioned/usr/lib/pkgconfig"
+
+          ## Move python bits into a tmpdir, delete everything else, then
+          ## replace the contextdir with our tmpdir.
+          tmpdir="${{targets.contextdir}}.sav"
+          mkdir -p "$tmpdir/usr/lib"
+          mv "${{targets.contextdir}}"/usr/lib/libpytalloc*.so* \
+            "$tmpdir/usr/lib"
+          mv "${{targets.contextdir}}"/usr/lib/python${{range.key}} \
+            "$tmpdir/usr/lib"
+          rm -rf "${{targets.contextdir}}"
+          mv "$tmpdir" "${{targets.contextdir}}"
+      - uses: strip
+    test:
+      pipeline:
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.import}}
+
+  - name: pytalloc-dev-common
+    dependencies:
+      runtime:
+        - talloc-dev
+    pipeline:
+      - runs: |
+          rm -rf "${{targets.contextdir}}"
+          devdir_common="pytalloc-common-dev.sav"
+          mv "$devdir_common" "${{targets.contextdir}}"
+    test:
+      pipeline:
+        - uses: test/pkgconf
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}-dev
+    description: python${{range.key}} version of ${{vars.pypi-package}} dev files
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}-dev
+      runtime:
+        - py${{range.key}}-${{vars.pypi-package}}
+        - pytalloc-dev-common
+    pipeline:
+      - runs: |
+          rm -rf "${{targets.contextdir}}"
+          devdir_versioned="pytalloc-dev-${{range.key}}.sav"
+          mv "$devdir_versioned" "${{targets.contextdir}}"
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/pkgconf
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+        - uses: python/import
+          with:
+            python: python3.10
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.11
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.12
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.13
+            import: ${{vars.import}}
+
+  - name: py3-supported-${{vars.pypi-package}}-dev
+    description: meta package providing ${{vars.pypi-package}} dev files for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}-dev
+        - py3.11-${{vars.pypi-package}}-dev
+        - py3.12-${{vars.pypi-package}}-dev
+        - py3.13-${{vars.pypi-package}}-dev
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+
+update:
+  enabled: true
+  git:
+    strip-prefix: talloc-
+    tag-filter-prefix: talloc-

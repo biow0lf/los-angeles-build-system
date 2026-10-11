@@ -1,0 +1,32 @@
+package:
+  name: seatd
+  version: 0.9.3
+  epoch: 0
+  description: "A minimal seat management daemon, and a universal seat management library"
+  url: https://sr.ht/~kennylevinsen/seatd/
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      # - scdoc TODO: fix man pages build
+      - systemd-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/kennylevinsen/seatd
+      tag: ${{package.version}}
+      expected-commit: daa8196e10b180b8b0caeafa8e5f860eb1bd6706
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+

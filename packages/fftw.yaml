@@ -1,0 +1,243 @@
+#nolint:update-disabled-reason
+# Generated from https://git.alpinelinux.org/aports/plain/main/fftw/APKBUILD
+package:
+  name: fftw
+  version: 3.3.11
+  epoch: 3 # glibc: 2.43->2.44
+  description: Discrete Fourier transform (DFT) library
+  copyright:
+    - license: GPL-2.0-or-later
+  resources:
+    cpu: "2"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - fig2dev
+      - gfortran
+      - glibc-2.44-dev
+      - libtool
+      - ocaml
+      - ocaml-num
+      - ocamlbuild
+      - ocamlfind
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/FFTW/fftw3
+      tag: fftw-${{package.version}}
+      expected-commit: d69d34f078baee4fa38a035634017404cce3e09a
+
+  - runs: |
+      # We build 3 times, so make 3 copies of the build.
+
+      _precision="single double long-double"
+      basedir=$(pwd)
+      for i in $_precision; do
+        git clone . $basedir/$i
+      done
+
+      _openmp=
+      for i in $_precision; do
+        case "$i" in
+          single) _cf="--enable-single";;
+          double) _cf="";;
+          long-double) _cf="--enable-long-double";;
+        esac
+
+        case "$i--$CARCH" in
+          single--x86_64 | double--x86_64)
+            _cf="$_cf --enable-sse2 --enable-avx";;
+          single--arm* | single--aarch64)
+            _cf="$_cf --enable-neon";;
+        esac
+
+        echo "Building for $i precision ($_cf)"
+        cd "$basedir"/$i
+        ls
+        ./bootstrap.sh \
+          --build=$CBUILD \
+          --host=$CHOST \
+          --prefix=/usr \
+          --sysconfdir=/etc \
+          --mandir=/usr/share/man \
+          --infodir=/usr/share/info \
+          --enable-shared \
+          --enable-threads \
+          $_openmp \
+          $_cf
+        make
+      done
+
+      for i in $_precision; do
+        cd "$basedir"/$i
+        make DESTDIR="${{targets.destdir}}" install
+      done
+
+  - name: remove libtool .la files
+    runs: find "${{targets.destdir}}" -name '*.la' -delete
+
+  - uses: strip
+
+subpackages:
+  - name: fftw-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - fftw
+    description: fftw dev
+    test:
+      environment:
+        contents:
+          packages:
+            - gcc
+            - glibc-dev
+            - pkgconf
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+        - uses: test/tw/header-check
+          with:
+            files: "fftw3.h"
+
+  - name: fftw-doc
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    description: fftw manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: fftw-single-libs
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libfftw3f*.so* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: fftw-long-double-libs
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libfftw3l*.so* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: fftw-double-libs
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libfftw3*.so* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+update:
+  github:
+    identifier: FFTW/fftw3
+    use-tag: true
+    tag-filter-prefix: fftw-
+    strip-prefix: fftw-
+
+test:
+  environment:
+    contents:
+      packages:
+        - gcc
+        - glibc-dev
+        - fftw-dev
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          fftw-wisdom
+          fftw-wisdom-to-conf
+          fftwf-wisdom
+          fftwl-wisdom
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          fftw-wisdom
+          fftw-wisdom-to-conf
+          fftwf-wisdom
+          fftwl-wisdom
+    - uses: test/tw/ldd-check
+    - name: Functional DFT test
+      runs: |
+        # Create a small C program that computes a DFT and verifies the result
+        tee /tmp/test_fftw.c <<'EOF'
+        #include <fftw3.h>
+        #include <math.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main() {
+            int N = 8;
+            fftw_complex *in, *out;
+            fftw_plan p;
+            double energy_time = 0.0, energy_freq = 0.0;
+
+            in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+            out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+
+            if (!in || !out) {
+                fprintf(stderr, "FAIL: fftw_malloc returned NULL\n");
+                return 1;
+            }
+
+            /* Set up a simple input signal */
+            for (int i = 0; i < N; i++) {
+                in[i][0] = (double)i;  /* real part */
+                in[i][1] = 0.0;       /* imaginary part */
+                energy_time += in[i][0] * in[i][0] + in[i][1] * in[i][1];
+            }
+
+            /* Create plan and execute DFT */
+            p = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+            if (!p) {
+                fprintf(stderr, "FAIL: fftw_plan_dft_1d returned NULL\n");
+                return 1;
+            }
+
+            fftw_execute(p);
+
+            /* Verify Parseval's theorem: sum|x|^2 = (1/N)*sum|X|^2 */
+            for (int i = 0; i < N; i++) {
+                energy_freq += out[i][0] * out[i][0] + out[i][1] * out[i][1];
+            }
+            energy_freq /= (double)N;
+
+            if (fabs(energy_time - energy_freq) > 1e-10) {
+                fprintf(stderr, "FAIL: Parseval's theorem violated: time=%.6f freq=%.6f\n",
+                        energy_time, energy_freq);
+                return 1;
+            }
+
+            printf("SUCCESS: DFT computed correctly (energy_time=%.6f, energy_freq=%.6f)\n",
+                   energy_time, energy_freq);
+
+            fftw_destroy_plan(p);
+            fftw_free(in);
+            fftw_free(out);
+
+            return 0;
+        }
+        EOF
+
+        # Compile and run the test
+        gcc /tmp/test_fftw.c -lfftw3 -lm -o /tmp/test_fftw
+        /tmp/test_fftw

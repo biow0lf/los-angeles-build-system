@@ -1,0 +1,30 @@
+package:
+  name: libsfdo
+  version: 0.1.4
+  epoch: 0
+  description: "A collection of libraries which implement some of the freedesktop.org specifications"
+  url: https://gitlab.freedesktop.org/vyivel/libsfdo
+  copyright:
+    - license: "BSD-2-Clause"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/vyivel/libsfdo.git
+      tag: v${{package.version}}
+      expected-commit: 82115b19317f065ea3c4f52e62549bec81521203
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+

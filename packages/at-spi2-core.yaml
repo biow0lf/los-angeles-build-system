@@ -1,0 +1,131 @@
+#nolint:unused-var-transform
+package:
+  name: at-spi2-core
+  version: "2.62.1"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Protocol definitions and daemon for D-Bus at-spi
+  copyright:
+    - license: LGPL-2.0-or-later
+  resources:
+    cpu: "1"
+    memory: 2Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - dbus-dev
+      - glib-dev
+      - glib-gir
+      - glibc-2.44-dev
+      - gobject-introspection-dev
+      - libxml2-dev
+      - libxtst-dev
+      - meson
+      - posix-libc-utils
+      - python3
+
+# creates a new var that contains only the major and minor version to be used in the fetch URL
+# e.g. 2.46.0 will create a new var mangled-package-version=2.46
+# e.g. 2.62.0.1 will create a new var mangled-package-version=2.62
+var-transforms:
+  - from: ${{package.version}}
+    match: (\d+\.\d+)\.[\d.]+
+    replace: $1
+    to: mangled-package-version
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.gnome.org/GNOME/at-spi2-core
+      expected-commit: 3a214cddffbf345b8c0d0b17e458abbc5ed851b1
+      tag: ${{package.version}}
+
+  - uses: meson/configure
+    with:
+      opts: |
+        -Db_lto=true \
+        -Dx11=enabled \
+        -Dintrospection=enabled \
+        -Ddocs=false \
+        -Ddbus_daemon=/usr/bin/dbus-daemon
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - runs: rm -rf ${{targets.destdir}}/usr/lib/systemd
+
+  - uses: strip
+
+subpackages:
+  - name: at-spi2-core-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - at-spi2-core
+        - libxext-dev
+    description: at-spi2-core dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: at-spi2-core-lang
+    pipeline:
+      - uses: split/locales
+    description: at-spi2-core locales
+    test:
+      pipeline:
+        - uses: test/tw/langpackage
+
+  - name: libatk-1.0
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/girepository-1.0
+          mv ${{targets.destdir}}/usr/lib/libatk-1.0* ${{targets.subpkgdir}}/usr/lib/
+          mv ${{targets.destdir}}/usr/lib/girepository-1.0/Atk-1.0.typelib ${{targets.subpkgdir}}/usr/lib/girepository-1.0/
+    description: ATK library accessibility interfaces (1.0)
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: libatk-bridge-2.0
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib/gnome-settings-daemon-3.0 ${{targets.subpkgdir}}/usr/lib/
+          mv ${{targets.destdir}}/usr/lib/gtk-2.0 ${{targets.subpkgdir}}/usr/lib/
+          mv ${{targets.destdir}}/usr/lib/libatk-bridge-2.0* ${{targets.subpkgdir}}/usr/lib/
+    description: GTK+2.0 module that bridges ATK to D-Bus at-spi
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  git: {}
+  ignore-regex-patterns:
+    - chart-.* # Not the relevant tags
+    - AT_SPI2_CORE_.* # Ignore legacy underscore format tags
+
+test:
+  pipeline:
+    - name: Binary and library tests
+      runs: |
+        test -f /usr/libexec/at-spi-bus-launcher
+        test -x /usr/libexec/at-spi-bus-launcher
+        test -f /usr/libexec/at-spi2-registryd
+        test -x /usr/libexec/at-spi2-registryd
+
+        test -f /usr/lib/libatspi.so.0.0.1
+        test -f /usr/lib/libatspi.so.0
+
+        test -d /usr/share/defaults/at-spi2
+    - uses: test/tw/ldd-check

@@ -1,0 +1,80 @@
+#nolint:valid-pipeline-git-checkout-commit,valid-pipeline-git-checkout-tag,git-checkout-must-use-github-updates
+# wbraswell/parse-yapp does not publish versioned git tags; the package tracks an
+# untagged commit on the master branch. Without a tag, valid-pipeline-git-checkout-tag
+# fires (branch: is used instead of tag:), and valid-pipeline-git-checkout-commit
+# fires because the expected-commit cannot be cross-validated against any tag.
+package:
+  name: perl-parse-yapp
+  version: "1.21"
+  epoch: 5 # fix grammar file quoting in test
+  description: Perl module for Parse-Yapp
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/wbraswell/parse-yapp
+      branch: master
+      expected-commit: 1c2dadf98f97b491ddb1418ba39bc6723dd88b1a
+
+  - runs: PERL_MM_USE_DEFAULT=1 perl -I. Makefile.PL INSTALLDIRS=vendor
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: find "${{targets.destdir}}" \( -name perllocal.pod -o -name .packlist \) -delete
+
+  - uses: strip
+
+subpackages:
+  - name: perl-parse-yapp-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-parse-yapp manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 3197
+
+test:
+  pipeline:
+    - name: Verify yapp version output
+      runs: yapp -V
+    - name: Parse a grammar file and generate a parser module
+      runs: |
+        # Write a minimal LALR(1) grammar to a file.
+        # Each line written separately to avoid quoting issues.
+        echo '%token NUM' > /tmp/calc.yp
+        echo '%%' >> /tmp/calc.yp
+        echo 'expr:' >> /tmp/calc.yp
+        echo '  NUM' >> /tmp/calc.yp
+        echo ';' >> /tmp/calc.yp
+        echo '%%' >> /tmp/calc.yp
+        # Generate the parser module from the grammar
+        yapp -m Calc -o /tmp/Calc.pm /tmp/calc.yp
+        # Verify the generated file exists and contains expected parser structure
+        grep -F "package Calc" /tmp/Calc.pm
+        grep -F "Parse::Yapp::Driver" /tmp/Calc.pm
+    - name: Load Parse::Yapp module
+      runs: perl -e 'use Parse::Yapp; print "Parse::Yapp loaded ok\n"'
+    - name: Load Parse::Yapp::Driver module
+      runs: perl -e 'use Parse::Yapp::Driver; print "Parse::Yapp::Driver loaded ok\n"'

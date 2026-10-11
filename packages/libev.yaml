@@ -1,0 +1,97 @@
+package:
+  name: libev
+  version: 4.33
+  epoch: 13 # glibc: 2.43->2.44
+  description: "event dispatch library"
+  copyright:
+    - license: BSD-2-Clause OR GPL-2.0-or-later
+  resources:
+    cpu: "2"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - wolfi-base
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: http://dist.schmorp.de/libev/Attic/libev-${{package.version}}.tar.gz
+      expected-sha256: 507eb7b8d1015fbec5b935f34ebed15bf346bed04a11ab82b8eee848c4205aea
+
+  - uses: patch
+    with:
+      patches: libev-4.11-Add-pkgconfig-support.patch
+
+  - runs: |
+      autoreconf -vfi
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: rm ${{targets.destdir}}/usr/include/event.h # avoid clash with libevent
+
+  - uses: strip
+
+subpackages:
+  - name: "libev-dev"
+    description: "headers for libev"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: "libev-doc"
+    description: "libev documentation"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1605
+
+test:
+  environment:
+    contents:
+      packages:
+        - libev-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Test libev compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <ev.h>
+        int main() {
+            struct ev_loop *loop = ev_default_loop(0);
+            if (!loop) return 1;
+            ev_loop_destroy(loop);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libev) test.c -o test $(pkg-config --libs libev)
+        ./test

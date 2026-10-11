@@ -1,0 +1,109 @@
+package:
+  name: libxcursor
+  version: 1.2.3
+  epoch: 6 # go/wolfi-rsc/libxcursor
+  description: X cursor management library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - libx11-dev
+      - libxfixes-dev
+      - libxrender-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxcursor
+      tag: libXcursor-${{package.version}}
+      expected-commit: 8ae6cf61b18ecddf26f72a07bbfbd1ea9f022c36
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxcursor-dev
+    pipeline:
+      - uses: split/dev
+    description: libxcursor dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libxcursor-doc
+    pipeline:
+      - uses: split/manpages
+    description: libxcursor manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1770
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - libx11-dev
+        - libxcursor-dev
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Compile and run a program using libxcursor API
+      runs: |
+        cat > /tmp/test_xcursor.c << 'EOF'
+        #include <X11/Xcursor/Xcursor.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main(void) {
+          /* Test XcursorImageCreate and XcursorImageDestroy */
+          XcursorImage *img = XcursorImageCreate(32, 32);
+          if (!img) {
+            fprintf(stderr, "XcursorImageCreate failed\n");
+            return 1;
+          }
+          printf("XcursorImageCreate: width=%u height=%u\n", img->width, img->height);
+          XcursorImageDestroy(img);
+
+          /* Test XcursorImagesCreate and XcursorImagesDestroy */
+          XcursorImages *imgs = XcursorImagesCreate(1);
+          if (!imgs) {
+            fprintf(stderr, "XcursorImagesCreate failed\n");
+            return 1;
+          }
+          printf("XcursorImagesCreate: nimage=%d\n", imgs->nimage);
+          XcursorImagesDestroy(imgs);
+
+          printf("libxcursor API test passed\n");
+          return 0;
+        }
+        EOF
+        gcc $(pkg-config --cflags xcursor) /tmp/test_xcursor.c -o /tmp/test_xcursor $(pkg-config --libs xcursor)
+        /tmp/test_xcursor

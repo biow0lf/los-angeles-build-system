@@ -1,0 +1,108 @@
+package:
+  name: libusb
+  version: "1.0.30"
+  epoch: 3 # glibc: 2.43->2.44
+  description: Library that enables userspace access to USB devices
+  copyright:
+    - license: LGPL-2.1
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libatomic
+      - libtool
+      - linux-headers
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libusb/libusb
+      tag: v${{package.version}}
+      expected-commit: 87a55632db62c9bdc58cd31d3ccfa673f1bb017f
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-udev \
+        --enable-static
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libusb-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libusb
+    description: libusb dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: libusb/libusb
+    strip-prefix: v
+    tag-filter-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - gcc
+        - glibc-dev
+        - libusb-dev
+        - pkgconf
+  pipeline:
+    - name: Verify libusb version via C API
+      runs: |
+        cat > /tmp/test_libusb.c << 'EOF'
+        #include <libusb-1.0/libusb.h>
+        #include <stdio.h>
+        int main(void) {
+            const struct libusb_version *v = libusb_get_version();
+            printf("libusb %d.%d.%d\n", v->major, v->minor, v->micro);
+            return 0;
+        }
+        EOF
+        gcc -o /tmp/test_libusb /tmp/test_libusb.c $(pkg-config --cflags --libs libusb-1.0)
+        /tmp/test_libusb
+    - uses: test/tw/ldd-check
+    - uses: test/tw/header-check
+      with:
+        packages: libusb-dev
+    - name: Test libusb compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <libusb-1.0/libusb.h>
+        #include <stdio.h>
+        int main() {
+            const struct libusb_version *v = libusb_get_version();
+            if (v == NULL) {
+                return 1;
+            }
+            printf("libusb version: %d.%d.%d\n", v->major, v->minor, v->micro);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libusb-1.0) test.c -o test $(pkg-config --libs libusb-1.0)
+        ./test

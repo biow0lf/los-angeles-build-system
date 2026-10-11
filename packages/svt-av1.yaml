@@ -1,0 +1,88 @@
+package:
+  name: svt-av1
+  version: "4.2.0"
+  epoch: 2 # llvm: 22->23
+  description: "Scalable Video Technology for AV1 (SVT-AV1 Encoder)"
+  copyright:
+    - license: BSD-2-Clause
+  resources:
+    cpu: "2"
+    memory: 8Gi
+
+vars:
+  soversion: "4"
+  llvm-version: 23
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - clang-${{vars.llvm-version}}
+      - cmake
+      - glibc-2.44-dev
+      - nasm
+      - samurai
+      - yasm
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.com/AOMediaCodec/SVT-AV1.git
+      expected-commit: 9292ec8e32bce26f781f277ec8739b53426c4300
+      tag: v${{package.version}}
+
+  - uses: cmake/configure
+    with:
+      opts: |
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: libsvtav1enc${{vars.soversion}}
+    pipeline:
+      - uses: split/lib
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: "${{package.name}}-dev"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libsvtav1enc${{vars.soversion}}=${{package.full-version}}
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: svt-av1-dev
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 24271
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Functional encode test
+      runs: |
+        # Create a minimal Y4M (YUV4MPEG2) file: 16x16 frame, 1 fps, 1 frame
+        # Frame size: 16*16 (Y) + 8*8 (Cb) + 8*8 (Cr) = 256+64+64 = 384 bytes
+        printf 'YUV4MPEG2 W16 H16 F1:1 Ip A0:0 C420\n' > /tmp/test.y4m
+        printf 'FRAME\n' >> /tmp/test.y4m
+        dd if=/dev/zero bs=384 count=1 >> /tmp/test.y4m 2>/dev/null
+        # Encode the Y4M input to an IVF output file
+        SvtAv1EncApp -i /tmp/test.y4m -b /tmp/test.ivf --preset 12 -n 1
+        # Verify the output file was created and has the IVF magic bytes "DKIF"
+        test -s /tmp/test.ivf
+        head -c 4 /tmp/test.ivf | grep -F "DKIF"

@@ -1,0 +1,92 @@
+package:
+  name: itstool
+  version: 2.0.7
+  epoch: 9 # go/wolfi-rsc/itstool
+  description: ITS-based XML translation tool
+  copyright:
+    - license: GPL-3.0-or-later
+  dependencies:
+    runtime:
+      - libxml2-py3
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - libxml2-py3
+      - python3
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/itstool/itstool
+      tag: ${{package.version}}
+      expected-commit: f1c6544dcd83a73a5ccea9e0c48cf9a47e006190
+
+  - runs: autoreconf -vif
+
+  - runs: |
+      PYTHON="/usr/bin/python3" ./configure \
+        --host=${{host.triplet.gnu}} \
+        --build=${{host.triplet.gnu}} \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --mandir=/usr/share/man \
+        --infodir=/usr/share/info \
+        --localstatedir=/var
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: itstool-doc
+    pipeline:
+      - uses: split/manpages
+    description: itstool manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: itstool/itstool
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - diffutils
+        - docbook-xml
+        - gettext
+        - python3
+  pipeline:
+    - runs: |
+        itstool --help
+        itstool --version | grep -F "${{package.version}}"
+    - uses: git-checkout
+      with:
+        repository: https://github.com/itstool/itstool
+        tag: ${{package.version}}
+        expected-commit: f1c6544dcd83a73a5ccea9e0c48cf9a47e006190
+    - runs: |
+        # The tests expect to run `itstool_test` in the root of the repo
+        ln -s /usr/bin/itstool itstool_test
+
+        cd tests
+        python3 -m unittest run_tests.py
+    - uses: test/no-docs

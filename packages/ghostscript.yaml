@@ -1,0 +1,182 @@
+package:
+  name: ghostscript
+  version: "10.08.0"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Interpreter for the PostScript language and for PDF
+  copyright:
+    - license: AGPL-3.0-or-later
+  resources:
+    cpu: "2"
+    memory: 9Gi
+  test-resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cups-dev
+      - expat-dev
+      - freetype-dev
+      - glibc-2.44-dev
+      - gtk-3-dev
+      - jbig2dec-dev
+      - lcms2-dev
+      - libjpeg-turbo
+      - libpng-dev
+      - libtool
+      - libx11-dev
+      - libxext-dev
+      - libxt-dev
+      - openjpeg-dev
+      - tiff-dev
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/ArtifexSoftware/ghostpdl
+      tag: ghostpdl-${{package.version}}
+      expected-commit: 05631c2cba4e578fdd6bd25cae6f0939436de848
+
+  - uses: patch
+    with:
+      patches: fix-sprintf.patch
+
+  - uses: patch
+    with:
+      patches: ghostscript-system-zlib.patch
+
+  - runs: |
+      rm -r jpeg libpng zlib tiff lcms2mt cups/libs jbig2dec \
+      freetype
+
+      # fix parallel builds
+      sed -i -e 's/ECHO_XE/ECHOGS_XE/g' \
+      	-e 's/^\($(GLOBJ)md5.$(OBJ) :.*\)/\1 $(ECHOGS_XE)/' \
+      	base/lib.mak
+
+      # ijs ships a pre-generated configure (committed to git) that predates
+      # autoconf 2.72; remove it so autoconf/configure triggers autoreconf -vfi,
+      # which regenerates it using the current toolchain.
+      rm ijs/configure
+
+  - uses: autoconf/configure
+    with:
+      dir: ijs
+      opts: |
+        CFLAGS="$CFLAGS -flto=auto" \
+        --enable-shared \
+        --disable-static
+
+  - uses: autoconf/make
+    with:
+      dir: ijs
+
+  - uses: autoconf/make-install
+    with:
+      dir: ijs
+
+  - uses: autoconf/configure
+    with:
+      dir: .
+      opts: |
+        CFLAGS="$CFLAGS -fPIC -Wno-error=incompatible-pointer-types" \
+        CXXFLAGS="$CXXFLAGS -fPIC" \
+        --docdir=/usr/share/doc/ghostscript \
+        --with-system-libtiff \
+        --with-ijs \
+        --with-jbig2dec \
+        --without-libpaper \
+        --without-versioned-path \
+        --enable-gtk \
+        --with-drivers=ALL \
+        --with-fontpath=/usr/share/fonts/Type1:/usr/share/fonts \
+        --disable-compile-inits
+
+  - runs: |
+      make so all
+      make -j1 DESTDIR="${{targets.destdir}}" install soinstall
+      # create empty dir for future fonts
+      mkdir -p "${{targets.destdir}}"/usr/share/fonts/Type1
+
+  - uses: strip
+
+subpackages:
+  - name: ghostscript-doc
+    pipeline:
+      - uses: split/manpages
+    description: ghostscript manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: "ghostscript-dbg"
+    description: "ghostscript Debug Symbols"
+    pipeline:
+      - uses: split/debug
+    dependencies:
+      runtime:
+        - ghostscript
+    test:
+      pipeline:
+        - uses: test/tw/debugpackage
+
+  - name: ghostscript-dev
+    pipeline:
+      - uses: split/dev
+    description: ghostscript dev
+    dependencies:
+      runtime:
+        - ghostscript
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: ArtifexSoftware/ghostpdl
+    strip-prefix: ghostpdl-
+    tag-filter-prefix: ghostpdl-
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          gs
+          gsc
+          gsdj
+          gsdj500
+          gslj
+          gslp
+          gsnd
+          gsx
+          ps2ascii
+          ps2epsi
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          dvipdf
+          gs
+          gsc
+          gsdj
+          gsdj500
+          gslj
+          gslp
+          gsnd
+          gsx
+          pf2afm
+          printafm
+          ps2ascii
+          ps2epsi
+          unix-lpr.sh

@@ -1,0 +1,55 @@
+package:
+  name: xbitmaps
+  version: "1.1.4"
+  epoch: 1
+  description: X.org header files with bitmaps
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - util-macros-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/data/bitmaps
+      tag: xbitmaps-${{package.version}}
+      expected-commit: 433634f36f791c2779af974ab444c4b521b4a4d8
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/tw/emptypackage
+
+subpackages:
+  - name: xbitmaps-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - xbitmaps
+    description: xbitmaps dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 13645

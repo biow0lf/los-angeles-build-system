@@ -1,0 +1,104 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/ell/APKBUILD
+package:
+  name: ell
+  version: "0.83"
+  epoch: 2 # go/wolfi-rsc/ell
+  description: Linux library for embedded development
+  copyright:
+    - license: LGPL-2.1-or-later
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glib-dev
+      - glibc-2.44-dev
+      - libtool
+      - linux-headers
+      - pkgconf-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.kernel.org/pub/scm/libs/ell/ell.git
+      tag: ${{package.version}}
+      expected-commit: 002b32d7c091993c5036956bf92d2444aca1c799
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --enable-glib
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: ell-dbg
+    pipeline:
+      - uses: split/debug
+    # test added by a robot (debug)
+    test:
+      pipeline:
+        - uses: test/tw/debugpackage
+
+  - name: ell-dev
+    pipeline:
+      - uses: split/dev
+    description: ell dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  git:
+    tag-filter-prefix: ""
+
+test:
+  environment:
+    contents:
+      packages:
+        - ell-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation and linkage
+      runs: |
+        set -euo pipefail
+
+        # Create a test program that uses ell library
+        tee test_ell.c <<'EOF'
+        #include <ell/ell.h>
+        #include <stdio.h>
+
+        int main(int argc, char *argv[]) {
+            /* Test basic ell initialization */
+            if (!l_main_init()) {
+                fprintf(stderr, "FAIL: l_main_init() failed\n");
+                return 1;
+            }
+
+            /* Clean up */
+            l_main_exit();
+
+            printf("SUCCESS: ell library compilation and linkage works\n");
+            return 0;
+        }
+        EOF
+
+        # Compile using pkg-config flags
+        gcc $(pkg-config --cflags ell) test_ell.c $(pkg-config --libs ell) -o test_ell
+
+        # Run the test program
+        ./test_ell | grep -F "SUCCESS"

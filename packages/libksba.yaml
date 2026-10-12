@@ -1,0 +1,103 @@
+package:
+  name: libksba
+  version: "1.8.1"
+  epoch: 2 # glibc: 2.43->2.44
+  description: Libksba is a CMS and X.509 access library
+  copyright:
+    - license: GPL-2.0-or-later OR GPL-3.0-or-later
+  resources:
+    cpu: "2"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libgpg-error-dev
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: git://git.gnupg.org/libksba.git
+      tag: libksba-${{package.version}}
+      expected-commit: 717381422750fb5a3e971d768ba46cae9a01682d
+
+  - runs: |
+      ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --host=${{host.triplet.gnu}} \
+        --build=${{host.triplet.gnu}} \
+        --enable-maintainer-mode
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libksba-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libgpg-error-dev
+        - libksba
+    description: libksba dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libksba-doc
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    description: libksba manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1649
+
+test:
+  environment:
+    contents:
+      packages:
+        - libksba-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation and usage
+      runs: |
+        tee test.c <<'EOF'
+        #include <ksba.h>
+        #include <stdio.h>
+        int main() {
+            const char *version = ksba_check_version(NULL);
+            if (!version) {
+                fprintf(stderr, "FAIL: ksba_check_version returned NULL\n");
+                return 1;
+            }
+            printf("libksba version: %s\n", version);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags ksba) test.c -o test $(pkg-config --libs ksba)
+        ./test

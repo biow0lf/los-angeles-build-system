@@ -1,0 +1,106 @@
+package:
+  name: cppunit
+  version: 1.15.1
+  epoch: 9 # glibc: 2.43->2.44
+  description: C++ unit testing framework
+  copyright:
+    - license: LGPL-2.1-or-later
+  resources:
+    cpu: "1"
+    memory: 3Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      expected-sha256: 89c5c6665337f56fd2db36bc3805a5619709d51fb136e51937072f63fcc717a7
+      uri: https://dev-www.libreoffice.org/src/cppunit-${{package.version}}.tar.gz
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: cppunit-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - cppunit
+    description: cppunit dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: cppunit-doc
+    description: cppunit documentation
+    pipeline:
+      - uses: split/alldocs
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 9543
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - cppunit-dev
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Compile and run a CppUnit test
+      runs: |
+        cat > test_cppunit.cpp << 'EOF'
+        #include <cppunit/TestCase.h>
+        #include <cppunit/TestRunner.h>
+        #include <cppunit/TestResult.h>
+        #include <cppunit/TestResultCollector.h>
+        #include <cppunit/extensions/HelperMacros.h>
+        #include <cppunit/ui/text/TestRunner.h>
+
+        class SimpleTest : public CppUnit::TestCase {
+          CPPUNIT_TEST_SUITE(SimpleTest);
+          CPPUNIT_TEST(testAddition);
+          CPPUNIT_TEST(testEquality);
+          CPPUNIT_TEST_SUITE_END();
+        public:
+          void testAddition() {
+            CPPUNIT_ASSERT_EQUAL(4, 2 + 2);
+          }
+          void testEquality() {
+            CPPUNIT_ASSERT(1 == 1);
+          }
+        };
+
+        CPPUNIT_TEST_SUITE_REGISTRATION(SimpleTest);
+
+        int main() {
+          CppUnit::TextUi::TestRunner runner;
+          CppUnit::TestFactoryRegistry &registry = CppUnit::TestFactoryRegistry::getRegistry();
+          runner.addTest(registry.makeTest());
+          return runner.run() ? 0 : 1;
+        }
+        EOF
+        g++ $(pkg-config --cflags cppunit) test_cppunit.cpp -o test_cppunit $(pkg-config --libs cppunit)
+        ./test_cppunit

@@ -1,0 +1,227 @@
+package:
+  name: graphviz
+  version: "15.1.1"
+  epoch: 1 # glibc: 2.43->2.44
+  description: Graph Visualization Tools
+  copyright:
+    - license: EPL-1.0
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  python-version: '3.14'
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cairo-dev
+      - expat-dev
+      - flex
+      - fontconfig-dev
+      - freetype-dev
+      - gd-dev
+      - glibc-2.44-dev
+      - gmp-dev
+      - libjpeg-turbo-dev
+      - libltdl
+      - libpng-dev
+      - libsm-dev
+      - libtool
+      - libxaw-dev
+      - libxext-dev
+      - lua5.4-dev
+      - m4
+      - pango-dev
+      - pkgconf-dev
+      - python-${{vars.python-version}}-dev
+      - swig
+      - tcl
+      - zlib-dev
+  environment:
+    LUA: lua5.4
+    lua_suffix: "5.4"
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.com/graphviz/graphviz
+      tag: ${{package.version}}
+      expected-commit: 5386ee001a7ac279ec3f64ae6750d995fa8963b9
+      # depth: -1 (full clone) is required so that autogen.sh can use
+      # git describe to generate version.m4 without a spurious pre-release suffix
+      depth: -1
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-python \
+        --disable-silent-rules \
+        --disable-static \
+        --disable-dependency-tracking \
+        --disable-ltdl-install \
+        --enable-ltdl \
+        --enable-sharp=no \
+        --enable-go=no \
+        --enable-guile=no \
+        --enable-java=no \
+        --enable-lua=yes \
+        --enable-ocaml=no \
+        --enable-perl=no \
+        --enable-php=no \
+        --enable-python3 \
+        --enable-r=no \
+        --enable-ruby=no \
+        --enable-tcl=no \
+        --without-included-ltdl \
+        --with-gdk-pixbuf=yes \
+        --with-ipsepcola=yes \
+        --with-jpeg \
+        --with-libgd=yes \
+        --with-pangocairo=yes \
+        --with-rsvg=yes \
+        --with-x
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: graphviz-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - graphviz
+        - cairo-dev
+        - expat-dev
+        - fontconfig-dev
+        - freetype-dev
+        - gd-dev
+        - gmp-dev
+        - libjpeg-turbo-dev
+        - libpng-dev
+        - libsm-dev
+        - libxext-dev
+        - pango-dev
+        - python3-dev
+        - zlib-dev
+    description: graphviz dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: ${{subpkg.name}}
+
+  - name: graphviz-doc
+    pipeline:
+      - uses: split/manpages
+    description: graphviz manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: py3-gv
+    dependencies:
+      runtime:
+        - python-${{vars.python-version}}-base
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/graphviz
+          mv ${{targets.destdir}}/usr/lib/graphviz/python3* ${{targets.subpkgdir}}/usr/lib/graphviz/
+          mv ${{targets.destdir}}/usr/lib/python3* ${{targets.subpkgdir}}/usr/lib/
+    description: Python3 extension for graphviz
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: lua5.4-graphviz
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/lua/5.4
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/graphviz
+
+          mv ${{targets.destdir}}/usr/lib/lua5.4/lua/* ${{targets.subpkgdir}}/usr/lib/lua/5.4/
+          mv ${{targets.destdir}}/usr/lib/graphviz/lua ${{targets.subpkgdir}}/usr/lib/graphviz/
+    description: Lua5.4 extension for graphviz
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: graphviz-graphs
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/share/graphviz
+          mv ${{targets.destdir}}/usr/share/graphviz/graphs/* ${{targets.subpkgdir}}/usr/share/graphviz/
+    description: Demo graphs for graphviz
+    test:
+      pipeline:
+        - uses: test/tw/contains-files
+
+update:
+  enabled: true
+  git: {}
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: circo dot dot_builtins fdp neato osage patchwork sfdp twopi
+    - uses: test/tw/help-check
+      with:
+        bins: circo dot dot_builtins fdp neato osage patchwork sfdp twopi
+    - name: Register graphviz plugins
+      runs: |
+        dot -c
+    - name: Functional test - convert DOT graph to SVG using dot
+      runs: |
+        set -euo pipefail
+        # Create a simple directed graph in DOT format and render it to SVG
+        cat > /tmp/test.dot <<'EOF'
+        digraph G {
+          A -> B
+          B -> C
+          C -> A
+        }
+        EOF
+        dot -Tsvg /tmp/test.dot -o /tmp/test.svg
+        grep -F "<svg" /tmp/test.svg
+    - name: Functional test - convert DOT graph to SVG using neato (spring model layout)
+      runs: |
+        set -euo pipefail
+        # Render the same graph with neato (undirected spring-model layout engine)
+        cat > /tmp/test_neato.dot <<'EOF'
+        graph G {
+          A -- B
+          B -- C
+          C -- A
+        }
+        EOF
+        neato -Tsvg /tmp/test_neato.dot -o /tmp/test_neato.svg
+        grep -F "<svg" /tmp/test_neato.svg
+    - name: Functional test - convert DOT graph to SVG using circo (circular layout)
+      runs: |
+        set -euo pipefail
+        # Render a graph with circo (circular layout engine)
+        cat > /tmp/test_circo.dot <<'EOF'
+        digraph G {
+          A -> B -> C -> D -> A
+        }
+        EOF
+        circo -Tsvg /tmp/test_circo.dot -o /tmp/test_circo.svg
+        grep -F "<svg" /tmp/test_circo.svg

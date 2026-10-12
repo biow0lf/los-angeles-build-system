@@ -1,0 +1,245 @@
+#nolint:unused-var-transform
+package:
+  name: gtk-3
+  version: "3.24.52"
+  epoch: 5 # glibc: 2.43->2.44
+  description: The GTK+ Toolkit (v3)
+  copyright:
+    - license: LGPL-2.1-or-later
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      glib-compile-schemas /usr/share/glib-2.0/schemas
+  dependencies:
+    runtime:
+      - cmd:gtk-update-icon-cache
+  resources:
+    cpu: "2"
+    memory: 10Gi
+
+vars:
+  gschemas: "usr/share/glib-2.0/schemas"
+  python-version: "3.13"
+
+# creates a new var that contains only the major and minor version to be used in the fetch URL
+# e.g. 2.46.0 will create a new var mangled-package-version=2.46
+var-transforms:
+  - from: ${{package.version}}
+    match: (\d+\.\d+)\.\d+
+    replace: $1
+    to: mangled-package-version
+
+environment:
+  contents:
+    packages:
+      - at-spi2-core-dev
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cairo-dev
+      - cmake
+      - cups-dev
+      - dbus-dev
+      - expat-dev
+      - fontconfig-dev
+      - freetype-dev
+      - fribidi-dev
+      - gdk-pixbuf-dev
+      - gettext-dev
+      - git
+      - glib-dev
+      - glib-gir
+      - glibc-2.44-dev
+      - gobject-introspection-dev
+      - gtk-doc
+      - harfbuzz-dev
+      - hicolor-icon-theme
+      - iso-codes-dev
+      - libatk-bridge-2.0
+      - libepoxy-dev
+      - libice-dev
+      - libtool
+      - libx11-dev
+      - libxcomposite-dev
+      - libxcursor-dev
+      - libxdamage-dev
+      - libxext-dev
+      - libxfixes-dev
+      - libxft-dev
+      - libxi-dev
+      - libxinerama-dev
+      - libxkbcommon
+      - libxkbcommon-dev
+      - libxrandr-dev
+      - libxtst-dev
+      - mesa-dev
+      - meson
+      - ninja
+      - pango-dev
+      - py${{vars.python-version}}-packaging
+      - shared-mime-info
+      - tiff-dev
+      - wayland-dev
+      - wayland-protocols-dev
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.gnome.org/GNOME/gtk.git
+      tag: ${{package.version}}
+      expected-commit: 6a0b360d473f7c546314738c0c8dd9829eb9d3c2
+
+  - uses: meson/configure
+    with:
+      opts: |
+        -Db_lto=true \
+        -Dman=true \
+        -Dgtk_doc=false \
+        -Dbroadway_backend=true \
+        -Dexamples=false
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - runs: |
+      # We've had trouble with this build accidentally including pango. This should be fixed,
+      # but throw in a test here in case.
+      if [ -f ${{targets.destdir}}/usr/lib/libpango-1.0.so ]; then
+        echo "ERROR: libpango-1.0.so found in /usr/lib. This is a bug in the build system."
+        exit 1
+      fi
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+    dependencies:
+      runtime:
+        - shared-mime-info
+        - at-spi2-core-dev
+        - gdk-pixbuf-dev
+        - glib-dev
+        - libepoxy-dev
+        - libxext-dev
+        - libxi-dev
+        - libxinerama-dev
+        - libxkbcommon-dev
+        - wayland-dev
+    description: gtk+3 dev
+
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/manpages
+    description: gtk+3 manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: ${{package.name}}-lang
+    pipeline:
+      - uses: split/locales
+    description: gtk+3 locales
+    test:
+      pipeline:
+        - uses: test/tw/langpackage
+
+  - name: ${{package.name}}-compiled-gschemas
+    description: Compiled gschemas for GTK 3
+    dependencies:
+      runtime:
+        - ${{package.name}}
+    pipeline:
+      - runs: |
+          glib-compile-schemas "${{targets.destdir}}/${{vars.gschemas}}"
+          install -Dm755 "${{targets.destdir}}/${{vars.gschemas}}/gschemas.compiled" "${{targets.contextdir}}/${{vars.gschemas}}/gschemas.compiled"
+          rm "${{targets.destdir}}/${{vars.gschemas}}/gschemas.compiled"
+    test:
+      pipeline:
+        - uses: test/tw/contains-files
+          with:
+            files: |
+              /${{vars.gschemas}}/gschemas.compiled
+
+  - name: ${{package.name}}-update-icon-cache
+    description: GTK 3 gtk-update-icon-cache utility
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/gtk-update-icon-cache "${{targets.subpkgdir}}"/usr/bin/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - name: Test gtk-update-icon-cache creates icon cache
+          runs: |
+            # Create a minimal icon theme directory structure
+            THEME_DIR=/tmp/test-icon-theme
+            mkdir -p "$THEME_DIR/48x48/apps"
+
+            # Create a minimal index.theme file
+            cat > "$THEME_DIR/index.theme" <<'EOF'
+            [Icon Theme]
+            Name=TestTheme
+            Comment=Test icon theme
+            Directories=48x48/apps
+
+            [48x48/apps]
+            Size=48
+            Type=Fixed
+            EOF
+
+            # Create a placeholder icon so the directory is non-empty
+            touch "$THEME_DIR/48x48/apps/test-app.png"
+
+            # Run gtk-update-icon-cache to generate the cache
+            gtk-update-icon-cache -f -t "$THEME_DIR"
+
+            # Verify the icon cache file was created
+            test -f "$THEME_DIR/icon-theme.cache"
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - (?i)[a-z] # Ignore tags that include any case letters
+    - 3\.[89]\d.* # Ignore tags that start with 3.8x.x or 3.9x.x upstream released whi this tag 4 years ago.
+    - ^\d+\.(\d*[13579])\.\d+$ # Ignore odd minor versions: those are dev snapshots
+  git:
+    tag-filter-prefix: 3.
+
+test:
+  environment:
+    contents:
+      packages:
+        - ${{package.name}}-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test GTK3 library compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <gtk/gtk.h>
+        int main() {
+            /* Verify GTK3 major version constant is accessible */
+            unsigned int major = gtk_get_major_version();
+            return (major == 3) ? 0 : 1;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags gtk+-3.0) test.c -o test $(pkg-config --libs gtk+-3.0)
+        ./test
+    - name: Test gtk-query-immodules-3.0 lists input method modules
+      runs: |
+        # gtk-query-immodules-3.0 scans for input method modules and prints them
+        # It should produce output listing the module cache format header
+        gtk-query-immodules-3.0 | grep -F "# GTK"

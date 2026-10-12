@@ -1,0 +1,122 @@
+package:
+  name: liburing
+  version: "2.15"
+  epoch: 5 # glibc: 2.43->2.44
+  description: Linux kernel io_uring access library.
+  copyright:
+    - license: MIT OR LGPL-2.1-or-later
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - linux-headers
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: d41bf9220ec39277ff235379e9089d9e0fd6c2a5
+      repository: https://github.com/axboe/liburing.git
+      tag: liburing-${{package.version}}
+
+  - uses: patch
+    with:
+      patches: |
+        realpath-flag.patch
+
+  - runs: |
+      ./configure \
+        --prefix=/usr \
+        --use-libc \
+        --libdir=/usr/lib \
+        --mandir=/usr/share/man
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: liburing-ffi
+    description: liburing shared library
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}/usr/lib"
+          mv ${{targets.destdir}}/usr/lib/liburing-ffi.so.* ${{targets.subpkgdir}}/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: liburing-dev
+    description: liburing development headers
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: liburing-doc
+    description: liburing documentation
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: axboe/liburing
+    strip-prefix: liburing-
+    tag-filter: liburing-
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - liburing-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Compile and link test against liburing
+      runs: |
+        tee test.c <<'EOF'
+        #include <liburing.h>
+        #include <stdio.h>
+        #include <errno.h>
+
+        int main() {
+            struct io_uring ring;
+            int ret = io_uring_queue_init(1, &ring, 0);
+            if (ret == 0) {
+                printf("io_uring initialized successfully\n");
+                io_uring_queue_exit(&ring);
+            } else if (ret == -ENOSYS) {
+                /* Kernel does not support io_uring - acceptable in test container */
+                printf("io_uring not supported by kernel, but library linked OK\n");
+            } else {
+                printf("io_uring_queue_init returned %d\n", ret);
+            }
+            /* Success: the library linked and the function was callable */
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags liburing) test.c -o test $(pkg-config --libs liburing)
+        ./test

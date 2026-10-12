@@ -1,0 +1,91 @@
+package:
+  name: cmocka
+  version: "2.0.2"
+  epoch: 3 # glibc: 2.43->2.44
+  description: An elegant unit testing framework for C with support for mock objects
+  copyright:
+    - license: Apache-2.0
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake
+      - glibc-2.44-dev
+      - samurai
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.com/cmocka/cmocka.git
+      tag: cmocka-${{package.version}}
+      expected-commit: fefa2b8a023121f7235e18ed17249e4012dd144f
+
+  - runs: |
+      cmake -B build -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DBUILD_SHARED_LIBS=True \
+        -DCMAKE_BUILD_TYPE=MinSizeRel \
+        -DUNIT_TESTING=ON
+      cmake --build build
+
+  - runs: DESTDIR=${{targets.destdir}} cmake --install build
+
+  - uses: strip
+
+subpackages:
+  - name: cmocka-dev
+    description: cmocka dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - cmocka
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  git:
+    strip-prefix: cmocka-
+    tag-filter-prefix: cmocka-
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - cmocka-dev
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test cmocka library functionality
+      runs: |
+        tee test_cmocka.c <<'EOF'
+        #include <stdarg.h>
+        #include <stddef.h>
+        #include <setjmp.h>
+        #include <cmocka.h>
+
+        static void test_pass(void **state) {
+            (void)state;
+            assert_int_equal(1, 1);
+        }
+
+        int main(void) {
+            const struct CMUnitTest tests[] = {
+                cmocka_unit_test(test_pass),
+            };
+            return cmocka_run_group_tests(tests, NULL, NULL);
+        }
+        EOF
+        gcc $(pkg-config --cflags cmocka) test_cmocka.c -o test_cmocka $(pkg-config --libs cmocka)
+        ./test_cmocka

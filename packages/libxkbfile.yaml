@@ -1,0 +1,58 @@
+package:
+  name: libxkbfile
+  version: "1.2.0"
+  epoch: 3 # glibc: 2.43->2.44
+  description: X11 keyboard file manipulation library
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - libx11-dev
+      - pkgconf-dev
+      - util-macros
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxkbfile
+      tag: libxkbfile-${{package.version}}
+      expected-commit: 42e5dedd7fd3c7c73f3870a8751893c03c1afc69
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - runs: |
+      install -D -m644 COPYING \
+      "${{targets.destdir}}"/usr/share/licenses/${{package.name}}/COPYING
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1781
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

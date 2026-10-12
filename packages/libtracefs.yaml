@@ -1,0 +1,86 @@
+package:
+  name: libtracefs
+  version: "1.8.3"
+  epoch: 4 # glibc: 2.43->2.44
+  description: "Linux kernel trace file system library"
+  copyright:
+    - license: "LGPL-2.1-or-later"
+  resources:
+    cpu: "2"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtraceevent-dev
+      - linux-headers
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://kernel.googlesource.com/pub/scm/libs/libtrace/libtracefs.git
+      tag: libtracefs-${{package.version}}
+      expected-commit: 6fad6a14ba0d4c4b437d9e4eed7098d4bb07b4fc
+
+  - uses: autoconf/make
+
+  - runs: |
+      make install DESTDIR=${{targets.destdir}} \
+        prefix=/usr \
+        libdir_relative=lib \
+        pkgconfig_dir=/usr/lib/pkgconfig
+
+  - uses: strip
+
+subpackages:
+  - name: libtracefs-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libtraceevent-dev
+    description: libtracefs dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 288157
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - libtracefs-dev
+        - libtraceevent-dev
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test libtracefs API compilation and usage
+      runs: |
+        tee test.c <<'EOF'
+        #include <tracefs.h>
+        #include <stdio.h>
+
+        int main(void) {
+            const char *tracefs_dir = tracefs_tracing_dir();
+            if (tracefs_dir) {
+                printf("tracefs dir: %s\n", tracefs_dir);
+            } else {
+                printf("tracefs not mounted (expected in container)\n");
+            }
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libtracefs) test.c -o test $(pkg-config --libs libtracefs)
+        ./test

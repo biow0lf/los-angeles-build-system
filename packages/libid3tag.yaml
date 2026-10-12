@@ -1,0 +1,64 @@
+package:
+  name: libid3tag
+  version: "0.16.4"
+  epoch: 2 # glibc: 2.43->2.44
+  description: MAD ID3 tagger for MP3 audio files
+  copyright:
+    - license: GPL-2.0-or-later
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake
+      - glibc-2.44-dev
+      - gperf
+      - samurai
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://codeberg.org/tenacityteam/libid3tag
+      tag: ${{package.version}}
+      expected-commit: fff52d4e27a6f8e3a714bd304e4258d9e1b0dad8
+
+  # Allow build with CMake 4.0.0 (cherry-pick eee94b22 no longer applies cleanly)
+  - runs: sed -i 's/cmake_minimum_required(VERSION 3.10)/cmake_minimum_required(VERSION 3.10...4.0)/' CMakeLists.txt
+
+  - runs: |
+      cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=MinSizeRel \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib
+      cmake --build build
+
+  - runs: |
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: strip
+
+subpackages:
+  - name: libid3tag-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libid3tag
+    description: libid3tag dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  git: {}
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

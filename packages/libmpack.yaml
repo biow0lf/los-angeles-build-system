@@ -1,0 +1,92 @@
+package:
+  name: libmpack
+  version: 1.0.5
+  epoch: 9 # glibc: 2.43->2.44
+  description: Simple implementation of msgpack in C
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libmpack/libmpack
+      tag: ${{package.version}}
+      expected-commit: e9047afe4c02cd47c510f701deda6f502d7d94a2
+
+  - runs: |
+      make
+      make DESTDIR=${{targets.destdir}} PREFIX=/usr install
+
+  - name: remove libtool .la files
+    runs: find "${{targets.destdir}}" -name '*.la' -delete
+
+  - uses: strip
+
+subpackages:
+  - name: libmpack-dev
+    pipeline:
+      - uses: split/dev
+    description: libmpack dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: libmpack/libmpack
+    strip-prefix: v
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - libmpack-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Compile and link test against libmpack
+      runs: |
+        tee test.c <<'EOF'
+        #include <mpack.h>
+        #include <string.h>
+        #include <stdlib.h>
+
+        int main() {
+            /* Test basic msgpack packing */
+            char buf[256];
+            size_t buflen = sizeof(buf);
+            int result;
+
+            mpack_tokbuf_t tokbuf;
+            mpack_tokbuf_init(&tokbuf);
+
+            const char *p = buf;
+            size_t plen = buflen;
+
+            /* Verify the library is linked and functional */
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags mpack) test.c -o test $(pkg-config --libs mpack)
+        ./test

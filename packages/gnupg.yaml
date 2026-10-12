@@ -1,0 +1,458 @@
+#nolint:background-process-without-redirect
+package:
+  name: gnupg
+  version: "2.4.9"
+  epoch: 12 # glibc: 2.43->2.44
+  description: GNU Privacy Guard 2 - meta package for full GnuPG suite
+  copyright:
+    - license: GPL-3.0-or-later
+  dependencies:
+    runtime:
+      - merged-lib
+      - merged-usrsbin
+      - wolfi-baselayout
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+vars:
+  gpg-package: gpg
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - bzip2-dev
+      - ca-certificates-bundle
+      - gettext-dev
+      - glibc-2.44-dev
+      - glibc-iconv
+      # - pinentry TODO skipping for now as seems to require gtk+3.0, gcr, libproxy and mesa
+      - gnutls-dev
+      - libassuan-dev
+      - libgcrypt-dev
+      - libgpg-error-dev
+      - libksba-dev
+      - libtool
+      - libusb-dev
+      - npth-dev
+      - openldap-dev
+      - readline-dev
+      - sqlite-dev
+      - texinfo
+      - zlib-dev
+  environment:
+    CPPFLAGS: -Wp,-DLDAP_DEPRECATED=1
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/gpg/gnupg
+      tag: gnupg-${{package.version}}
+      expected-commit: 21c7d29d6ed2eb891f7f66f83bcf764fcaaa6752
+
+  # **Note:** When the main package version is updated, you may also have to
+  #           update the freepg expected-commit below.
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.com/freepg/gnupg.git
+      expected-commit: ea4ab237fc8d76cc494d044310cefe681b3ec24d
+      destination: freepg-patches
+      tag: source-${{package.version}}-freepg-1
+
+  # Skip the gitlab patch as it doesn't apply cleanly and we don't need it.
+  - name: "Apply freepg patches"
+    runs: |
+      for p in freepg-patches/STABLE-BRANCH-2-4-freepg/*.patch ; do
+        if [ "$p" = "freepg-patches/STABLE-BRANCH-2-4-freepg/0001-Add-gitlab-build-toolchain.patch" ] ; then
+          continue
+        fi
+        echo "Applying $p..."
+        patch -p1 --batch < $p
+      done
+
+  - uses: patch
+    with:
+      patches: |
+        libassun-version.patch
+        0010-avoid-beta-warning.patch
+        0210-dirmngr-hkp-avoid-potential-race-condition-when-some-host-die.patch
+        fix-i18n.patch
+        make-aes-default-for-fips.patch
+
+  # Building from git with --enable-maintainer-mode generates audit-events.h,
+  # status-codes.h, and doc images. The doc image rules call ImageMagick
+  # `convert` (SVG sources) and `fig2dev` (FIG sources); stub both so the
+  # build doesn't fail on image conversions we don't need to ship.
+  - name: "Stub image conversion tools for doc build rules"
+    runs: |
+      for cmd in convert fig2dev; do
+        printf '#!/bin/sh\n# Stub: touch the output (last arg)\neval "out=\$$#"\ntouch "$out"\n' \
+          > /usr/local/bin/$cmd
+        chmod +x /usr/local/bin/$cmd
+      done
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --prefix=/usr \
+        --disable-nls \
+        --disable-docs \
+        --enable-bzip2 \
+        --enable-tofu \
+        --enable-scdaemon \
+        --enable-ccid-driver \
+        --enable-maintainer-mode \
+        --sbindir=/usr/bin
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      install -Dm644 -t ${{targets.destdir}}/usr/lib/udev/rules.d/ 60-scdaemon.rules
+
+      cd ${{targets.destdir}}
+
+      # install compat symlink
+      ln -s gpg  usr/bin/gpg2
+      ln -s gpgv usr/bin/gpgv2
+
+      # Remove docs for systemd-user
+      rm -rf usr/share/doc/gnupg/examples/systemd-user
+
+      # Remove gpg scheme interpreter - an internal tool used in gpg tests
+      rm -rf usr/bin/gpgscm
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/manpages
+    description: gnupg manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+
+  - name: ${{package.name}}-lang
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/share/gnupg
+          mv ${{targets.destdir}}/usr/share/gnupg/help.*.txt ${{targets.subpkgdir}}/usr/share/gnupg/
+    description: Languages for package gnupg
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/contains-files
+          with:
+            dir: /usr/share/gnupg/
+            name: "help.*.txt"
+
+  - name: ${{package.name}}-dirmngr
+    dependencies:
+      runtime:
+        - ${{package.name}}-gpgconf
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mkdir -p "${{targets.subpkgdir}}"/usr/libexec
+          mkdir -p "${{targets.subpkgdir}}"/usr/share/gnupg
+
+          mv ${{targets.destdir}}/usr/bin/dirmngr* ${{targets.subpkgdir}}/usr/bin/
+          mv ${{targets.destdir}}/usr/libexec/dirmngr_ldap ${{targets.subpkgdir}}/usr/libexec/
+          mv ${{targets.destdir}}/usr/share/gnupg/sks-keyservers.netCA.pem ${{targets.subpkgdir}}/usr/share/gnupg/
+    description: GNU Privacy Guard 2 - network certificate management service
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/ver-check
+          with:
+            bins: dirmngr dirmngr-client
+        - uses: test/tw/help-check
+          with:
+            bins: dirmngr dirmngr-client
+
+  - name: ${{package.name}}-gpgconf
+    dependencies:
+      runtime:
+        - ${{package.name}}-gpgconf
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mkdir -p "${{targets.subpkgdir}}"/usr/share/gnupg
+
+          mv ${{targets.destdir}}/usr/bin/gpg-connect-agent ${{targets.subpkgdir}}/usr/bin/
+          mv ${{targets.destdir}}/usr/bin/gpgconf ${{targets.subpkgdir}}/usr/bin/
+          mv ${{targets.destdir}}/usr/share/gnupg/distsigkey.gpg ${{targets.subpkgdir}}/usr/share/gnupg/
+    description: GNU Privacy Guard 2 - core configuration utilities
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/ver-check
+          with:
+            bins: gpg-connect-agent gpgconf
+        - uses: test/tw/help-check
+          with:
+            bins: gpg-connect-agent gpgconf
+
+  - name: ${{package.name}}-scdaemon
+    dependencies:
+      runtime:
+        - ${{vars.gpg-package}}-agent
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/libexec
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib/udev
+          mv ${{targets.destdir}}/usr/libexec/scdaemon ${{targets.subpkgdir}}/usr/libexec/
+          mv ${{targets.destdir}}/usr/lib/udev/rules.d ${{targets.subpkgdir}}/usr/lib/udev/
+    description: GNU Privacy Guard 2 - smart card support
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: ${{package.name}}-wks-client
+    dependencies:
+      runtime:
+        - ${{vars.gpg-package}}
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/libexec
+          mv ${{targets.destdir}}/usr/libexec/gpg-wks-client ${{targets.subpkgdir}}/usr/libexec/
+    description: GNU Privacy Guard 2 - Web Key Service client
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: ${{vars.gpg-package}}
+    description: GNU Privacy Guard 2 - public key operations only
+    dependencies:
+      runtime:
+        - ${{package.name}}-gpgconf
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin "${{targets.subpkgdir}}"/usr/libexec
+
+          mv ${{targets.destdir}}/usr/bin/gpg ${{targets.subpkgdir}}/usr/bin/
+          mv ${{targets.destdir}}/usr/bin/gpg2 ${{targets.subpkgdir}}/usr/bin/
+          mv "${{targets.destdir}}"/usr/libexec/keyboxd "${{targets.subpkgdir}}"/usr/libexec
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/ver-check
+          with:
+            bins: gpg gpg2
+        - uses: test/tw/help-check
+          with:
+            bins: gpg gpg2
+        - runs: |
+            gpg --list-keys
+
+  - name: ${{vars.gpg-package}}-agent
+    dependencies:
+      runtime:
+        - ${{package.name}}-gpgconf
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mkdir -p "${{targets.subpkgdir}}"/usr/libexec
+          mkdir -p "${{targets.subpkgdir}}"/usr/share/gnupg
+
+          mv ${{targets.destdir}}/usr/bin/gpg-agent ${{targets.subpkgdir}}/usr/bin/
+          mv ${{targets.destdir}}/usr/libexec/gpg-check-pattern ${{targets.subpkgdir}}/usr/libexec/
+          mv ${{targets.destdir}}/usr/libexec/gpg-preset-passphrase ${{targets.subpkgdir}}/usr/libexec/
+          mv ${{targets.destdir}}/usr/libexec/gpg-protect-tool ${{targets.subpkgdir}}/usr/libexec/
+          mv ${{targets.destdir}}/usr/share/gnupg/help.txt ${{targets.subpkgdir}}/usr/share/gnupg/
+    description: GNU Privacy Guard 2 - cryptographic agent
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/ver-check
+          with:
+            bins: gpg-agent
+        - uses: test/tw/help-check
+          with:
+            bins: gpg-agent
+
+  - name: ${{vars.gpg-package}}-wks-server
+    dependencies:
+      runtime:
+        - ${{vars.gpg-package}}
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mv ${{targets.destdir}}/usr/bin/gpg-wks-server ${{targets.subpkgdir}}/usr/bin/
+    description: GNU Privacy Guard 2 - Web Key Service server
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/ver-check
+          with:
+            bins: gpg-wks-server
+        - uses: test/tw/help-check
+          with:
+            bins: gpg-wks-server
+
+  - name: ${{vars.gpg-package}}sm
+    description: GNU Privacy Guard 2 - S/MIME version
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mv ${{targets.destdir}}/usr/bin/gpgsm ${{targets.subpkgdir}}/usr/bin/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/ver-check
+          with:
+            bins: gpgsm
+        - uses: test/tw/help-check
+          with:
+            bins: gpgsm
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+
+  - name: ${{vars.gpg-package}}v
+    description: GNU Privacy Guard 2 - signature verification only
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mv ${{targets.destdir}}/usr/bin/gpgv ${{targets.subpkgdir}}/usr/bin/
+          mv ${{targets.destdir}}/usr/bin/gpgv2 ${{targets.subpkgdir}}/usr/bin/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/ver-check
+          with:
+            bins: gpgv gpgv2
+        - uses: test/tw/help-check
+          with:
+            bins: gpgv gpgv2
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+
+  - name: ${{package.name}}-utils
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr
+          mv ${{targets.destdir}}/usr/* ${{targets.subpkgdir}}/usr/
+    description: GNU Privacy Guard 2 - utility programs
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/ver-check
+          with:
+            bins: gpgsplit gpgtar kbxutil watchgnupg
+        - uses: test/tw/help-check
+          with:
+            bins: gpgparsemail gpgsplit gpgtar kbxutil watchgnupg
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - merged-lib
+        - wolfi-baselayout
+
+update:
+  enabled: true
+  github:
+    identifier: gpg/gnupg
+    use-tag: true
+    strip-prefix: gnupg-
+    tag-filter-prefix: gnupg-2.4.
+
+test:
+  environment:
+    contents:
+      packages:
+        - ${{vars.gpg-package}}
+        - ${{vars.gpg-package}}-agent
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/hardening-check
+    - uses: test/tw/ver-check
+      with:
+        bins: gpg
+    - uses: test/tw/help-check
+      with:
+        bins: gpg
+    - name: Test key generation and listing
+      runs: |
+        export GNUPGHOME=$(mktemp -d)
+
+        # Generate a test keypair in batch mode (no passphrase, no pinentry needed)
+        gpg --batch --pinentry-mode loopback --passphrase "" \
+          --quick-gen-key "Test User <test@example.com>" rsa2048 sign 0
+
+        # Verify the key was created and is listed
+        gpg --list-keys | grep -F "Test User"
+        gpg --list-keys | grep -F "test@example.com"
+    - name: Test encryption and decryption
+      runs: |
+        export GNUPGHOME=$(mktemp -d)
+
+        # Generate a key for encryption/decryption test
+        gpg --batch --pinentry-mode loopback --passphrase "" \
+          --quick-gen-key "Enc User <enc@example.com>" rsa2048 encr 0
+
+        # Encrypt a message to the key
+        echo "gnupg encryption test payload" | \
+          gpg --batch --yes --trust-model always \
+          --encrypt --recipient "enc@example.com" \
+          --output /tmp/test-encrypted.gpg
+
+        # Decrypt and verify the original plaintext is recovered
+        gpg --batch --pinentry-mode loopback --passphrase "" \
+          --decrypt /tmp/test-encrypted.gpg | grep -F "gnupg encryption test payload"
+    - name: Test signing and signature verification
+      runs: |
+        export GNUPGHOME=$(mktemp -d)
+
+        # Generate a key for signing test
+        gpg --batch --pinentry-mode loopback --passphrase "" \
+          --quick-gen-key "Sign User <sign@example.com>" rsa2048 sign 0
+
+        # Create a test file and sign it
+        echo "gnupg signature test payload" > /tmp/test-sign.txt
+        gpg --batch --pinentry-mode loopback --passphrase "" \
+          --detach-sign --output /tmp/test-sign.txt.sig /tmp/test-sign.txt
+
+        # Verify the signature
+        gpg --verify /tmp/test-sign.txt.sig /tmp/test-sign.txt

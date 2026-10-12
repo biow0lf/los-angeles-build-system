@@ -1,0 +1,214 @@
+package:
+  name: uv
+  version: "0.13.0"
+  epoch: 0 # rust: 1.98->1.99
+  description: An extremely fast Python package installer and resolver, written in Rust.
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "12"
+    memory: 24Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  build-pypi-package: uv-build
+  build-module-name: uv_build
+  llvm-version: 23
+  openssl-version: "4.0"
+  rust-version: 1.99
+
+data:
+  - name: py-versions
+    items:
+      3.10: '310'
+      3.11: '311'
+      3.12: '312'
+      3.13: '313'
+      3.14: '314'
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cargo-auditable
+      - clang-${{vars.llvm-version}}
+      - cmake
+      - glibc-2.44-dev
+      - openssl-${{vars.openssl-version}}-dev
+      - perl
+      - py3-supported-build-base
+      - py3-supported-maturin
+      - py3.14-maturin
+      - rust-${{vars.rust-version}}
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/astral-sh/uv
+      tag: ${{package.version}}
+      expected-commit: 4ecd0eff2a81e3ffdcd7cfee10d08936e4747c17
+      destination: uv
+
+  - working-directory: uv
+    uses: bump
+    with:
+      language: rust
+      deps: |-
+        quinn-proto@0.11.14
+        rustls-webpki@0.103.13
+        astral-tokio-tar@0.6.1
+        rkyv@0.8.16
+        hyper-rustls@0.27.9
+        quick-xml@0.41.0
+        reqsign@0.20.2
+        reqsign-aws-v4@3.0.2
+        reqsign-azure-storage@3.1.0
+        reqsign-command-execute-tokio@3.0.2
+        reqsign-core@3.1.0
+        reqsign-file-read-tokio@3.0.2
+        reqsign-google@3.0.2
+        reqsign-http-send-reqwest@4.0.2
+        sha1@0.11.0
+
+  - working-directory: uv
+    uses: cargo/build
+    with:
+      output: uv
+
+  - working-directory: uv
+    uses: cargo/build
+    with:
+      output: uvx
+
+  - uses: strip
+
+subpackages:
+  - name: uv-compat
+    description: uv and uvx at the filesystem root for OCI-image COPY --from drop-in
+    pipeline:
+      # Copy (never move) the main package's stripped binaries to the filesystem
+      # root: real regular files survive `COPY --from` on every builder (kaniko
+      # included) without hardlinks, and uvx must sit beside uv since it resolves
+      # uv as a sibling in its own dir rather than via PATH.
+      - name: place uv and uvx at filesystem root
+        runs: |
+          install -Dm755 "${{targets.destdir}}"/usr/bin/uv  "${{targets.subpkgdir}}"/uv
+          install -Dm755 "${{targets.destdir}}"/usr/bin/uvx "${{targets.subpkgdir}}"/uvx
+    test:
+      pipeline:
+        - uses: test/tw/contains-files
+          with:
+            files: |
+              /uv
+              /uvx
+        # auto-scans uv-compat's own ELFs (/uv, /uvx) — confirms the SCA-detected
+        # glibc/libgcc/libm deps resolve with only uv-compat installed.
+        - uses: test/tw/ldd-check
+        # Running /uvx also proves the co-location requirement: uvx resolves uv as a
+        # sibling in its own dir (not via PATH), so /uvx only works with /uv beside it.
+        # Reference: https://github.com/astral-sh/uv/blob/0.11.19/crates/uv/src/bin/uvx.rs
+        - uses: test/tw/ver-check
+          with:
+            bins: |
+              /uv
+              /uvx
+            version: ${{package.version}}
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              /uv
+              /uvx
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.build-pypi-package}}
+    description: ${{vars.build-pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provides:
+        - py3-${{vars.build-pypi-package}}
+      provider-priority: ${{range.value}}
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+        working-directory: uv/crates/uv-build
+      - name: move usr/bin executables for -bin
+        runs: |
+          mkdir -p ./cleanup/${{range.key}}/
+          mv ${{targets.contextdir}}/usr/bin ./cleanup/${{range.key}}/
+      - uses: strip
+    test:
+      pipeline:
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.build-module-name}}
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.build-pypi-package}}-bin
+    description: Executable binaries for ${{vars.build-pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.build-pypi-package}}-bin
+      runtime:
+        - py${{range.key}}-${{vars.build-pypi-package}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr/
+          mv ./cleanup/${{range.key}}/bin ${{targets.contextdir}}/usr/
+    test:
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: uv-build
+
+  - name: py3-supported-${{vars.build-pypi-package}}
+    description: meta package providing ${{vars.build-pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.build-pypi-package}}
+        - py3.11-${{vars.build-pypi-package}}
+        - py3.12-${{vars.build-pypi-package}}
+        - py3.13-${{vars.build-pypi-package}}
+    test:
+      pipeline:
+        - uses: test/metapackage
+
+update:
+  enabled: true
+  github:
+    identifier: astral-sh/uv
+
+test:
+  environment:
+    contents:
+      packages:
+        - python3
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          uv
+          uvx
+        version: ${{package.version}}
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          uv
+          uvx
+    - name: uv simple example
+      runs: |
+        uv init example
+        cd example
+        uv add ruff
+        uv run ruff check
+    - name: uv toolings
+      runs: |
+        uv tool install ruff
+        uv venv
+        uv python list

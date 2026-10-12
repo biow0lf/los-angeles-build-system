@@ -18,6 +18,7 @@ Simple desktop linux.
 
 ## TODO
 
+* Self host (aka self rebuild without external repos)
 * Build logs
 * Reproducable builds
 * PGO

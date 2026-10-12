@@ -1,0 +1,104 @@
+package:
+  name: libkcapi
+  version: "1.5.1"
+  epoch: 1 # glibc: 2.43->2.44
+  description: Linux Kernel Crypto API User Space Interface Library
+  copyright:
+    - license: BSD-3-Clause OR GPL-2.0-or-later
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/smuellerDD/libkcapi
+      tag: v${{package.version}}
+      expected-commit: df40ea48ecbf1afc6d3efa5494673fa73bd40826
+
+  - runs: autoreconf -fvi
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --host=${{host.triplet.gnu}} \
+        --build=${{host.triplet.gnu}} \
+        --enable-kcapi-hasher \
+        --enable-kcapi-speed \
+        --enable-kcapi-rngapp \
+        --enable-kcapi-encapp \
+        --enable-kcapi-dgstapp \
+        --enable-kcapi-test \
+        --disable-static
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      rm -r ${{targets.destdir}}/usr/libexec/
+
+  - uses: strip
+
+subpackages:
+  - name: libkcapi-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libkcapi
+    description: libkcapi dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+
+  - name: libkcapi-tools
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr
+          mv ${{targets.destdir}}/usr/bin ${{targets.subpkgdir}}/usr/
+    description: libkcapi (commandline utilities)
+    test:
+      pipeline:
+        - runs: |
+            # aarch64 CI uses Docker (not QEMU) and the host kernel has SHA-1
+            # disabled in AF_ALG, which causes all kcapi tool invocations to fail
+            if [ "${{build.arch}}" = "x86_64" ]; then
+              kcapi -h
+              kcapi-convenience --version
+              kcapi-convenience --help
+              kcapi-dgst --version
+              kcapi-enc --version
+              kcapi-enc-test-large --version
+              kcapi-enc-test-large --help
+              kcapi-hasher --version
+              kcapi-hasher --help
+              kcapi-rng --version
+            fi
+
+  - name: libkcapi-doc
+    pipeline:
+      - uses: split/manpages
+    description: libkcapi manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: smuellerDD/libkcapi
+    strip-prefix: v
+    tag-filter-prefix: v

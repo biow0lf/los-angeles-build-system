@@ -1,0 +1,116 @@
+package:
+  name: libevent
+  version: "2.1.13"
+  epoch: 3 # openssl: 3.6->4.0
+  description: An event notification library
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "2"
+    memory: 2Gi
+
+vars:
+  openssl-version: "4.0"
+  python-version: '3.14'
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - openssl-${{vars.openssl-version}}-dev
+      - python3-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libevent/libevent.git
+      tag: release-${{package.version}}-stable
+      expected-commit: 79ddfb460847999b807cba76d04e73891f29c6ee
+
+  - runs: |
+      ./autogen.sh
+
+  - runs: |
+      sed -i '1s|^#!/usr/bin/env python$|#!/usr/bin/python3|' event_rpcgen.py
+      # help provides tracing work out correctly
+      sed -i -e "s/@VERSION@/${{package.version}}-r${{package.epoch}}/" *.pc.in
+
+  - uses: autoconf/configure
+    with:
+      opts: --with-pic
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libevent-static
+    description: libevent static library
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: libevent-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libevent
+        - python-${{vars.python-version}}-base
+    description: libevent dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - "^release-.*-[alpha|beta|rc]$"
+  github:
+    identifier: libevent/libevent
+    strip-prefix: release-
+    strip-suffix: -stable
+
+test:
+  environment:
+    contents:
+      packages:
+        - libevent-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test libevent compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #include <event2/event.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main() {
+            struct event_base *base = event_base_new();
+            if (!base) {
+                fprintf(stderr, "FAIL: event_base_new() returned NULL\n");
+                return 1;
+            }
+            printf("event_base_new() succeeded, method: %s\n", event_base_get_method(base));
+            event_base_free(base);
+            printf("SUCCESS: libevent is functional\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libevent) test.c -o test $(pkg-config --libs libevent)
+        ./test

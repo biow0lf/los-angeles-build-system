@@ -1,0 +1,109 @@
+package:
+  name: just
+  version: "1.58.0"
+  epoch: 2 # glibc: 2.43->2.44
+  description: "just is a handy way to save and run project-specific commands."
+  copyright:
+    - license: CC0-1.0
+  resources:
+    cpu: "2"
+    memory: 6Gi
+
+vars:
+  rust-version: 1.94
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cargo-auditable
+      - glibc-2.44-dev
+      - rust-${{vars.rust-version}}
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/casey/just
+      expected-commit: 7f4ef81bd6a93faa2b28430912c8e9ab0e3dd29a
+      tag: ${{package.version}}
+
+  - uses: bump
+    with:
+      deps: |-
+        rand@0.10.1
+
+  - uses: cargo/build
+    with:
+      output: just
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: casey/just
+
+test:
+  pipeline:
+    - name: Version Check
+      runs: |
+        just --version
+        just --help
+    - name: Basic Functionality Test
+      runs: |
+        echo -e "default:\n  touch it-worked" > justfile
+        just
+        [ -f it-worked ]
+    - name: Test Recipe Listing
+      runs: |
+        echo -e "recipe1:\n  echo recipe1\n\nrecipe2:\n  echo recipe2" > justfile
+        just --list | grep -F recipe1
+        just --list | grep -F recipe2
+    - name: Test Parameters
+      runs: |
+        cat > justfile << 'EOF'
+        greet name="world":
+          echo "Hello, {{name}}!"
+        EOF
+
+        # Test default parameter
+        OUTPUT=$(just greet)
+        echo "$OUTPUT" | grep -F "Hello, world!"
+
+        # Test custom parameter
+        OUTPUT=$(just greet Alice)
+        echo "$OUTPUT" | grep -F "Hello, Alice!"
+    - name: Test Variables and Imports
+      runs: |
+        mkdir -p subdir
+
+        # Create a justfile that imports another
+        cat > subdir/justfile << 'EOF'
+        export NAME := "imported"
+
+        show-name:
+          echo "{{NAME}}"
+        EOF
+
+        cat > justfile << 'EOF'
+        export NAME := "parent"
+
+        show-name:
+          echo "{{NAME}}"
+
+        import-test:
+          just --justfile=subdir/justfile show-name
+        EOF
+
+        # Test variable in parent
+        OUTPUT=$(just show-name)
+        echo "$OUTPUT" | grep -F "parent"
+
+        # Test imported justfile
+        OUTPUT=$(just import-test)
+        echo "$OUTPUT" | grep -F "imported"
+    - name: Binary reliability checks
+      uses: test/tw/ldd-check

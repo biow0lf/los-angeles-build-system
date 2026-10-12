@@ -1,0 +1,86 @@
+package:
+  name: libmspack
+  version: "0.11_alpha"
+  epoch: 6 # glibc: 2.43->2.44
+  description: Library for Microsoft CAB compression formats
+  copyright:
+    - license: LGPL-2.1-only
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44
+      - glibc-2.44-dev
+      - libtool
+
+# The upstream does not have `_` in the tags, but it's invalid in semver, so we
+# use a transform to convert it.
+var-transforms:
+  - from: ${{package.version}}
+    match: _alpha
+    replace: alpha
+    to: mangled-package-version
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/kyz/libmspack.git
+      tag: v${{vars.mangled-package-version}}
+      expected-commit: 370d41b64230907f7ca16586bcc1cd93304718f9
+
+  - uses: autoconf/configure
+    with:
+      dir: ./libmspack
+
+  - uses: autoconf/make
+    with:
+      dir: ./libmspack
+
+  - uses: autoconf/make-install
+    with:
+      dir: ./libmspack
+
+  - uses: strip
+
+subpackages:
+  - name: libmspack-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+    dependencies:
+      runtime:
+        - libmspack
+    description: libmspack dev
+
+# This update section is little wonky because the upstream repo uses two styles
+# of tags for versions. There are two releases, one that is for `cabextract`,
+# and another for `libmspack`.
+# The libmspack are of the form `v0.11alpha` while the cabextract ones are
+# of the form `v1.11`.
+# So, for now we only consider the alpha tags for libmspack itself.
+update:
+  enabled: true
+  enable-prerelease-tags: true
+  version-transform:
+    - match: 'alpha'
+      replace: '_alpha'
+  github:
+    identifier: kyz/libmspack
+    strip-prefix: v
+    use-tag: true
+    tag-filter-contains: alpha
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

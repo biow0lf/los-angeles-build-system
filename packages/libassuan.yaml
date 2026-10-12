@@ -1,0 +1,96 @@
+package:
+  name: libassuan
+  version: "3.0.2"
+  epoch: 10 # glibc: 2.43->2.44
+  description: IPC library used by some GnuPG related software
+  copyright:
+    - license: LGPL-2.1-or-later
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libgpg-error-dev
+      - libtool
+      - readline-dev
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/gpg/libassuan
+      tag: libassuan-${{package.version}}
+      expected-commit: 0f84595a4bc706d3afb969d59618244c7db3b59f
+
+  - uses: autoconf/configure
+
+  # Build doc/version.texi, which is in the distributed tarball but not in the repository.
+  - uses: autoconf/make
+    with:
+      dir: doc
+      opts: stamp-vti
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libassuan-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libassuan
+        - libgpg-error-dev
+    description: libassuan dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libassuan-doc
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    description: libassuan manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: gpg/libassuan
+    strip-prefix: libassuan-
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - libassuan-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Test library compilation and usage
+      runs: |
+        tee test.c <<'EOF'
+        #include <assuan.h>
+        int main() {
+            const char *v = assuan_check_version(NULL);
+            return v == NULL ? 1 : 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libassuan) test.c -o test $(pkg-config --libs libassuan)
+        ./test

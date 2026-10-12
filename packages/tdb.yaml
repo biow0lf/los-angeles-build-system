@@ -1,0 +1,173 @@
+package:
+  name: tdb
+  version: "1.4.15"
+  epoch: 4 # glibc: 2.43->2.44
+  description: The tdb library
+  copyright:
+    - license: LGPL-3.0-or-later
+  resources:
+    cpu: "4"
+    memory: 9Gi
+
+vars:
+  pypi-package: tdb
+  import: tdb
+
+data:
+  - name: py-versions
+    items:
+      3.10: "310"
+      3.11: "311"
+      3.12: "312"
+      3.13: "313"
+
+environment:
+  contents:
+    packages:
+      - apk-tools
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - py3-supported-build-base-dev
+      - python3
+
+pipeline:
+  - uses: git-checkout
+    with:
+      depth: 1
+      expected-commit: c05d12c4fefa0272fb06a040ff8ba2b03ab42fb3
+      repository: https://gitlab.com/samba-team/samba.git
+      tag: tdb-${{package.version}}
+
+  - uses: autoconf/configure
+    working-directory: lib/tdb
+
+  - uses: autoconf/make
+    working-directory: lib/tdb
+
+  - uses: autoconf/make-install
+    working-directory: lib/tdb
+
+  - uses: strip
+
+subpackages:
+  - name: tdb-dev
+    pipeline:
+      - uses: split/dev
+    description: tdb dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: python${{range.key}} version of ${{vars.pypi-package}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}
+    pipeline:
+      - runs: |
+          # ./configure expects `python3` to be the version of Python we're
+          # building against unless certain environment variables are set, but
+          # we can't set environment variables per-subpackage, nor can we pass
+          # them to autoconf/configure: instead, we ensure the appropriate
+          # `python3`-defaulting package is installed
+          apk del python-3.13
+          apk add python-${{range.key}}
+      - uses: autoconf/configure
+        working-directory: lib/tdb
+      - uses: autoconf/make
+        working-directory: lib/tdb
+      - uses: autoconf/make-install
+        working-directory: lib/tdb
+      - runs: |
+          apk del python-${{range.key}}
+      - runs: |
+          savedir="${{targets.contextdir}}.sav"
+          mkdir -p "$savedir/usr/lib"
+          mv "${{targets.contextdir}}"/usr/lib/python${{range.key}} "$savedir/usr/lib"
+          rm -rf "${{targets.contextdir}}"
+          mv "$savedir" "${{targets.contextdir}}"
+      - uses: strip
+    test:
+      pipeline:
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.import}}
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/emptypackage
+        - uses: python/import
+          with:
+            python: python3.10
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.11
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.12
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.13
+            import: ${{vars.import}}
+
+update:
+  enabled: true
+  git:
+    strip-prefix: tdb-
+    tag-filter-prefix: tdb-
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Create and query a TDB database
+      runs: |
+        # Create a TDB database and insert key/value pairs.
+        # Use heredoc piped to tdbtool (no filename arg) so the
+        # "create" command inside tdbtool opens the new file.
+        tdbtool << 'EOF'
+        create /tmp/test.tdb
+        insert key1 value1
+        insert key2 value2
+        quit
+        EOF
+        # Dump the database and verify the keys are present
+        tdbdump /tmp/test.tdb | grep -F "key1"
+        tdbdump /tmp/test.tdb | grep -F "key2"
+    - name: Backup and restore a TDB database
+      runs: |
+        # Create a TDB database
+        tdbtool << 'EOF'
+        create /tmp/backup_test.tdb
+        insert testkey testvalue
+        quit
+        EOF
+        # Backup the database (creates backup_test.tdb.bak in TDB binary format)
+        tdbbackup /tmp/backup_test.tdb
+        # Verify the backup file was created
+        if ! [ -f /tmp/backup_test.tdb.bak ]; then
+          echo "ERROR: tdbbackup did not create /tmp/backup_test.tdb.bak"
+          exit 1
+        fi
+        # Restore via tdbdump text format: tdbrestore reads from stdin
+        tdbdump /tmp/backup_test.tdb | tdbrestore /tmp/restored.tdb
+        # Verify the restored database contains the original data
+        tdbdump /tmp/restored.tdb | grep -F "testkey"

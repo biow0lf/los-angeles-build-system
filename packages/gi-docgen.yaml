@@ -1,0 +1,149 @@
+package:
+  name: gi-docgen
+  version: "2026.1"
+  epoch: 3 # split/manpages
+  description: A documentation generator for GObject-based libraries
+  copyright:
+    - license: Apache-2.0 OR GPL-3.0-or-later
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "2"
+    memory: 7Gi
+
+vars:
+  pypi-package: gi-docgen
+  # Latest supported python version; the -doc subpackage splits
+  # the manual pages out of this interpreter's subpackage.
+  python-version: "3.13"
+
+data:
+  - name: py-versions
+    items:
+      3.11: '311'
+      3.12: '312'
+      3.13: '313'
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - meson
+      - py3-supported-jinja2
+      - py3-supported-markdown
+      - py3-supported-markupsafe
+      - py3-supported-packaging
+      - py3-supported-pip
+      - py3-supported-pygments
+      - py3-supported-python
+      - py3-supported-typogrify
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.gnome.org/GNOME/gi-docgen
+      tag: ${{package.version}}
+      expected-commit: 3142afb34f5dee4889c92d3bc8ec2bd2aabb90b7
+
+subpackages:
+  - range: py-versions
+    name: gi-docgen-py${{range.key}}
+    description: gi-docgen for Python ${{range.key}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - gi-docgen
+    pipeline:
+      - runs: |
+          py=python${{range.key}}
+          pyfullpath=$(which "$py") || {
+            echo "ERROR: '$py' not found in PATH."
+            exit 1
+          }
+
+          echo "Using Python interpreter: $pyfullpath"
+
+          # Create a temporary directory and symlink for python3
+          tmp_dir=$(mktemp -d)
+          trap "rm -rf $tmp_dir" EXIT
+          ln -s "$pyfullpath" "$tmp_dir/python3"
+          export PATH="$tmp_dir:$PATH"
+
+          # Cleanup previous build and compile
+          rm -rf output
+
+          meson . output
+          meson compile ${JOBS:+-j ${JOBS}} -C output
+          DESTDIR="${{targets.contextdir}}" meson install --no-rebuild -C output
+      - uses: strip
+      - name: Remove pkgconfig as it causing conflicts
+        runs: rm -rf ${{targets.contextdir}}/usr/local/share
+    test:
+      pipeline:
+        - uses: test/virtualpackage
+          with:
+            virtual-pkg-name: "gi-docgen"
+            real-pkg-name: "${{subpkg.name}}"
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: python${{range.key}} version of ${{vars.pypi-package}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}
+      runtime:
+        - py${{range.key}}-jinja2
+        - py${{range.key}}-markdown
+        - py${{range.key}}-markupsafe
+        - py${{range.key}}-packaging
+        - py${{range.key}}-pygments
+        - py${{range.key}}-typogrify
+        - python-${{range.key}}
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - uses: strip
+    test:
+      environment:
+        contents:
+          packages:
+            - python-${{range.key}}
+      pipeline:
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: gidocgen
+        - runs: |
+            gi-docgen --version
+            gi-docgen --help
+        - uses: test/virtualpackage
+          with:
+            virtual-pkg-name: "py3-${{vars.pypi-package}}"
+            real-pkg-name: "${{subpkg.name}}"
+
+  - name: ${{package.name}}-doc
+    description: ${{package.name}} manpages
+    pipeline:
+      - uses: split/manpages
+        with:
+          package: py${{vars.python-version}}-${{vars.pypi-package}}
+      - runs: |
+          rm -rf ${{targets.outdir}}/py3*-${{vars.pypi-package}}/usr/share/man
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 178582
+
+test:
+  pipeline:
+    - uses: test/virtualpackage
+      with:
+        virtual-pkg-name: "gi-docgen"

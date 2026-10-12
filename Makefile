@@ -87,7 +87,7 @@ build-package: build-builder-image
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v /tmp:/tmp \
 		-v $(CURDIR):/work -w /work $(BUILDER_IMAGE) \
-		melange build packages/$(PKG).yaml \
+		melange build --log-level debug packages/$(PKG).yaml \
 		--arch $(ARCH) \
 		--runner=docker \
 		--repository-append=packages-out \

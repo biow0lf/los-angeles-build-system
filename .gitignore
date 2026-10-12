@@ -1,5 +1,6 @@
 /keys/*.rsa
 /packages-out/
+/melange-cache/
 /work/
 *.img
 *.qcow2

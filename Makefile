@@ -29,6 +29,15 @@ BOOTSTRAP_KEY := https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
 # it cleanly (not just a seed/placeholder) -- see BOOTSTRAP.md.
 PUBLISHED_REPO := https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev
 
+# melange's own caches (fetched sources, downloaded apk packages) default to
+# paths that would land inside the --rm'd outer docker container's own
+# filesystem, not the bind-mounted $(CURDIR):/work -- so without pointing
+# them here explicitly, every single `make build-package` invocation starts
+# cold and re-downloads every build-time apk dependency from scratch, even
+# ones that haven't changed since the last build. Living under $(CURDIR)
+# makes them persist across invocations like packages-out already does.
+MELANGE_CACHE_DIR := melange-cache
+
 # Every target below runs the same builder image; docker.sock and privileged
 # access are opted into only by the specific targets that need them, so
 # privilege never leaks into steps that don't require it.
@@ -67,7 +76,7 @@ SOURCE_DIR_FLAG = --source-dir=$(if $(wildcard packages/$(PKG)),packages/$(PKG),
 
 build-package: build-builder-image
 	@if [ -z "$(PKG)" ]; then echo "usage: make build-package PKG=<name>"; exit 1; fi
-	mkdir -p packages-out
+	mkdir -p packages-out $(MELANGE_CACHE_DIR)/apk $(MELANGE_CACHE_DIR)/sources
 	# -v /tmp:/tmp: melange's docker runner is a sibling container talking to
 	# the host daemon over the socket, so the workspace dirs it bind-mounts
 	# into build-guest containers must exist at identical paths on the host
@@ -86,6 +95,7 @@ build-package: build-builder-image
 	docker run --rm --privileged --platform $(PLATFORM) \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v /tmp:/tmp \
+		-v $(CURDIR)/$(MELANGE_CACHE_DIR):$(CURDIR)/$(MELANGE_CACHE_DIR) \
 		-v $(CURDIR):/work -w /work $(BUILDER_IMAGE) \
 		melange build --log-level debug packages/$(PKG).yaml \
 		--arch $(ARCH) \
@@ -98,6 +108,8 @@ build-package: build-builder-image
 		--signing-key=keys/melange.rsa \
 		--out-dir=./packages-out \
 		--pipeline-dir=pipelines \
+		--cache-dir=$(CURDIR)/$(MELANGE_CACHE_DIR)/sources \
+		--apk-cache-dir=$(MELANGE_CACHE_DIR)/apk \
 		$(SOURCE_DIR_FLAG)
 
 build-index: build-builder-image

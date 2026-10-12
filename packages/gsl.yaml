@@ -1,0 +1,160 @@
+# Generated from https://git.alpinelinux.org/aports/plain/community/gsl/APKBUILD
+package:
+  name: gsl
+  version: "2.8"
+  epoch: 11 # glibc: 2.43->2.44
+  description: Modern numerical library for C and C++ programmers
+  copyright:
+    - license: GPL-3.0-or-later
+  resources:
+    cpu: "6"
+    memory: 7Gi
+
+var-transforms:
+  - from: ${{package.version}}
+    match: \.
+    replace: "-"
+    to: mangled-package-version
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/gsl.git
+      tag: release-${{vars.mangled-package-version}}
+      expected-commit: f6de5706f9287e7b9cf5eebf31274caedf6f9603
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: gsl-static
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+    description: gsl static
+
+  - name: gsl-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - gsl
+    description: gsl dev
+    test:
+      environment:
+        contents:
+          packages:
+            - build-base
+      pipeline:
+        - uses: test/tw/ver-check
+          with:
+            bins: gsl-config
+            version: ${{package.version}}
+        - uses: test/tw/help-check
+          with:
+            bins: gsl-config
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+        - name: Compile and link test with GSL
+          runs: |
+            set -euo pipefail
+
+            tee test.c <<'EOF'
+            #include <gsl/gsl_sf_bessel.h>
+            #include <stdio.h>
+            int main() {
+                double y = gsl_sf_bessel_J0(5.0);
+                printf("J0(5.0) = %g\n", y);
+                return 0;
+            }
+            EOF
+
+            gcc $(pkg-config --cflags gsl) test.c -o test $(pkg-config --libs gsl)
+            ./test
+
+  - name: gsl-doc
+    pipeline:
+      - uses: split/manpages
+    description: gsl manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  version-transform:
+    - match: "-"
+      replace: .
+  git:
+    strip-prefix: release-
+
+test:
+  environment:
+    contents:
+      packages:
+        - gsl-dev
+        - build-base
+  pipeline:
+    - uses: test/tw/help-check
+      with:
+        bins: gsl-histogram gsl-randist
+    - uses: test/tw/ldd-check
+    - name: Test gsl-histogram functional
+      runs: |
+        set -euo pipefail
+
+        # Feed numeric data into gsl-histogram with range 0-10 and 5 bins
+        printf '1\n2\n3\n4\n5\n6\n7\n8\n9\n' | gsl-histogram 0 10 5 > /tmp/hist_output.txt
+
+        # Verify output contains histogram data (numeric lines)
+        line_count=$(wc -l < /tmp/hist_output.txt)
+        [ "$line_count" -ge 1 ] || { echo "FAIL: No histogram output"; exit 1; }
+
+        echo "SUCCESS: gsl-histogram produced output"
+    - name: Test gsl-randist functional
+      runs: |
+        set -euo pipefail
+
+        # Generate 10 random samples from a Gaussian distribution with seed 0
+        gsl-randist 0 10 gaussian 1.0 > /tmp/randist_output.txt
+
+        # Verify output was produced and contains numeric data
+        line_count=$(wc -l < /tmp/randist_output.txt)
+        [ "$line_count" -ge 1 ] || { echo "FAIL: No randist output"; exit 1; }
+
+        echo "SUCCESS: gsl-randist produced output"
+    - name: Compile and link test with GSL library
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <gsl/gsl_sf_bessel.h>
+        #include <stdio.h>
+        int main() {
+            double y = gsl_sf_bessel_J0(5.0);
+            printf("J0(5.0) = %g\n", y);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags gsl) test.c -o test $(pkg-config --libs gsl)
+        ./test

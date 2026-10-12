@@ -1,0 +1,146 @@
+package:
+  name: gtest
+  version: "1.18.0"
+  epoch: 4 # glibc: 2.43->2.44
+  description: Google Test - C++ testing utility based on the xUnit framework (like JUnit)
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "7"
+    memory: 14Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - glibc-2.44-dev
+      - python3
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 063de7e9578f82b369302001269680b4b1553359
+      repository: https://github.com/google/googletest
+      tag: v${{package.version}}
+
+  # gcc 14.2-14.4 on aarch64 ICE while compiling gtest's own tests when
+  # ParamIteratorInterface carries [[nodiscard]]; see the patch header.
+  # Drop once the toolchain moves past the affected gcc versions.
+  - uses: patch
+    with:
+      patches: gcc14-aarch64-nodiscard-ice-workaround.patch
+
+  - uses: cmake/configure
+    with:
+      opts: |
+        -DBUILD_SHARED_LIBS=ON \
+        -DPYTHON_EXECUTABLE=python3 \
+        -Dgtest_build_tests=ON \
+        -DBUILD_GMOCK=ON
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: gtest-dev
+    pipeline:
+      - uses: split/dev
+    description: Google Test SDK
+    test:
+      environment:
+        contents:
+          packages:
+            - gtest-dev
+            - build-base
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: ${{subpkg.name}}
+        - uses: test/tw/devpackage
+        - name: Test gtest-dev compile with pkg-config
+          runs: |
+            tee test_dev.cpp <<'EOF'
+            #include <gtest/gtest.h>
+            TEST(DevTest, BasicAssertion) {
+                EXPECT_EQ(1, 1);
+            }
+            EOF
+
+            g++ $(pkg-config --cflags gtest) test_dev.cpp -o test_dev $(pkg-config --libs gtest) $(pkg-config --libs gtest_main) -pthread
+            ./test_dev
+
+  - name: gmock
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/lib
+          mv "${{targets.destdir}}"/usr/lib/libgmock*.so* "${{targets.subpkgdir}}"/usr/lib/
+    test:
+      environment:
+        contents:
+          packages:
+            - gtest-dev
+            - build-base
+            - pkgconf
+      pipeline:
+        - uses: test/tw/ldd-check
+          with:
+            packages: ${{subpkg.name}}
+        - name: Test gmock compile and link
+          runs: |
+            tee test_gmock.cpp <<'EOF'
+            #include <gmock/gmock.h>
+            #include <gtest/gtest.h>
+
+            class MockFoo {
+            public:
+                MOCK_METHOD(int, GetValue, ());
+            };
+
+            TEST(GmockTest, MockWorks) {
+                MockFoo foo;
+                EXPECT_CALL(foo, GetValue()).WillOnce(testing::Return(42));
+                EXPECT_EQ(foo.GetValue(), 42);
+            }
+            EOF
+
+            g++ $(pkg-config --cflags gmock) test_gmock.cpp -o test_gmock $(pkg-config --libs gmock) $(pkg-config --libs gtest_main) -pthread
+            ./test_gmock
+
+test:
+  environment:
+    contents:
+      packages:
+        - gtest-dev
+        - build-base
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test gtest compile and run
+      runs: |
+        tee test_gtest.cpp <<'EOF'
+        #include <gtest/gtest.h>
+
+        TEST(SampleTest, Addition) {
+            EXPECT_EQ(2 + 2, 4);
+        }
+
+        TEST(SampleTest, StringComparison) {
+            std::string hello = "hello";
+            EXPECT_EQ(hello, "hello");
+            EXPECT_NE(hello, "world");
+        }
+        EOF
+
+        g++ test_gtest.cpp -lgtest -lgtest_main -pthread -o test_gtest
+        ./test_gtest
+
+update:
+  enabled: true
+  github:
+    identifier: google/googletest
+    strip-prefix: v
+    tag-filter: v

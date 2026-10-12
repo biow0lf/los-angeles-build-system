@@ -1,0 +1,80 @@
+package:
+  name: protobuf-c
+  version: "1.5.2" # On update, please check if -fdelete-null-pointer-checks is still required
+  epoch: 11 # glibc: 2.43->2.44
+  description: Protocol Buffers implementation in C
+  copyright:
+    - license: BSD-2-Clause
+  resources:
+    cpu: "3"
+    memory: 13Gi
+
+environment:
+  contents:
+    packages:
+      - abseil-cpp-20250127-dev
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44
+      - glibc-2.44-dev
+      - libtool
+      # protobuf 34+ removed FieldDescriptor::label(); unpin once protobuf-c/protobuf-c#797 is released
+      - protobuf-29.5-dev
+  environment:
+    # https://github.com/wolfi-dev/os/issues/34075
+    CXXFLAGS: -fdelete-null-pointer-checks
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 4719fdd7760624388c2c5b9d6759eb6a47490626
+      repository: https://github.com/protobuf-c/protobuf-c.git
+      tag: v${{package.version}}
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: protobuf-c-compiler
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/bin
+          mv ${{targets.destdir}}/usr/bin/protoc-c ${{targets.subpkgdir}}/usr/bin/
+          mv ${{targets.destdir}}/usr/bin/protoc-gen-c ${{targets.subpkgdir}}/usr/bin/
+    description: Protocol Buffers C compiler
+    test:
+      pipeline:
+        - runs: |
+            protoc-c --version
+            protoc-c --help
+
+  - name: protobuf-c-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - protobuf-c
+        - protobuf-c-compiler
+    description: protobuf-c dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: protobuf-c/protobuf-c
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

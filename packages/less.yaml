@@ -1,0 +1,74 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/less/APKBUILD
+package:
+  name: less
+  version: "711"
+  epoch: 0 # glibc: 2.43->2.44
+  description: File pager
+  copyright:
+    - license: GPL-3.0-or-later OR BSD-2-Clause
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - groff
+      - ncurses-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 52c3b13f35d73c624d4a1ddd0dbe3a1a072159ab
+      repository: https://github.com/gwsw/less
+      tag: v${{package.version}}
+
+  - runs: make -f Makefile.aut distfiles
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Validate that lessecho runs
+      runs: |
+        # lessecho is really just internal help for less binary
+        # but this will show it can be executed and provides expected output.
+        expected='a\:b'
+        found=$(/usr/libexec/lessecho -m: a:b) || exit
+        [ "$expected" = "$found" ]
+    # lesskey was removed as a separate binary in version 706;
+    # its functionality was integrated into the less binary itself.
+    - uses: test/tw/ver-check
+      with:
+        bins: less
+    - uses: test/tw/help-check
+      with:
+        bins: less
+    - uses: test/no-docs
+
+subpackages:
+  - name: less-doc
+    pipeline:
+      - uses: split/manpages
+    description: less manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: gwsw/less
+    use-tag: true
+    strip-prefix: v
+    tag-filter-prefix: v

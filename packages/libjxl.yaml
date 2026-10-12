@@ -1,0 +1,174 @@
+package:
+  name: libjxl
+  version: "0.12.0"
+  epoch: 3 # llvm: 22->23
+  description: JPEG XL image format reference implementation.
+  copyright:
+    - license: BSD-3-Clause
+  dependencies:
+    runtime:
+      - brotli-dev
+  resources:
+    cpu: "5"
+    memory: 13Gi
+  test-resources:
+    cpu: "1"
+    memory: 3Gi
+
+environment:
+  contents:
+    packages:
+      - brotli-dev
+      - build-base
+      - clang-${{vars.llvm-version}}
+      - cmake
+      - giflib-dev
+      - glibc-2.44-dev
+      - highway-dev
+      - libjpeg-turbo-dev
+      - libpng-dev
+      - lld-${{vars.llvm-version}}
+      - ninja
+      - pkgconf
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libjxl/libjxl
+      tag: v${{package.version}}
+      expected-commit: a7a9c787341cf703dede03c2009fa460cae5e5df
+      recurse-submodules: true
+
+  - uses: cmake/configure
+    with:
+      opts: |
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_TESTING=OFF
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - name: Remove brotli files which are provided by brotli-dev
+    runs: |
+      rm -rf "${{targets.destdir}}"/usr/lib/libbrotli*
+      rm -rf "${{targets.destdir}}"/usr/bin/brotli*
+
+  - uses: strip
+
+subpackages:
+  - name: libjxl-dev
+    description: libjxl development files
+    pipeline:
+      - uses: split/dev
+      - runs: |
+          # It conflicts with brotli-dev, so remove the file and provide it via brotli-dev
+          rm -rf "${{targets.subpkgdir}}"/usr/include/brotli
+          rm -rf "${{targets.subpkgdir}}"/usr/lib/libbrotli*
+          rm -rf "${{targets.subpkgdir}}"/usr/lib/pkgconfig/libbrotli*
+    dependencies:
+      runtime:
+        - libjxl
+        - brotli-dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libjxl-tools
+    description: JPEG XL command-line tools (cjxl, djxl, benchmark_xl)
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}/usr/bin"
+          for b in cjxl djxl benchmark_xl jxlinfo jxltran; do
+            if [ -x "${{targets.destdir}}/usr/bin/$b" ]; then
+              mv "${{targets.destdir}}/usr/bin/$b" "${{targets.subpkgdir}}/usr/bin/"
+            fi
+          done
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              cjxl
+              djxl
+              jxlinfo
+              jxltran
+        - name: Encode PPM to JXL and decode back
+          runs: |
+            # Create a valid 4x4 binary PPM (P6 = binary RGB) test image:
+            #   header: "P6\n<width> <height>\n<maxval>\n"
+            #   body:   4*4*3 = 48 bytes of raw RGB pixel data (all zeros = solid black)
+            printf 'P6\n4 4\n255\n' > /tmp/test.ppm
+            dd if=/dev/zero bs=48 count=1 >> /tmp/test.ppm
+
+            # Encode PPM to JXL (lossless)
+            cjxl /tmp/test.ppm /tmp/test.jxl --lossless_jpeg=0
+            test -f /tmp/test.jxl
+
+            # Verify the JXL file metadata with jxlinfo
+            jxlinfo /tmp/test.jxl | grep -F "4x4"
+
+            # Decode JXL back to PPM and verify output exists
+            djxl /tmp/test.jxl /tmp/out.ppm
+            test -f /tmp/out.ppm
+
+  - name: libjxl-doc
+    description: Documentation for libjxl
+    pipeline:
+      - uses: split/alldocs
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: libjxl/libjxl
+    tag-filter-prefix: v
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - libjxl-dev
+        - gcc
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Compile and run a program using the libjxl decode/encode API
+      runs: |
+        cat > /tmp/test_jxl.c << 'EOF'
+        #include <jxl/decode.h>
+        #include <jxl/encode.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main(void) {
+          /* Test decoder creation and destruction */
+          JxlDecoder *dec = JxlDecoderCreate(NULL);
+          if (!dec) {
+            fprintf(stderr, "JxlDecoderCreate failed\n");
+            return 1;
+          }
+          JxlDecoderDestroy(dec);
+
+          /* Test encoder creation and destruction */
+          JxlEncoder *enc = JxlEncoderCreate(NULL);
+          if (!enc) {
+            fprintf(stderr, "JxlEncoderCreate failed\n");
+            return 1;
+          }
+          JxlEncoderDestroy(enc);
+
+          printf("libjxl API: decoder and encoder created successfully\n");
+          return 0;
+        }
+        EOF
+        gcc /tmp/test_jxl.c -o /tmp/test_jxl -ljxl
+        /tmp/test_jxl
+
+vars:
+  llvm-version: 23

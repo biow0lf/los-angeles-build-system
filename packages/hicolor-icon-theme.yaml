@@ -1,0 +1,65 @@
+package:
+  name: hicolor-icon-theme
+  version: "0.18"
+  epoch: 8 # go/wolfi-rsc/hicolor-icon-theme
+  description: Freedesktop.org Hicolor icon theme
+  copyright:
+    - license: GPL-2.0-only
+  resources:
+    cpu: "2"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xdg/default-icon-theme
+      tag: v${{package.version}}
+      expected-commit: a6dd02575b9e3d9e3e476b135ba92738563fe763
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1316
+
+test:
+  pipeline:
+    - uses: test/pkgconf
+    - name: Verify index.theme file exists
+      uses: test/tw/contains-files
+      with:
+        files: /usr/share/icons/hicolor/index.theme
+    - name: Verify index.theme content
+      runs: |
+        set -euo pipefail
+        # Verify the index.theme file contains expected icon theme metadata
+        grep -F '[Icon Theme]' /usr/share/icons/hicolor/index.theme
+        grep -F 'Name=Hicolor' /usr/share/icons/hicolor/index.theme
+    - name: Verify icon size directories exist
+      uses: test/tw/contains-files
+      with:
+        dir: /usr/share/icons/hicolor/
+        type: d
+        name: "48x48"
+    - name: Verify scalable directory exists
+      uses: test/tw/contains-files
+      with:
+        dir: /usr/share/icons/hicolor/
+        type: d
+        name: "scalable"

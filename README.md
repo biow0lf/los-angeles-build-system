@@ -14,7 +14,7 @@ Simple desktop linux.
 * builded by AI
 * fixed by humans
 * vanilla packages with minimal patches
-* Noctalia Shell
+* Noctalia Shell v5 (with umbriel or labwc)
 
 ## TODO
 

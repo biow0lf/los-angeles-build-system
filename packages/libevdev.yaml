@@ -1,0 +1,130 @@
+package:
+  name: libevdev
+  version: "1.14.0"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Kernel Evdev Device Wrapper Library
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - doxygen
+      - glibc-2.44
+      - glibc-2.44-dev
+      - linux-headers
+      - python3
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/libevdev/libevdev
+      tag: libevdev-${{package.version}}
+      expected-commit: d9af2e4580297e9c14715fef06621dd39d9d8a3a
+
+  - uses: meson/configure
+    with:
+      opts: -Dtests=disabled
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: libevdev-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - linux-headers
+    description: libevdev dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libevdev-doc
+    pipeline:
+      - uses: split/manpages
+    description: libevdev manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: libevdev-tools
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/bin/
+          mv "${{targets.destdir}}"/usr/bin/* "${{targets.contextdir}}"/usr/bin/
+    description: libevdev utilities
+    test:
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: libevdev-tweak-device
+        - name: Test libevdev-tweak-device rejects missing device
+          runs: |
+            # libevdev-tweak-device requires a real evdev device; verify it
+            # correctly reports an error when given a non-existent device path,
+            # which exercises the binary's device-open logic.
+            if libevdev-tweak-device --resolution 100 /dev/input/event-nonexistent 2>/tmp/err; then
+              echo "ERROR: expected non-zero exit for missing device"
+              exit 1
+            fi
+            grep -F "open" /tmp/err || grep -F "No such" /tmp/err
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 20540
+
+test:
+  environment:
+    contents:
+      packages:
+        - libevdev-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Test libevdev library compilation and usage
+      runs: |
+        tee test.c <<'EOF'
+        #include <libevdev/libevdev.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main() {
+            struct libevdev *dev = libevdev_new();
+            if (!dev) {
+                fprintf(stderr, "FAIL: libevdev_new() returned NULL\n");
+                return 1;
+            }
+
+            /* Verify we can set and get the device name */
+            libevdev_set_name(dev, "test-device");
+            const char *name = libevdev_get_name(dev);
+            if (!name) {
+                fprintf(stderr, "FAIL: libevdev_get_name() returned NULL\n");
+                libevdev_free(dev);
+                return 1;
+            }
+
+            printf("Device name: %s\n", name);
+            libevdev_free(dev);
+            printf("SUCCESS: libevdev library works correctly\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libevdev) test.c -o test $(pkg-config --libs libevdev)
+        ./test

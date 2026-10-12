@@ -1,0 +1,135 @@
+package:
+  name: libglvnd
+  version: 1.7.0
+  epoch: 11 # glibc: 2.43->2.44
+  description: The GL Vendor-Neutral Dispatch library
+  copyright:
+    - license: GPL-2.0-or-later AND BSD-2-Clause AND BSD-3-Clause AND MIT AND Apache-2.0
+  resources:
+    cpu: "1"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - gtk-doc
+      - intltool
+      - libtool
+      - libx11-dev
+      - libxext-dev
+      - libxml2-py3
+      - m4
+      - meson
+      - pkgconf
+      - pkgconf-dev
+      - python3
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/glvnd/libglvnd
+      tag: v${{package.version}}
+      expected-commit: faa23f21fc677af5792825dc30cb1ccef4bf33a6
+
+  - runs: |
+      ./autogen.sh
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    description: ${{package.name}} dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libglvnd
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: libglvnd-dev
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 12098
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - gcc
+        - libglvnd-dev
+  pipeline:
+    - runs: |
+        cat <<EOF > check_egl_gl_functions.c
+        #include <stdio.h>
+        #include <dlfcn.h>
+
+        int main() {
+            // Open the EGL library
+            void *eglHandle = dlopen("libEGL.so", RTLD_LAZY);
+            if (!eglHandle) {
+                fprintf(stderr, "Failed to open libEGL.so: %s\n", dlerror());
+                return -1;
+            }
+
+            // Check for the presence of key EGL functions
+            void (*eglInitialize)(void) = dlsym(eglHandle, "eglInitialize");
+            void (*eglGetDisplay)(void) = dlsym(eglHandle, "eglGetDisplay");
+            if (!eglInitialize || !eglGetDisplay) {
+                fprintf(stderr, "Failed to find necessary EGL functions: %s\n", dlerror());
+                dlclose(eglHandle);
+                return -1;
+            }
+            printf("EGL functions are available.\n");
+
+            // Open the OpenGL library
+            void *glHandle = dlopen("libGL.so", RTLD_LAZY);
+            if (!glHandle) {
+                fprintf(stderr, "Failed to open libGL.so: %s\n", dlerror());
+                dlclose(eglHandle);
+                return -1;
+            }
+
+            // Check for the presence of key OpenGL functions
+            const char* (*glGetString)(unsigned int) = dlsym(glHandle, "glGetString");
+            void (*glClear)(unsigned int) = dlsym(glHandle, "glClear");
+            if (!glGetString || !glClear) {
+                fprintf(stderr, "Failed to find necessary OpenGL functions: %s\n", dlerror());
+                dlclose(glHandle);
+                dlclose(eglHandle);
+                return -1;
+            }
+            printf("OpenGL functions are available.\n");
+
+            // Clean up
+            dlclose(glHandle);
+            dlclose(eglHandle);
+
+            return 0;
+        }
+        EOF
+
+        gcc check_egl_gl_functions.c -o check_egl_gl_functions -ldl
+        ./check_egl_gl_functions > /tmp/glvnd_out.txt
+        grep -F "EGL functions are available." /tmp/glvnd_out.txt
+        grep -F "OpenGL functions are available." /tmp/glvnd_out.txt
+    - uses: test/tw/ldd-check

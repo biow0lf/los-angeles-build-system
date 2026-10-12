@@ -1,0 +1,66 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/graphene/APKBUILD
+package:
+  name: graphene
+  version: 1.10.8
+  epoch: 9 # glibc: 2.43->2.44
+  description: A thin layer of graphic data types
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glib-dev
+      - glib-gir
+      - glibc-2.44-dev
+      - gobject-introspection-dev
+      - meson
+      - python3
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/ebassi/graphene
+      tag: ${{package.version}}
+      expected-commit: 4e2578450809c2099400cf85caf18eafcd7100aa
+
+  - runs: |
+      meson \
+        --prefix=/usr \
+        -Dinstalled_tests=false \
+        . output
+      meson compile ${JOBS:+-j ${JOBS}} -C output
+      DESTDIR="${{targets.destdir}}" meson install --no-rebuild -C output
+
+  - uses: strip
+
+subpackages:
+  - name: graphene-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - graphene
+    description: graphene dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: ebassi/graphene
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

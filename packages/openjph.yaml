@@ -1,0 +1,130 @@
+package:
+  name: openjph
+  version: "0.32.0"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Open source implementation of High-throughput JPEG2000 (HTJ2K)
+  copyright:
+    - license: BSD-2-Clause
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - glibc-2.44-dev
+      - tiff-dev
+
+var-transforms:
+  - from: ${{package.version}}
+    match: ^(\d+\.\d+).*
+    replace: $1
+    to: soversion
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/aous72/OpenJPH.git
+      expected-commit: 23c422895ce6c3a156935222e4715ee0b7be952c
+      tag: ${{package.version}}
+
+  - name: Configure shared build
+    uses: cmake/configure
+    with:
+      output-dir: build-shared
+      opts: |
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+
+  - name: Build shared build
+    uses: cmake/build
+    with:
+      output-dir: build-shared
+
+  - name: Configure static build
+    uses: cmake/configure
+    with:
+      output-dir: build-static
+      opts: |
+        -DBUILD_SHARED_LIBS=OFF \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+
+  - name: Build static build
+    uses: cmake/build
+    with:
+      output-dir: build-static
+
+  - name: Install static build
+    uses: cmake/install
+    with:
+      output-dir: build-static
+
+  - name: Install shared build
+    uses: cmake/install
+    with:
+      output-dir: build-shared
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: aous72/OpenJPH
+
+subpackages:
+  - name: ${{package.name}}-dev
+    description: ${{package.name}} development libraries and headers
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/tw/ldd-check
+        - uses: test/pkgconf
+
+  - name: ${{package.name}}-static
+    description: ${{package.name}} static libraries
+    dependencies:
+      runtime:
+        - ${{package.name}}-dev=${{package.full-version}}
+    pipeline:
+      - uses: split/static
+        with:
+          package: "openjph-dev"
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: lib${{package.name}}${{vars.soversion}}
+    description: ${{package.name} libraries
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib/*.so.* ${{targets.contextdir}}/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test compress and expand round-trip
+      runs: |
+        # Create a minimal PPM test image (8x8 pixels, white)
+        printf "P6\n8 8\n255\n" > /tmp/test.ppm
+        dd if=/dev/zero bs=192 count=1 >> /tmp/test.ppm
+
+        # Compress the PPM to HTJ2K format
+        ojph_compress -i /tmp/test.ppm -o /tmp/test.jph
+
+        # Verify the compressed file was created
+        stat /tmp/test.jph
+
+        # Expand the HTJ2K file back to PPM
+        ojph_expand -i /tmp/test.jph -o /tmp/output.ppm
+
+        # Verify the expanded file was created
+        stat /tmp/output.ppm

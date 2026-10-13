@@ -1,0 +1,82 @@
+#nolint:valid-pipeline-git-checkout-tag
+package:
+  name: dnssec-root
+  # Version is called by latest validFrom key in https://data.iana.org/root-anchors/root-anchors.xml, followed by git snapshot date, this is compatible with periodic updates
+  version: "20240718_git20260910"
+  epoch: 0
+  description: The DNSSEC root key(s)
+  copyright:
+    - license: CC-PDDC
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gpg
+      - openssl
+      - python3
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/iana-org/get-trust-anchor
+      branch: master
+      expected-commit: 0a21ec35e1902e2722bdca666dc4e79e0d8e9a27
+
+  - runs: |
+      python3 -m get_trust_anchor
+      sort -k 6 ksk-as-dnskey.txt* > trusted-key.key
+
+      # abump on alpine updates the version?  https://wiki.alpinelinux.org/wiki/Include:Abump
+      # abump dnssec-root-$(date "+%Y%m%d")
+
+      mkdir -p ${{targets.destdir}}/usr/share/dnssec-root
+      install -Dm644 trusted-key.key ${{targets.destdir}}/usr/share/dnssec-root/trusted-key.key
+
+update:
+  enabled: true
+  git: {}
+  schedule:
+    period: weekly
+    reason: Anchors change with about 3 years of notice
+
+test:
+  pipeline:
+    - uses: test/tw/contains-files
+      with:
+        files: /usr/share/dnssec-root/trusted-key.key
+    - name: Verify file is not empty
+      runs: |
+        set -euo pipefail
+        # Verify the trusted-key.key file has content (non-zero size)
+        test -s /usr/share/dnssec-root/trusted-key.key || {
+          echo "FAIL: trusted-key.key is empty"
+          exit 1
+        }
+        echo "SUCCESS: trusted-key.key is non-empty"
+    - name: Verify DNSKEY content
+      runs: |
+        set -euo pipefail
+        KEY_FILE=/usr/share/dnssec-root/trusted-key.key
+
+        # Verify the file contains DNSKEY records
+        grep -qF "DNSKEY" "$KEY_FILE" || {
+          echo "FAIL: trusted-key.key does not contain DNSKEY records"
+          exit 1
+        }
+
+        # Verify root zone '.' is present (this is the DNS root)
+        grep -q "^\." "$KEY_FILE" || {
+          echo "FAIL: trusted-key.key does not contain root zone entries"
+          exit 1
+        }
+
+        # Verify KSK flag 257 is present (Key Signing Key)
+        grep -qF "257" "$KEY_FILE" || {
+          echo "FAIL: trusted-key.key does not contain KSK flag 257"
+          exit 1
+        }
+
+        echo "SUCCESS: trusted-key.key contains valid DNSKEY records"

@@ -1,0 +1,97 @@
+package:
+  name: userspace-rcu
+  version: "0.15.7"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Userspace RCU (read-copy-update) library
+  copyright:
+    - license: LGPL-2.1-or-later
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bash
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - perl
+      - perl-utils
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.lttng.org/userspace-rcu.git
+      tag: v${{package.version}}
+      expected-commit: bbc6bc94901aebe6380e4e798858b995a8d3fd5d
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: userspace-rcu-static
+    pipeline:
+      - uses: split/static
+    description: userspace-rcu static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: userspace-rcu-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - userspace-rcu
+    description: userspace-rcu dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - userspace-rcu-dev
+  pipeline:
+    - name: "Compile and run a simple test program"
+      runs: |
+        cat << EOF > test_urcu.c
+        #include <stdio.h>
+        #include <urcu.h>
+
+        int main() {
+            rcu_register_thread();
+            printf("RCU thread registered successfully\n");
+            rcu_read_lock();
+            printf("RCU read lock acquired\n");
+            rcu_read_unlock();
+            printf("RCU read lock released\n");
+            rcu_unregister_thread();
+            printf("RCU thread unregistered successfully\n");
+            return 0;
+        }
+        EOF
+        gcc -o test_urcu test_urcu.c -lurcu
+        ./test_urcu | tee output.log
+        grep "RCU thread registered successfully" output.log
+        grep "RCU read lock acquired" output.log
+        grep "RCU read lock released" output.log
+        grep "RCU thread unregistered successfully" output.log
+    - uses: test/tw/ldd-check

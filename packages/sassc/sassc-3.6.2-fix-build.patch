@@ -1,0 +1,9 @@
+diff -urN sassc-3.6.2.orig/version.sh sassc-3.6.2/version.sh
+--- sassc-3.6.2.orig/version.sh	2020-10-27 02:21:20.000000000 +0100
++++ sassc-3.6.2/version.sh	2026-10-13 03:13:43.540671460 +0200
+@@ -1,3 +1,5 @@
++#! /bin/bash
++
+ if test "x$SASSC_VERSION" = "x"; then
+   SASSC_VERSION=`git describe --abbrev=4 --dirty --always --tags 2>/dev/null`
+ fi

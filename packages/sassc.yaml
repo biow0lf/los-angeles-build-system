@@ -1,0 +1,78 @@
+package:
+  name: sassc
+  version: "3.6.2"
+  epoch: 7 # fix build
+  description: Libsass command line driver
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - bash
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libsass-dev
+      - libtool
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/sass/sassc
+      tag: ${{package.version}}
+      expected-commit: 66f0ef37e7f0ad3a65d2f481eff09d09408f42d0
+
+  - uses: patch
+    with:
+      patches: sassc-3.6.2-fix-build.patch
+
+  - runs: |
+      ./script/bootstrap
+      autoreconf -vfi
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+update:
+  enabled: false
+  exclude-reason: Upstream sass/sassc was archived on 2025-10-24 (LibSass/SassC deprecated in favor of Dart Sass); kept frozen as a build-time dependency of gtk-4. No further releases expected.
+  github:
+    identifier: sass/sassc
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        sassc --version
+        sassc --help
+    - name: Test SCSS to CSS file compilation
+      runs: |
+        # Create a test SCSS file with a variable
+        tee /tmp/test.scss <<'EOF'
+        $color: red;
+        body { color: $color; }
+        EOF
+
+        # Compile SCSS to CSS
+        sassc /tmp/test.scss /tmp/test.css
+
+        # Verify the CSS output file was created
+        stat /tmp/test.css
+
+        # Verify the variable was resolved in the output
+        grep -F "color: red" /tmp/test.css
+    - name: Test stdin to stdout compilation
+      runs: |
+        # Test compiling from stdin to stdout
+        echo 'body { color: blue; }' | sassc --stdin | grep -F "color: blue"

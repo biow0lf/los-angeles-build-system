@@ -1,0 +1,136 @@
+package:
+  name: wasi-sdk
+  version: "33"
+  epoch: 7 # rust: 1.97->1.98
+  description: "WASI-enabled WebAssembly C/C++ toolchain"
+  copyright:
+    - license: Apache-2.0
+  # Ships custom clang
+  options:
+    no-commands: true
+  resources:
+    # https://go/wolfi-rsc/wasi-sdk
+    cpu: "48"
+    memory: 64Gi
+  test-resources:
+    cpu: "1"
+    memory: 3Gi
+
+vars:
+  llvm-version: 22
+  rust-version: "1.98"
+
+environment:
+  contents:
+    packages:
+      - bash
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - clang-${{vars.llvm-version}}
+      - cmake
+      - glibc-2.44-dev
+      - llvm-${{vars.llvm-version}}
+      - ncurses-dev
+      - perl
+      - python3
+      - rust-${{vars.rust-version}}
+      - samurai
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/WebAssembly/wasi-sdk
+      tag: wasi-sdk-${{package.version}}
+      expected-commit: c10c0507deb3e5aad506f1f9f32084e49a21834b
+      recurse-submodules: true
+
+  - name: Build toolchain
+    runs: |
+      cmake -G Ninja -B build/toolchain -S . -DWASI_SDK_BUILD_TOOLCHAIN=ON -DCMAKE_INSTALL_PREFIX=build/install -DWASI_SDK_LLDB=OFF
+      cmake --build build/toolchain --target install
+
+  - name: Build sysroot
+    runs: |
+      export PATH="$(pwd)/build/toolchain/wasm-component-ld/bin:$(pwd)/build/install/bin:$PATH"
+      export CFLAGS="-O2 -Wall -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
+      export CXXFLAGS="$CFLAGS"
+      export LDFLAGS="-Wl,-z,stack-size=8192"
+
+      cmake -G Ninja -B build/sysroot -S . \
+          -DCMAKE_INSTALL_PREFIX=build/install \
+          -DCMAKE_TOOLCHAIN_FILE=build/install/share/cmake/wasi-sdk.cmake \
+          -DCMAKE_C_COMPILER_WORKS=ON \
+          -DCMAKE_CXX_COMPILER_WORKS=ON
+      cmake --build build/toolchain --target dist
+      cmake --build build/sysroot --target dist
+
+  - name: Merge artifacts to buiild SDK
+    runs: |
+      mkdir dist-wolfi
+      cp build/toolchain/dist/* build/sysroot/dist/* dist-wolfi
+      ./ci/merge-artifacts.sh
+
+  - name: Install SDK
+    runs: |
+      mkdir -p ${{targets.destdir}}/usr
+      tar -xvf dist/wasi-sdk-*.tar.gz
+      mv wasi-sdk-*/* ${{targets.destdir}}/usr/
+
+  - uses: strip
+
+subpackages:
+  # This has to come before the split/dev step
+  - name: wasi-sdk-libclang-rt-builtins
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/clang/lib
+          # Copy instead of move because these also need to be in the -dev package
+          cp -r ${{targets.destdir}}/usr/lib/clang/${{vars.llvm-version}}/lib/wasm32-unknown-* ${{targets.subpkgdir}}/usr/lib/clang/lib/
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: wasi-sdk-sysroot
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/share
+          mv ${{targets.destdir}}/usr/share/wasi-sysroot/ ${{targets.subpkgdir}}/usr/share/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: wasi-sdk-dev
+    # Ships custom clang
+    options:
+      no-commands: true
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - runs: |
+            llvm-config --version
+            llvm-config --help
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  # Upstream tags before manually approving a GitHub release (and we've seen
+  # changes after the tag was cut in the past), so `git` (or `use-tag`) aren't
+  # appropriate
+  github:
+    identifier: WebAssembly/wasi-sdk
+    strip-prefix: wasi-sdk-
+
+test:
+  pipeline:
+    # Note: ver-check is intentionally omitted here. wasi-sdk bundles a custom
+    # LLVM/clang (currently llvm-${{vars.llvm-version}}) whose reported version is
+    # the LLVM release version, not ${{package.version}}. Hardcoding the LLVM
+    # version here would require a manual update on every wasi-sdk bump, making
+    # the test brittle and maintenance-heavy. The help-check below confirms the
+    # binaries are present and functional.
+    - uses: test/tw/help-check
+      with:
+        bins: c++filt llvm-strip clang-apply-replacements wasm32-wasi-clang wasm32-wasi-threads-clang++ ld64.lld llvm-objcopy objcopy size clang-${{vars.llvm-version}} wasm32-wasip1-clang wasm32-wasip1-threads-clang++ wasm32-wasi-clang++ clang-cl wasm-ld wasm32-wasi-threads-clang llvm-strings objdump llvm-size llvm-nm strings llvm-cxxfilt llvm-dwarfdump ranlib nm ld.lld wasm32-wasip2-clang++ clang-cpp wasm32-wasip2-clang strip wasm32-wasip1-threads-clang ar llvm-mc llvm-ar llvm-ranlib clang wasm32-wasip1-clang++ llvm-objdump clang-format clang-tidy lld-link clang++

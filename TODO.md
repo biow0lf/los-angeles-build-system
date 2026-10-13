@@ -1,7 +1,10 @@
 # TODO list
 
+* fd.yaml
+* check "why we need gnu-libiconv"?
 * libsrt -> split to libsrt and libsrt-dev
 * rework openssl builds
+* remove openssl-hardened
 * add buildlog each package
 * drop gcc-14-default and gcc-16-default virtual packages
 * -mtune=native -malign-double -fstrict-aliasing -fno-schedule-insns...
@@ -9,3 +12,17 @@
 * rebuild all packages that require gcc-14-default for build
 * rebuild all packages that require gcc-15-default for build
 * quickshell?
+* update systemd
+* terraform
+* tiff
+* tree-sitter
+* add typescript
+* undock
+* vim
+* yaml-language-server.yaml
+* apko
+* llvm
+* melange
+* xterm
+* yam.yaml
+* /bin/sh -> dash

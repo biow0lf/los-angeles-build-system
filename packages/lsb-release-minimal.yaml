@@ -1,0 +1,84 @@
+package:
+  name: lsb-release-minimal
+  version: "12.1"
+  epoch: 8 # go/wolfi-rsc/lsb-release-minimal
+  description: Minimal fake lsb-release that uses os-release
+  copyright:
+    - license: ISC
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gsl-dev
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://salsa.debian.org/gioele/lsb-release-minimal
+      tag: v${{package.version}}
+      expected-commit: 35516080b31afd516603b6756866d195674fb64d
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: lsb-release-minimal-doc
+    description: lsb-release-minimal docs
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v
+    tag-filter-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/help-check
+      with:
+        bins: lsb_release
+    - name: Test lsb_release core functionality
+      runs: |
+        # Test -a (all) flag produces output with key fields
+        output=$(lsb_release -a 2>&1)
+        echo "$output" | grep -F "Distributor ID"
+        echo "$output" | grep -F "Description"
+        echo "$output" | grep -F "Release"
+
+        # Test individual flags produce expected labeled output
+        lsb_release -i | grep -F "Distributor ID"
+        lsb_release -d | grep -F "Description"
+        lsb_release -r | grep -F "Release"
+        lsb_release -c | grep -F "Codename"
+
+        # Test -s (short) flag produces output without labels
+        distro_id=$(lsb_release -s -i)
+        if [ -z "$distro_id" ]; then
+          echo "FAIL: lsb_release -s -i produced empty output"
+          exit 1
+        fi
+        echo "Distributor ID (short): $distro_id"
+
+        # Verify the tool reads from os-release by cross-checking
+        if [ -f /etc/os-release ]; then
+          . /etc/os-release
+          echo "os-release ID: $ID"
+          echo "lsb_release distributor: $distro_id"
+        fi

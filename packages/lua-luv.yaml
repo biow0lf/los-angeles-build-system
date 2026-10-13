@@ -1,0 +1,119 @@
+package:
+  name: lua-luv
+  version: "1.53.0.0"
+  epoch: 1 # glibc: 2.43->2.44
+  description: "Bare libuv bindings for Lua"
+  copyright:
+    - license: Apache-2.0
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+# transform melange version 1.45.0.0 => 1.45.0-0
+var-transforms:
+  - from: ${{package.version}}
+    match: \.(\d+)$
+    replace: -$1
+    to: mangled-package-version
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake
+      - glibc-2.44
+      - glibc-2.44-dev
+      - libuv-dev
+      - luajit-dev
+      - samurai
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/luvit/luv
+      tag: ${{vars.mangled-package-version}}
+      expected-commit: 26e62e49b0230891ece45a78cc1f63c074e60020
+
+  - runs: |
+      # TODO: Package lua-compat5.3
+      make deps/lua-compat-5.3/c-api
+
+      cmake -B build -G Ninja \
+        -DWITH_SHARED_LIBUV=ON \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DLUA_BUILD_TYPE=System \
+        -DBUILD_MODULE=OFF \
+        -DLUA_COMPAT53_DIR=deps/lua-compat-5.3 \
+        -DBUILD_SHARED_LIBS=ON
+
+      cmake --build build
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - runs: |
+      rockdir=${{targets.destdir}}/usr/lib/luarocks/rocks-common/luv/${{vars.mangled-package-version}}
+      mkdir -p $rockdir
+      echo "rock_manifest = {}" > "$rockdir"/rock_manifest
+
+  - uses: strip
+
+subpackages:
+  - name: lua-luv-dev
+    pipeline:
+      - uses: split/dev
+    description: lua-luv dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  version-transform:
+    - match: \-
+      replace: .
+  github:
+    identifier: luvit/luv
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - luajit
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test luv module loads and basic API works
+      runs: |
+        # This package builds libluv as a shared library for linking
+        # (-DBUILD_MODULE=OFF), not as a require()-able Lua module, so load
+        # it explicitly via package.loadlib against the installed soname.
+        luajit - <<'EOF'
+        local luv = package.loadlib("/usr/lib/libluv.so.1", "luaopen_luv")()
+
+        -- Verify version string is present
+        local ver = luv.version_string()
+        assert(type(ver) == "string" and #ver > 0, "expected non-empty version string, got: " .. tostring(ver))
+        print("libuv version: " .. ver)
+
+        -- Create a timer and run a single iteration of the event loop
+        local timer = luv.new_timer()
+        assert(timer ~= nil, "luv.new_timer() returned nil")
+
+        local fired = false
+        luv.timer_start(timer, 0, 0, function()
+          fired = true
+          luv.timer_stop(timer)
+          luv.close(timer)
+        end)
+        luv.run()
+        assert(fired, "timer callback was never invoked")
+        print("timer callback fired successfully")
+
+        -- Verify loop handle count returns a number
+        local count = luv.loop_alive()
+        assert(type(count) == "boolean", "luv.loop_alive() should return boolean")
+        print("luv basic API checks passed")
+        EOF

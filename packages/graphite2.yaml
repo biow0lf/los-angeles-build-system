@@ -1,0 +1,123 @@
+package:
+  name: graphite2
+  version: "1.3.15"
+  epoch: 2 # glibc: 2.43->2.44
+  description: reimplementation of the SIL Graphite text processing engine
+  copyright:
+    - license: LGPL-2.1-or-later OR MPL-1.1
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake-3
+      - freetype-dev
+      - gcc-16-default
+      - glibc-2.44-dev
+      - python3
+      - samurai
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: ca8d821e60a15b6c24e404c9086992c975d8e1cf
+      repository: https://github.com/silnrsi/graphite
+      tag: ${{package.version}}
+
+  - runs: |
+      # static and shared version needs to be build in separated dirs
+      # See https://github.com/silnrsi/graphite/pull/12#issuecomment-311756732
+
+      # shared
+      cmake -B build-shared -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_BUILD_TYPE=MinSizeRel \
+        -DGRAPHITE2_COMPARE_RENDERER=OFF \
+        -DGRAPHITE2_NFILEFACE=ON
+      cmake --build build-shared
+
+      # static
+      cmake -B build-static -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_BUILD_TYPE=MinSizeRel \
+        -DGRAPHITE2_COMPARE_RENDERER=OFF \
+        -DGRAPHITE2_NFILEFACE=ON \
+        -DBUILD_SHARED_LIBS=OFF
+      cmake --build build-static
+
+  - runs: |
+      DESTDIR=${{targets.destdir}} cmake --install build-static
+      DESTDIR=${{targets.destdir}} cmake --install build-shared
+
+  - name: remove libtool .la files
+    runs: find "${{targets.destdir}}" -name '*.la' -delete
+
+  - uses: strip
+
+subpackages:
+  - name: graphite2-static
+    pipeline:
+      - uses: split/static
+    dependencies:
+      runtime:
+        - freetype-static
+    description: graphite2 static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: graphite2-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - graphite2
+        - freetype-dev
+    description: graphite2 dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: silnrsi/graphite
+
+test:
+  environment:
+    contents:
+      packages:
+        - graphite2-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test graphite2 library compilation and linkage
+      runs: |
+        tee test.c <<'EOF'
+        #include <graphite2/Segment.h>
+        #include <stdio.h>
+        int main() {
+            int major, minor, bugfix;
+            gr_engine_version(&major, &minor, &bugfix);
+            printf("graphite2 version: %d.%d.%d\n", major, minor, bugfix);
+            if (major < 1) {
+                fprintf(stderr, "FAIL: unexpected major version %d\n", major);
+                return 1;
+            }
+            printf("SUCCESS: graphite2 library is functional\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags graphite2) test.c -o test $(pkg-config --libs graphite2)
+        ./test

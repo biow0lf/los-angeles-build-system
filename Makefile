@@ -102,7 +102,6 @@ build-package: build-builder-image
 		--runner=docker \
 		--repository-append=packages-out \
 		--repository-append=$(PUBLISHED_REPO) \
-		--repository-append=$(BOOTSTRAP_REPO) \
 		--keyring-append=keys/melange.rsa.pub \
 		--keyring-append=$(BOOTSTRAP_KEY) \
 		--signing-key=keys/melange.rsa \

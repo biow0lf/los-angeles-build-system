@@ -1,0 +1,9 @@
+diff -urN libsass-3.6.6.orig/version.sh libsass-3.6.6/version.sh
+--- libsass-3.6.6.orig/version.sh	2023-12-21 09:30:51.000000000 +0100
++++ libsass-3.6.6/version.sh	2026-10-13 03:05:40.465754240 +0200
+@@ -1,3 +1,5 @@
++#! /bin/bash
++
+ if test "x$LIBSASS_VERSION" = "x"; then
+   LIBSASS_VERSION=`git describe --abbrev=4 --dirty --always --tags 2>/dev/null`
+ fi

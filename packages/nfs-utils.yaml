@@ -1,0 +1,232 @@
+package:
+  name: nfs-utils
+  version: "3.1.1"
+  epoch: 0 # revert client/server split (#335390)
+  description: kernel-mode NFS
+  copyright:
+    - license: GPL-2.0-only
+  checks:
+    disabled:
+      - setuidgid
+  dependencies:
+    runtime:
+      - busybox
+      - merged-sbin
+      - merged-usrsbin
+      - wolfi-baselayout
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - keyutils-dev
+      - libcap-dev
+      - libevent-dev
+      - libnl3-dev
+      - libseccomp-dev
+      - libtirpc-dev
+      - libxml2-dev
+      - lvm2-dev
+      - ncurses-dev
+      - openldap-dev
+      - pkgconf-dev
+      - readline-dev
+      - sqlite-dev
+      - util-linux-dev
+
+var-transforms:
+  - from: ${{package.version}}
+    match: \.
+    replace: "-"
+    to: mangled-package-version
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: git://git.linux-nfs.org/projects/steved/nfs-utils.git
+      tag: nfs-utils-${{vars.mangled-package-version}}
+      expected-commit: 5090e0bb662c53b4552b28b121ac2c2c434adb2e
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --sbindir=/usr/bin \
+        --without-tcp-wrappers \
+        --with-rpcgen=internal \
+        --enable-ipv6 \
+        --enable-nfsv4 \
+        --enable-uuid \
+        --enable-gss \
+        --enable-svcgss \
+        --enable-libmount-mount
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+    with:
+      opts: sbindir=/usr/bin
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-static
+    description: "${{package.name}} static library"
+    pipeline:
+      - uses: split/static
+    dependencies:
+      runtime:
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: ${{package.name}}-dev
+    description: "headers for ${{package.name}}"
+    dependencies:
+      runtime:
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: nfs-utils-dev
+
+  - name: ${{package.name}}-doc
+    description: "${{package.name}} manpages"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      runtime:
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: ${{package.name}}-dbg
+    description: "${{package.name}} debug symbols"
+    pipeline:
+      - uses: split/debug
+    dependencies:
+      runtime:
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/debugpackage
+
+  - name: ${{package.name}}-stats
+    description: "NFS I/O statistics tools (mountstats and nfsiostat)"
+    # mountstats and nfsiostat are Python scripts; split them out so the main
+    # nfs-utils package has no python dep and can coexist with images that pin
+    # a specific Python version (e.g. cephcsi with python-3.12 via ceph).
+    dependencies:
+      runtime:
+        - merged-sbin
+        - merged-usrsbin
+        - python3
+        - wolfi-baselayout
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/mountstats "${{targets.contextdir}}"/usr/bin/
+          mv "${{targets.destdir}}"/usr/bin/nfsiostat "${{targets.contextdir}}"/usr/bin/
+    test:
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: |
+              mountstats
+              nfsiostat
+
+  - name: rpcgen
+    description: Remote Procedure Call (RPC) protocol compiler
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.contextdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/rpcgen "${{targets.contextdir}}"/usr/bin
+    test:
+      pipeline:
+        - uses: test/tw/ver-check
+          with:
+            bins: rpcgen
+        - uses: test/tw/help-check
+          with:
+            bins: rpcgen
+    dependencies:
+      runtime:
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+
+update:
+  enabled: true
+  version-transform:
+    - match: "-"
+      replace: .
+  git:
+    tag-filter-prefix: nfs-utils-
+    strip-prefix: nfs-utils-
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          mount.nfs
+          mount.nfs4
+          nfsstat
+          rpc.mountd
+          rpc.statd
+          showmount
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          nfsidmap
+          rpc.idmapd
+          rpcdebug
+          exportfs
+          nfsdcld
+          nfsstat
+          rpc.mountd
+          rpc.statd
+          showmount
+    - name: Test nfsidmap domain lookup
+      runs: |
+        # nfsidmap -d prints the configured NFS domain name (from
+        # /etc/idmapd.conf or derived from the DNS domain). This exercises
+        # real ID-mapping functionality without requiring a running NFS server.
+        nfsidmap -d
+    - name: Test nfsstat statistics output
+      runs: |
+        # nfsstat reads NFS statistics from /proc/net/rpc/nfs (client) and
+        # /proc/net/rpc/nfsd (server). The NFS kernel module may not be loaded
+        # in the test environment, so /proc/net/rpc/nfs may not exist. Accept
+        # either a successful parse with "Client" output or the expected error
+        # message indicating the proc file is absent.
+        if [ -f /proc/net/rpc/nfs ]; then
+          nfsstat -c | grep -F "Client"
+        else
+          out=$(nfsstat -c 2>&1 || true)
+          echo "$out" | grep -F "No Client Stats"
+        fi

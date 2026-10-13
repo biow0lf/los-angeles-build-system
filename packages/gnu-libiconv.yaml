@@ -1,0 +1,109 @@
+package:
+  name: gnu-libiconv
+  version: "1.19"
+  epoch: 8 # use upstream file release
+  description: GNU charset conversion library for libc which doesn't implement it
+  copyright:
+    - license: LGPL-2.1-or-later
+  resources:
+    cpu: "2"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - gperf
+      - groff
+      - patch
+      - python3
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://ftp.gnu.org/gnu/libiconv/libiconv-${{package.version}}.tar.gz
+      expected-sha256: 88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --docdir=/usr/share/doc/${{package.name}}/ \
+        --disable-nls \
+        --disable-static \
+        --enable-extra-encodings
+
+  - runs: |
+      # since users of this package use this package to work around missing features in musls iconv,
+      # enable extra encodings (like the CP437) to be closer to glibcs iconv.
+
+      # work around rpath issue
+      sed -i 's|^hardcode_libdir_flag_spec=.*|hardcode_libdir_flag_spec=""|g' libtool
+      sed -i 's|^runpath_var=LD_RUN_PATH|runpath_var=DIE_RPATH_DIE|g' libtool
+
+  - uses: autoconf/make
+
+  - runs: |
+      mkdir -p "${{targets.destdir}}"/usr/bin
+      mkdir -p "${{targets.destdir}}"/usr/include/gnu-libiconv
+      make DESTDIR="${{targets.destdir}}/" install
+
+      # move headers so they dont clash with libc headers
+      mv "${{targets.destdir}}"/usr/include/*.h "${{targets.destdir}}"/usr/include/gnu-libiconv
+      mv "${{targets.destdir}}"/usr/bin/iconv "${{targets.destdir}}"/usr/bin/gnu-iconv
+
+  - name: remove libtool .la files
+    runs: find "${{targets.destdir}}" -name '*.la' -delete
+
+  - uses: strip
+
+subpackages:
+  - name: gnu-libiconv-doc
+    pipeline:
+      - uses: split/manpages
+    description: gnu-libiconv manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: gnu-libiconv-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - gnu-libiconv
+    description: gnu-libiconv dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+
+update:
+  enabled: true
+  git:
+    tag-filter-prefix: v
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/help-check
+      with:
+        bins: gnu-iconv
+    - uses: test/tw/ver-check
+      with:
+        bins: gnu-iconv
+        version: ${{package.version}}
+    - name: functional charset conversion test
+      runs: |
+        # Convert UTF-8 text to ISO-8859-1 and back, verify round-trip
+        echo "Hello World" | gnu-iconv -f UTF-8 -t ISO-8859-1 | gnu-iconv -f ISO-8859-1 -t UTF-8 | grep -F "Hello World"
+
+        # Convert UTF-8 to UTF-16 and back
+        echo "test" | gnu-iconv -f UTF-8 -t UTF-16 | gnu-iconv -f UTF-16 -t UTF-8 | grep -F "test"
+
+        # Verify list of supported encodings includes common charsets
+        gnu-iconv -l | grep -Fi "UTF-8"
+        gnu-iconv -l | grep -Fi "ISO-8859-1"
+        gnu-iconv -l | grep -Fi "CP437"

@@ -1,0 +1,113 @@
+#nolint:update-disabled-reason
+package:
+  name: lmdb
+  version: 0.9.35
+  epoch: 3 # glibc: 2.43->2.44
+  description: Lightning Memory-Mapped Database
+  copyright:
+    - license: OLDAP-2.8
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/LMDB/lmdb.git
+      tag: LMDB_${{package.version}}
+      expected-commit: 69087ced3cb6082f7dcfb4fc2dcaa3b68a7e2e8c
+
+  - uses: patch
+    with:
+      patches: 0001-Debian-quirks-to-make-shared-library-versioned.patch
+
+  - runs: |
+      cd libraries/liblmdb
+
+      cat > lmdb.pc << 'EOF'
+      prefix=/usr
+      exec_prefix=${prefix}
+      libdir=${exec_prefix}/lib
+      includedir=${prefix}/include
+
+      Name: liblmdb
+      Description: Lightning Memory-mapped key-value database
+      URL: http://symas.com/mdb/
+      Version: @@VERSION@@
+      Libs: -L${libdir} -llmdb
+      Cflags: -I${includedir}
+      EOF
+
+      sed -i "s|@@VERSION@@|${{package.version}}|" -i *.pc
+
+      make DESTDIR="${{targets.destdir}}"  prefix=/usr install
+
+      install -Dm0644 *.pc -t ${{targets.destdir}}/usr/lib/pkgconfig
+
+      rm "${{targets.destdir}}"/usr/lib/liblmdb.so.0
+      ln -s /usr/lib/liblmdb.so.0.0.0 "${{targets.destdir}}"/usr/lib/liblmdb.so.0
+      rm "${{targets.destdir}}"/usr/lib/liblmdb.so
+      ln -s /usr/lib/liblmdb.so.0.0.0 "${{targets.destdir}}"/usr/lib/liblmdb.so
+
+  - uses: strip
+
+subpackages:
+  - name: lmdb-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - lmdb
+    description: lmdb dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: lmdb-doc
+    pipeline:
+      - uses: split/manpages
+    description: lmdb manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: lmdb-tools
+    pipeline:
+      - runs: |
+          mkdir -p  ${{targets.subpkgdir}}/usr
+          mv ${{targets.destdir}}/usr/bin  ${{targets.subpkgdir}}/usr
+    description: lmdb tools
+    test:
+      pipeline:
+        - name: Test lmdb tools functional operations
+          runs: |
+            mkdir -p /tmp/testdb /tmp/copydb
+
+            # Load a key-value pair into a new database using mdb_load
+            printf 'VERSION=3\nformat=print\ntype=btree\nHEADER=END\n key1\n value1\nDATA=END\n' | mdb_load /tmp/testdb
+
+            # Verify the database with mdb_stat
+            mdb_stat /tmp/testdb | grep -F "Entries:"
+
+            # Dump the database and verify the key is present
+            mdb_dump -p /tmp/testdb | grep -F "key1"
+
+            # Copy the database and verify the copy
+            mdb_copy /tmp/testdb /tmp/copydb
+            mdb_stat /tmp/copydb | grep -F "Entries:"
+
+update:
+  enabled: false
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

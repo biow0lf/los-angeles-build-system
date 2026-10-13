@@ -1,0 +1,91 @@
+# Generated from https://git.alpinelinux.org/aports/plain/community/xcb-util-wm/APKBUILD
+package:
+  name: xcb-util-wm
+  version: 0.4.2
+  epoch: 6 # glibc: 2.43->2.44
+  description: X C-language Binding - helpers for ICCCM and EWMH
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - m4
+      - pkgconf-dev
+      - util-macros-dev
+      - xcb-util-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxcb-wm
+      tag: xcb-util-wm-${{package.version}}
+      expected-commit: 0c6681e465c9cc7b1fbb60778ba1eaa61ab01a14
+      recurse-submodules: true
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: xcb-util-wm-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - xcb-util-wm
+        - xcb-util-dev
+    description: xcb-util-wm dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 5170
+
+test:
+  environment:
+    contents:
+      packages:
+        - xcb-util-wm-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+    - name: Test ICCCM and EWMH library compilation and linking
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <xcb/xcb_icccm.h>
+        #include <xcb/xcb_ewmh.h>
+        int main() {
+            /* Verify ICCCM: xcb_icccm_get_wm_name resolves */
+            xcb_get_property_cookie_t (*icccm_fn)(xcb_connection_t *,
+                xcb_window_t) = xcb_icccm_get_wm_name;
+            (void)icccm_fn;
+            /* Verify EWMH: xcb_ewmh_init_atoms resolves */
+            void *ewmh_fn = (void *)xcb_ewmh_init_atoms;
+            (void)ewmh_fn;
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xcb-icccm xcb-ewmh) test.c -o test \
+          $(pkg-config --libs xcb-icccm xcb-ewmh)
+        ./test

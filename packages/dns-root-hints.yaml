@@ -1,0 +1,59 @@
+#nolint:update-disabled-reason
+package:
+  name: dns-root-hints
+  version: "2022062901"
+  epoch: 5 # go/wolfi-rsc/dns-root-hints
+  description: The DNS root hint(s)
+  copyright:
+    - license: CC-PDDC
+  dependencies:
+    runtime:
+      - curl
+      - gpgv
+  resources:
+    cpu: "1"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - curl
+      - gpg
+      - gpgv
+
+pipeline:
+  - runs: |
+      # Convert the key to the GPG keyring that can be used with gpgv.
+      gpg --dearmor -o verisign-grs-nstld-key.gpg verisign-grs-nstld-key.asc
+
+      mkdir -p ${{targets.destdir}}/usr/share
+      mkdir -p ${{targets.destdir}}/usr/bin
+      mkdir -p ${{targets.destdir}}/etc/periodic/monthly/
+
+      install -D -m 644 -t ${{targets.destdir}}/usr/share/dns-root-hints \
+        named.root \
+        named.root.sig \
+        verisign-grs-nstld-key.asc \
+        verisign-grs-nstld-key.gpg
+
+      install -D -m 755 -t ${{targets.destdir}}/usr/bin/ update-dns-root-hints
+
+      # compatibility links
+      cd ${{targets.destdir}}/usr/share/dns-root-hints
+
+      ln -s named.root named.cache
+      ln -s named.root db.cache
+
+update:
+  enabled: false
+
+test:
+  pipeline:
+    - runs: |
+        update-dns-root-hints

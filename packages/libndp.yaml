@@ -1,7 +1,7 @@
 package:
   name: libndp
   version: 1.9
-  epoch: 0
+  epoch: 0 # rebuild
   description: "Neighbor Discovery library"
   url: https://github.com/jpirko/libndp/
   copyright:

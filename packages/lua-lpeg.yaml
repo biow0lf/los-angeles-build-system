@@ -1,0 +1,114 @@
+package:
+  name: lua-lpeg
+  version: 1.1.0
+  epoch: 6 # glibc: 2.43->2.44
+  description: "Pattern-matching library for Lua"
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  rocks-release: 2
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libarchive-tools # bsdtar
+      - luajit-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://luarocks.org/manifests/gvvaughan/lpeg-${{package.version}}-${{vars.rocks-release}}.src.rock
+      expected-sha256: 836d315b920a5cdd62e21786c6c9fad547c4faa131d5583ebca64f0b6595ee76
+      extract: false
+
+  - runs: |
+      bsdtar xf lpeg-${{package.version}}-${{vars.rocks-release}}.src.rock
+      bsdtar --strip-components 1 -xf lpeg-${{package.version}}.tar.gz
+
+  - runs: |
+      make LUADIR=/usr/include/lua
+
+  - runs: |
+      install -Dm755 lpeg.so \
+        ${{targets.destdir}}/usr/lib/lua/lpeg.so
+      install -Dm644 re.lua \
+        ${{targets.destdir}}/usr/share/lua/re.lua
+
+      rockdir=${{targets.destdir}}/usr/lib/luarocks/rocks-common/lpeg/${{package.version}}
+      mkdir -p $rockdir
+      echo "rock_manifest = {}" > "$rockdir"/rock_manifest
+
+  - uses: strip
+
+subpackages:
+  - name: lua5.1-lpeg
+    description: "Pattern-matching library for Lua 5.1"
+    dependencies:
+      runtime:
+        - luajit # use luajit in place of lua5.1
+      provides:
+        - lua-lpeg # placeholder if/when we ever rebuild this for more versions of lua
+    pipeline:
+      - runs: |
+          install -Dm755 lpeg.so \
+            ${{targets.contextdir}}/usr/lib/lua/5.1/lpeg.so
+          install -Dm644 re.lua \
+            ${{targets.contextdir}}/usr/share/lua/5.1/re.lua
+    test:
+      environment:
+        contents:
+          packages:
+            - luajit
+      pipeline:
+        - uses: test/tw/ldd-check
+        - name: Test lpeg pattern matching
+          runs: |
+            luajit -e '
+              local lpeg = require("lpeg")
+              -- Test basic pattern matching
+              local digit = lpeg.R("09")
+              local digits = digit^1
+              local result = lpeg.match(digits, "12345")
+              assert(result == 6, "Expected match position 6, got " .. tostring(result))
+              -- Test capture
+              local cap = lpeg.C(digits)
+              local matched = lpeg.match(cap, "42abc")
+              assert(matched == "42", "Expected capture \"42\", got " .. tostring(matched))
+              print("lpeg pattern matching: OK")
+            '
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1852
+
+test:
+  environment:
+    contents:
+      packages:
+        - luajit
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test lpeg pattern matching
+      runs: |
+        LUA_CPATH="/usr/lib/lua/?.so;;" luajit -e '
+          local lpeg = require("lpeg")
+          -- Test basic pattern matching
+          local digit = lpeg.R("09")
+          local digits = digit^1
+          local result = lpeg.match(digits, "12345")
+          assert(result == 6, "Expected match position 6, got " .. tostring(result))
+          -- Test capture
+          local cap = lpeg.C(digits)
+          local matched = lpeg.match(cap, "42abc")
+          assert(matched == "42", "Expected capture \"42\", got " .. tostring(matched))
+          print("lpeg pattern matching: OK")
+        '

@@ -1,0 +1,39 @@
+package:
+  name: libndp
+  version: 1.9
+  epoch: 0
+  description: "Neighbor Discovery library"
+  url: https://github.com/jpirko/libndp/
+  copyright:
+    - license: LGPL-2.1-or-later
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://github.com/jpirko/libndp/archive/refs/tags/v${{package.version}}.tar.gz
+      expected-sha256: e564f5914a6b1b799c3afa64c258824a801c1b79a29e2fe6525b682249c65261
+
+  - runs: autoreconf -fiv
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libndp-dev
+    description: "libndp dev"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libndp

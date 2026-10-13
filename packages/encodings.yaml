@@ -1,0 +1,48 @@
+package:
+  name: encodings
+  version: 1.1.0
+  epoch: 5
+  description: X.org font encoding files
+  copyright:
+    - license: LicenseRef-xorg-font-encoding
+      license-path: COPYING
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - font-util-dev
+      - mkfontscale
+      - util-macros-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/font/encodings
+      tag: encodings-${{package.version}}
+      expected-commit: a7e63704951b95351096c1d96808d48d0fb7e0a8
+
+  - uses: autoconf/configure
+    with:
+      opts: --with-encodingsdir=/usr/share/fonts/encodings
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 15051
+
+test:
+  pipeline:
+    - uses: test/tw/contains-files
+      with:
+        dir: /usr/share/fonts/encodings/

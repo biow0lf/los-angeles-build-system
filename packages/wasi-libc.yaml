@@ -1,0 +1,79 @@
+package:
+  name: wasi-libc
+  version: "34"
+  epoch: 1 # llvm: 22->23
+  description: "WASI libc implementation for WebAssembly"
+  copyright:
+    - license: Apache-2.0 WITH LLVM-exception AND Apache-2.0 AND MIT AND CC0-1.0 AND BSD-2-Clause
+  resources:
+    cpu: "2"
+    memory: 9Gi
+
+environment:
+  contents:
+    packages:
+      - bash
+      - busybox
+      - ca-certificates-bundle
+      - clang-23
+      - cmake
+      - lld-23
+      - llvm-23
+      - ninja
+      - wasi-sdk-libclang-rt-builtins
+      - wolfi-baselayout
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/WebAssembly/wasi-libc
+      tag: wasi-sdk-${{package.version}}
+      expected-commit: 2e6fb9d8ee0cdf9e431fbcabe8af3115de000a13
+
+  - name: Build
+    runs: |
+      cmake -S . -B build -G Ninja \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_INSTALL_PREFIX=/usr/share/wasi-sysroot \
+        -DBUILTINS_LIB=/usr/lib/clang/lib/wasm32-unknown-wasi/libclang_rt.builtins.a \
+        -DCHECK_SYMBOLS=ON
+      cmake --build build
+
+  - runs: DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: strip
+
+update:
+  enabled: true
+  git:
+    strip-prefix: wasi-sdk-
+
+test:
+  environment:
+    contents:
+      packages:
+        - clang-17
+  pipeline:
+    - name: Installation verification
+      runs: |
+        # Check sysroot directory structure
+        stat /usr/share/wasi-sysroot/include/wasm32-wasip1
+        stat /usr/share/wasi-sysroot/lib/wasm32-wasip1
+
+        # Verify critical headers and libraries
+        stat /usr/share/wasi-sysroot/include/wasm32-wasip1/wasi/api.h
+        stat /usr/share/wasi-sysroot/lib/wasm32-wasip1/libc.a
+        stat /usr/share/wasi-sysroot/lib/wasm32-wasip1/crt1.o
+    - name: Basic compilation test
+      runs: |
+        # Create minimal test program
+        tee test.c << 'EOF'
+        int main() {
+            return 0;
+        }
+        EOF
+
+        # Compile with minimal flags
+        clang -v --target=wasm32-wasip1 \
+          --sysroot=/usr/share/wasi-sysroot \
+          -c test.c -o test.o

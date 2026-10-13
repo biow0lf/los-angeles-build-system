@@ -1,0 +1,94 @@
+package:
+  name: rav1e
+  version: 0.8.1
+  epoch: 9 # glibc: 2.43->2.44
+  description: The fastest and safest AV1 encoder.
+  copyright:
+    - license: BSD-2-Clause
+  resources:
+    cpu: "5"
+    memory: 7Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  rust-version: "1.94"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - cargo-c
+      - glibc-2.44-dev
+      - nasm
+      - rust-${{vars.rust-version}}
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/xiph/rav1e.git
+      tag: v${{package.version}}
+      expected-commit: 1fe82de02510767539e89b2ee6fa846920ae2686
+
+  # GHSA-cq8v-f236-94qc: bump the 0.9.x rand specifically; cargobump can't
+  # handle rav1e's multi-lane setup (quickcheck pulls in rand "^0.8").
+  - runs: |
+      cargo update -p rand@0.9.1 --precise 0.9.3
+
+  - uses: cargo/build
+    with:
+      output: rav1e
+
+  - name: Build and install C shared/static objects
+    runs: cargo-cinstall cinstall --release --prefix /usr --destdir ${{targets.destdir}}
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: xiph/rav1e
+    strip-prefix: v
+
+subpackages:
+  - name: ${{package.name}}-static
+    description: ${{package.name}} static libraries
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: ${{package.name}}-dev
+    description: ${{package.name}} development libraries and headers
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/pkgconf
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/help-check
+      with:
+        bins: rav1e
+    - uses: test/tw/ver-check
+      with:
+        bins: rav1e
+    - name: Functional encode test
+      runs: |
+        # Create a minimal Y4M (YUV4MPEG2) file: 16x16 frame, 1 fps, 1 frame
+        # Y4M header followed by one frame of YUV 4:2:0 data
+        # Frame size: 16*16 (Y) + 8*8 (Cb) + 8*8 (Cr) = 256+64+64 = 384 bytes
+        printf 'YUV4MPEG2 W16 H16 F1:1 Ip A0:0 C420\n' > /tmp/test.y4m
+        printf 'FRAME\n' >> /tmp/test.y4m
+        # Write 384 bytes of YUV data (all zeros = black frame)
+        dd if=/dev/zero bs=384 count=1 >> /tmp/test.y4m 2>/dev/null
+        # Encode the Y4M input to an IVF output file
+        rav1e /tmp/test.y4m -o /tmp/test.ivf --limit 1
+        # Verify the output file was created and has the IVF magic bytes "DKIF"
+        test -s /tmp/test.ivf
+        head -c 4 /tmp/test.ivf | grep -q "DKIF"

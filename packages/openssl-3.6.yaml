@@ -1,11 +1,7 @@
 package:
   name: openssl-3.6
   version: "3.6.5"
-  # Epoch bumped past Wolfi's live 1: same resolution-tie reasoning as
-  # packages/openssl.yaml's own epoch comment -- this is a brand-new
-  # self-hosted package (never published by us before), so the only tie
-  # to beat is Wolfi's own live copy.
-  epoch: 2
+  epoch: 3
   description: "meta package to switch to version stream"
   copyright:
     - license: Apache-2.0
@@ -22,13 +18,7 @@ package:
     toolchain-stream: true
     toolchain-stream-pkgs: ${{package.name}}-dev
 
-# Deviation from Wolfi's own recipe: adds this block (absent upstream).
-# With zero environment.contents.packages, melange's guest container has
-# no /bin/sh at all to run even the trivial steps a pure metapackage
-# still needs (e.g. the subpackage's own test/metapackage pipeline) --
-# confirmed via "exec: \"/bin/sh\": stat /bin/sh: no such file or
-# directory" on a plain verbatim fork. Same shape as build-base.yaml's
-# own environment block.
+# Fix build
 environment:
   contents:
     packages:

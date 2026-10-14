@@ -170,6 +170,14 @@ packages=(
 	libxft
 	libxinerama
 	libxkbcommon
+	libxml2
+	libxrandr
+	libxrender
+	libxshmfence
+	libxslt
+	libxt
+	libxtst
+	libxv
 	perl
 )
 

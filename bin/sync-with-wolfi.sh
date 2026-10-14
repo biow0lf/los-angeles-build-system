@@ -188,6 +188,15 @@ packages=(
 	lua-lpeg
 	lua-mpack
 	lua5.3-lzlib
+	lua5.3
+	luajit
+	lz4
+	lzip
+	m4
+	make
+	man-db
+	mesa
+	mold
 	perl
 )
 

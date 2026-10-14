@@ -1,7 +1,7 @@
 package:
   name: actionlint
   version: "1.7.12"
-  epoch: 7 # toolchain rebuild for  go-1.27-1.27.1
+  epoch: 9 # toolchain rebuild for  go-1.27-1.27.2
   description: Static checker for GitHub Actions workflow files
   copyright:
     - license: MIT
@@ -13,14 +13,10 @@ package:
     cpu: "1"
     memory: 1Gi
 
-# Deviation from Wolfi's own recipe: Wolfi maintains several parallel Go
-# release streams (go-1.27, etc.); we only maintain a single stream named
-# plain "go" (see packages/go.yaml). Renamed go-1.27 -> go below and in
-# the go/build step's go-package input.
 environment:
   contents:
     packages:
-      - go
+      - go-1.27
 
 pipeline:
   - uses: git-checkout
@@ -31,7 +27,7 @@ pipeline:
 
   - uses: go/build
     with:
-      go-package: go
+      go-package: go-1.27
       output: actionlint
       packages: ./cmd/actionlint
 

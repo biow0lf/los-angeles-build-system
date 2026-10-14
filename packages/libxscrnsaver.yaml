@@ -1,0 +1,100 @@
+package:
+  name: libxscrnsaver
+  version: "1.2.5"
+  epoch: 7 # glibc: 2.43->2.44
+  description: X.Org screen saver extension
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - libx11-dev
+      - libxext-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxscrnsaver
+      tag: libXScrnSaver-${{package.version}}
+      expected-commit: 60c957ba8a727d01b376da0142aef7e18aa86fe1
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxscrnsaver-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libx11-dev
+        - libxscrnsaver
+    description: libxscrnsaver dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libxscrnsaver-doc
+    pipeline:
+      - uses: split/manpages
+    description: libxscrnsaver manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1791
+
+test:
+  environment:
+    contents:
+      packages:
+        - libxscrnsaver-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compile and link
+      runs: |
+        set -euo pipefail
+
+        tee test.c <<'EOF'
+        #include <X11/extensions/scrnsaver.h>
+        #include <stdio.h>
+
+        int main() {
+            /* Verify we can reference XScreenSaverQueryExtension symbol */
+            int (*fn)(Display*, int*, int*) = XScreenSaverQueryExtension;
+            printf("XScreenSaverQueryExtension symbol: %p\n", (void*)fn);
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xscrnsaver) test.c -o test $(pkg-config --libs xscrnsaver)
+        ./test

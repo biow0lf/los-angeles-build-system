@@ -197,6 +197,21 @@ packages=(
 	man-db
 	mesa
 	mold
+	ncurses
+	neovim
+	omnibump
+	openssf-compiler-options
+	openssh
+	openssl-4.0
+	openssl-provider-legacy-allowed
+	openssl-hardened-3.6
+	openssl-hardened-4.0
+	openssl
+	parted
+	patch
+	pcre2
+	perl-yaml-pp
+	perl-yaml-syck
 	perl
 )
 

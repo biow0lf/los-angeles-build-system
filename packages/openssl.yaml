@@ -5,15 +5,7 @@ package:
   #
   #       https://chainguard.engineering/docs/packages/playbooks/core-components/openssl-updates/
   version: "3.6.5"
-  # Not reset to match Wolfi's own epoch (1) on this bump: this repo's own
-  # already-published builds and Wolfi's live repo are both appended as
-  # --repository-append tiers, and apk's solver doesn't reliably prefer
-  # one over the other on a version+epoch tie (same resolution-risk
-  # category as build-base/wolfi-baselayout/tcl elsewhere in this repo) --
-  # keeping our own epoch numbering (continuing past 8, not restarting at
-  # Wolfi's 1) guarantees our build wins resolution against Wolfi's live
-  # same-version copy without needing to re-verify this empirically.
-  epoch: 9
+  epoch: 10
   description: "the OpenSSL cryptography suite"
   copyright:
     - license: Apache-2.0
@@ -60,24 +52,21 @@ pipeline:
         0001-baseprovider-add-MD5-and-SHA1.patch
         0001-fips-block-HMAC-calculation-with-unapproved-digests.patch
         0001-fips-retain-FIPS-140-2-TLSv1.2-connectivity.patch
+        0001-Look-for-providers-in-ossl-modules-3-before-ossl-mod.patch
 
-  # Deviation from Wolfi's own recipe: this step is skipped entirely.
-  # Its own name says "throw-away" -- the whole build-jitter-fips-tests/
-  # directory it produces is rm -rf'd immediately after, and the *real*
-  # build further below (the "Configure and build" step) never passes
-  # enable-fips or enable-jitter at all, so this canary's result has no
-  # bearing on the actual shipped package either way. Reproduced twice,
-  # consistently (not a flake), that its own upstream test suite fails
-  # two specific subtests -- 75-test_quicapi.t and 90-test_threads.t --
-  # under this environment (Docker + QEMU x86_64 emulation on Apple
-  # Silicon): both are exactly the kind of timing/entropy-sensitive
-  # tests (jitter entropy timing, thread scheduling) that plausibly
-  # behave differently under an emulated CPU than on real hardware,
-  # matching the same category of QEMU-emulation-specific incompatibility
-  # documented for systemd's eBPF CO-RE build (see packages/systemd.yaml).
   - name: Perform throw-away canary tests of jitter and non-validated fips
     runs: |
-      echo "skipped -- see packages/openssl.yaml's own comment"
+      if [ -d /usr/lib/oldglibc ]; then
+        # all the jitter stuff assumes glibc 2.34+
+        exit 0
+      fi
+      mkdir -p build-jitter-fips-tests/
+      cd build-jitter-fips-tests/
+      ../Configure --with-rand-seed=none enable-jitter enable-fips-jitter enable-fips -DOPENSSL_DEFAULT_SEED_SRC=JITTER --debug
+      make -s -j$(nproc)
+      make tests HARNESS_JOBS=10
+      cd ../
+      rm -rf build-jitter-fips-tests/
 
   - name: Configure and build
     runs: |
@@ -159,13 +148,19 @@ pipeline:
 subpackages:
   - name: "openssl-dbg"
     description: "OpenSSL debug symbols"
+    dependencies:
+      runtime:
+        # Debug symbols only match the exact build they were split from
+        - openssl=${{package.full-version}}
+        - libcrypto3=${{package.full-version}}
+        - libssl3=${{package.full-version}}
     pipeline:
       - uses: split/debug
     test:
       environment:
         contents:
           packages:
-            - openssl
+            - openssl=${{package.full-version}}
             - gdb
       pipeline:
         - uses: test/tw/debugpackage
@@ -259,7 +254,8 @@ test:
         - curl
         - gdb
         - git
-        - openssl-dbg
+        - openssl=${{package.full-version}}
+        - openssl-dbg=${{package.full-version}}
         - wget
   pipeline:
     - uses: test/tw/ldd-check

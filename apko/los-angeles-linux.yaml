@@ -23,6 +23,13 @@
 contents:
   repositories:
     - https://packages.wolfi.dev/os
+    # Our own published repo (same URL the Makefile's PUBLISHED_REPO
+    # points at) -- lets apk/apko resolve anything NOT pinned @local below
+    # straight from R2 over HTTP, same mechanism already used for the
+    # Wolfi line above, instead of requiring every self-hosted package's
+    # bytes to be physically present in packages-out. The @local-pinned
+    # names still resolve to the literal local directory regardless.
+    - https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev
     - "@local packages-out"
   keyring:
     - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub

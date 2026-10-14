@@ -136,27 +136,30 @@ jobs:
           path: packages-out/x86_64/*.apk
           retention-days: 14
 
-  # Merges every matrix leg's .apk files with the *currently published*
-  # repo (downloaded fresh from R2 below), then regenerates one signed
-  # APKINDEX over the combined set -- each leg's own mini-index, produced
-  # as a side effect of `make build-package`, is discarded -- irrelevant
-  # once merged.
+  # Merges this run's own fresh .apk files into the *currently published*
+  # index -- not the currently published .apk files themselves. We only
+  # ever need the old index's TEXT to preserve every untouched package's
+  # entry (melange's --merge/--source doesn't re-read the old bytes --
+  # confirmed directly against chainguard-dev/melange's pkg/index/index.go
+  # during planning), so this job fetches a single object
+  # (x86_64/APKINDEX.tar.gz) over plain public HTTP instead of syncing the
+  # whole bucket -- no AWS credentials needed here at all.
   #
-  # The baseline-merge step is what makes incremental builds safe to
-  # publish at all: this run's own build only ever covers the handful of
-  # packages that actually changed, but boot-test needs a full rootfs,
-  # and publish needs to mirror the complete correct repo state, not just
-  # today's diff. Downloading the whole published repo and overlaying
-  # this run's fresh output on top (new/modified wins via cp -n
-  # no-clobber) makes packages-out complete again -- except any package
-  # named in needs.discover.outputs.removed, deliberately excluded from
-  # the merge so it drops out of the index (and, via publish's --delete,
-  # out of the bucket) on this exact push, not some future cleanup.
+  # Before merging, baseline records whose `o:` origin is in EITHER
+  # needs.discover.outputs.removed OR needs.discover.outputs.packages are
+  # stripped out first: removed so they vanish from the index entirely
+  # (and later get pruned from the bucket by publish), and this run's own
+  # rebuilt packages so a version/epoch bump doesn't leave the OLD
+  # version's entry sitting alongside the new one (melange's merge only
+  # replaces an entry on an exact Name+Version match -- a changed version
+  # string would otherwise just append a second entry instead of
+  # replacing). Matching by origin, not filename, is what correctly drops
+  # every subpackage a rebuilt/removed recipe produced (e.g. tcl also
+  # drops tcl-dev/tcl-doc).
   #
-  # Matching origins (not filenames) against the removed list, via each
-  # baseline record's own `o:` field in APKINDEX, is what correctly
-  # removes every subpackage a removed recipe produced (e.g. removing
-  # tcl.yaml also removes tcl-dev/tcl-doc), not just a same-named file.
+  # The resulting packages-out artifact is now small: just this run's
+  # fresh .apk files plus one signed index describing every still-valid
+  # package, old and new.
   index:
     needs: [discover, build]
     runs-on: ubuntu-24.04
@@ -181,50 +184,40 @@ jobs:
           path: packages-out/x86_64
           merge-multiple: true
 
-      - name: Merge in the currently-published repo, excluding removed packages
+      - name: Fetch and filter the published index (no package bytes)
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_S3_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_S3_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
           REMOVED_JSON: ${{ needs.discover.outputs.removed }}
+          PACKAGES_JSON: ${{ needs.discover.outputs.packages }}
         run: |
           mkdir -p packages-out/x86_64 baseline/x86_64
-          aws s3 sync s3://los-angeles-linux/x86_64/ baseline/x86_64/ \
-            --endpoint-url https://3cbfa894108429db9520d0e70906bcf0.r2.cloudflarestorage.com
-
-          if [ ! -f baseline/x86_64/APKINDEX.tar.gz ]; then
+          if ! curl -fsSL https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev/x86_64/APKINDEX.tar.gz \
+              -o baseline/x86_64/APKINDEX.tar.gz; then
             echo "No published index yet (first-ever publish) -- nothing to merge in."
             exit 0
           fi
           tar -xzOf baseline/x86_64/APKINDEX.tar.gz APKINDEX > /tmp/baseline-APKINDEX
 
-          # One line per baseline record: "<exact .apk filename> <origin>".
-          # Confirmed this record format (P:/V:/o: fields) directly
-          # against this repo's own real APKINDEX.tar.gz during planning.
-          awk -v RS='' -F'\n' '
-            { P=""; V=""; O="";
-              for (i=1;i<=NF;i++) {
-                if ($i ~ /^P:/) P=substr($i,3);
-                if ($i ~ /^V:/) V=substr($i,3);
-                if ($i ~ /^o:/) O=substr($i,3);
-              }
-              if (P!="" && V!="") print P"-"V".apk", O;
-            }' /tmp/baseline-APKINDEX > /tmp/baseline-origins.txt
+          exclude_names=$( (echo "$REMOVED_JSON" | jq -r '.[]'; echo "$PACKAGES_JSON" | jq -r '.[]') | sort -u)
 
-          removed_names=$(echo "$REMOVED_JSON" | jq -r '.[]')
+          # Paragraph mode (RS=""): each record is one blank-line-separated
+          # block. Reprint the whole block verbatim unless its o: origin is
+          # in the exclude set -- confirmed this record format (P:/V:/o:
+          # fields) directly against this repo's own real APKINDEX.tar.gz
+          # during planning.
+          awk -v RS='' -v ORS='\n\n' -v FS='\n' -v exclude="$exclude_names" '
+            BEGIN { n = split(exclude, ex, "\n"); for (i=1;i<=n;i++) skip[ex[i]] = 1 }
+            { O="";
+              for (i=1;i<=NF;i++) if ($i ~ /^o:/) O=substr($i,3);
+              if (!(O in skip)) print;
+            }' /tmp/baseline-APKINDEX > /tmp/filtered-APKINDEX
 
-          while read -r fname origin; do
-            [ -z "$fname" ] && continue
-            if [ -n "$removed_names" ] && grep -qxF "$origin" <<< "$removed_names"; then
-              continue
-            fi
-            # -n: no-clobber -- this run's own fresh build of the same
-            # package (if any) already landed here first and wins.
-            cp -n "baseline/x86_64/$fname" "packages-out/x86_64/$fname" 2>/dev/null || true
-          done < /tmp/baseline-origins.txt
+          cp /tmp/filtered-APKINDEX APKINDEX
+          tar -czf baseline/x86_64/APKINDEX.filtered.tar.gz APKINDEX
+          rm -f APKINDEX
+          echo "MERGE_SOURCE=baseline/x86_64/APKINDEX.filtered.tar.gz" >> "$GITHUB_ENV"
 
       - name: Rebuild signed index
-        run: make build-index
+        run: make build-index MERGE_SOURCE=${{ env.MERGE_SOURCE }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -249,6 +242,49 @@ jobs:
           name: packages-out
           path: packages-out/
 
+      # apko/los-angeles-linux.yaml and apko/self-hosted.yaml pin a fixed
+      # set of package names directly to the "@local packages-out"
+      # repository (solver-conflict/transitive-edge workarounds -- see
+      # those files' own comments). @local forces resolution to that
+      # literal local directory, so those specific names' .apk bytes must
+      # physically exist here -- they can't fall back to a URL the way
+      # everything else in the image's dependency graph now can (both
+      # apko configs also list the published R2 repo as a plain,
+      # untagged repository). The index artifact just downloaded already
+      # describes every one of these by metadata (melange's merge keeps
+      # every untouched entry), but only this run's own freshly-built
+      # packages have bytes on disk -- fetch just the handful that are
+      # still missing, by plain public HTTP (no AWS credentials needed).
+      - name: Fetch @local-pinned packages not built this run
+        run: |
+          tar -xzOf packages-out/x86_64/APKINDEX.tar.gz APKINDEX > /tmp/APKINDEX
+          awk -v RS='' -v FS='\n' '
+            { P=""; V="";
+              for (i=1;i<=NF;i++) {
+                if ($i ~ /^P:/) P=substr($i,3);
+                if ($i ~ /^V:/) V=substr($i,3);
+              }
+              if (P!="" && V!="") print P"\t"P"-"V".apk";
+            }' /tmp/APKINDEX > /tmp/name-to-file.tsv
+
+          grep -vE '^\s*#' apko/los-angeles-linux.yaml apko/self-hosted.yaml \
+            | grep -oE '[A-Za-z0-9_.+-]+@local' \
+            | sed 's/@local$//' \
+            | sort -u > /tmp/local-pinned-names.txt
+
+          while read -r name; do
+            [ -z "$name" ] && continue
+            fname=$(awk -F'\t' -v n="$name" '$1==n{print $2}' /tmp/name-to-file.tsv)
+            if [ -z "$fname" ]; then
+              echo "::error::no index entry for @local-pinned package $name"
+              exit 1
+            fi
+            if [ ! -f "packages-out/x86_64/$fname" ]; then
+              curl -fsSL "https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev/x86_64/$fname" \
+                -o "packages-out/x86_64/$fname"
+            fi
+          done < /tmp/local-pinned-names.txt
+
       - name: Build disk image
         run: make build-image
 
@@ -271,13 +307,21 @@ jobs:
   # boot-test, not just index) -- a package that indexes fine but breaks
   # the final image should never reach the public repo.
   #
-  # --delete is safe to use unconditionally even though this run's own
-  # build may have only touched one or two packages: index (above) always
-  # merges this run's output with a fresh download of the currently
-  # published repo, minus anything in needs.discover.outputs.removed, so
-  # packages-out here is the complete, accurate target state either way --
-  # --delete just prunes exactly the packages that were deliberately
-  # removed from packages/ this push, nothing else.
+  # packages-out here only physically contains this run's fresh .apk files
+  # plus the newly merged+signed index -- NOT a full mirror of the bucket
+  # (see index job above) -- so publishing is now two deliberately
+  # sequenced steps instead of one `sync --delete`:
+  #
+  #   1. Upload (additive only, no --delete): pushes just the new/changed
+  #      files. Everything the index still references that wasn't
+  #      touched this run is already sitting in the bucket untouched.
+  #   2. Prune: only AFTER that upload lands, list the bucket's current
+  #      keys and delete whichever ones the just-published index no
+  #      longer references (a removed recipe's old files, or a rebuilt
+  #      recipe's stale old-version file). Sequenced last on purpose --
+  #      there must never be a window where the live index points at a
+  #      file that's missing, but a brief window where a stale file
+  #      outlives the index that no longer mentions it is harmless.
   #
   # R2 has no per-object ACLs (unlike Linode/AWS S3) -- public access is a
   # bucket-level setting already in place, so no --acl flag here. Region is
@@ -292,12 +336,42 @@ jobs:
         with:
           name: packages-out
           path: packages-out/
-      - name: Publish to Cloudflare R2
+
+      - name: Upload new/changed packages and index
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_S3_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_S3_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
         run: |
           aws s3 sync packages-out/ s3://los-angeles-linux/ \
-            --endpoint-url https://3cbfa894108429db9520d0e70906bcf0.r2.cloudflarestorage.com \
-            --delete
+            --endpoint-url https://3cbfa894108429db9520d0e70906bcf0.r2.cloudflarestorage.com
+
+      - name: Prune bucket objects no longer in the index
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ENDPOINT: https://3cbfa894108429db9520d0e70906bcf0.r2.cloudflarestorage.com
+        run: |
+          tar -xzOf packages-out/x86_64/APKINDEX.tar.gz APKINDEX > /tmp/final-APKINDEX
+          awk -v RS='' -v FS='\n' '
+            { P=""; V="";
+              for (i=1;i<=NF;i++) {
+                if ($i ~ /^P:/) P=substr($i,3);
+                if ($i ~ /^V:/) V=substr($i,3);
+              }
+              if (P!="" && V!="") print "x86_64/" P "-" V ".apk";
+            }' /tmp/final-APKINDEX > /tmp/keep-keys.txt
+          echo "x86_64/APKINDEX.tar.gz" >> /tmp/keep-keys.txt
+
+          aws s3api list-objects-v2 --bucket los-angeles-linux --prefix x86_64/ \
+            --endpoint-url "$ENDPOINT" --query 'Contents[].Key' --output text \
+            | tr '\t' '\n' | grep -v '^None$' > /tmp/bucket-keys.txt || true
+
+          comm -23 <(sort -u /tmp/bucket-keys.txt) <(sort -u /tmp/keep-keys.txt) > /tmp/stale-keys.txt
+
+          while read -r key; do
+            [ -z "$key" ] && continue
+            echo "pruning $key"
+            aws s3 rm "s3://los-angeles-linux/$key" --endpoint-url "$ENDPOINT"
+          done < /tmp/stale-keys.txt

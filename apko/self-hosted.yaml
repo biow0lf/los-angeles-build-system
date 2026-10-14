@@ -66,6 +66,10 @@
 contents:
   repositories:
     - https://packages.wolfi.dev/os
+    # Same published-repo addition as los-angeles-linux.yaml -- lets this
+    # minimal config's own transitive deps resolve to our self-hosted
+    # builds over HTTP instead of always falling through to Wolfi.
+    - https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev
     - "@local packages-out"
   keyring:
     - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub

@@ -111,10 +111,27 @@ build-package: build-builder-image
 		--apk-cache-dir=$(MELANGE_CACHE_DIR)/apk \
 		$(SOURCE_DIR_FLAG)
 
+# MERGE_SOURCE (optional): an existing APKINDEX.tar.gz whose entries get
+# merged in -- used by CI's incremental publish flow (build-packages.yml's
+# index job) to fold this run's fresh packages into the previously-
+# published index without ever downloading the previously-published .apk
+# files themselves (melange's merge only needs the old index's text, not
+# the bytes behind it). Local/manual `make build-index` omits it and
+# behaves as before: a plain index over whatever's in packages-out right
+# now.
+MERGE_SOURCE ?=
+MERGE_FLAG := $(if $(MERGE_SOURCE),--merge --source=$(MERGE_SOURCE),)
+
+# nullglob: once CI can legitimately run this with zero local .apk files
+# (a push that only deletes packages, so nothing gets freshly built),
+# plain bash would otherwise pass the literal unexpanded string
+# "packages-out/$(ARCH)/*.apk" to melange index, which then fails trying
+# to open a file by that literal name.
 build-index: build-builder-image
-	$(DOCKER_RUN) melange index \
+	shopt -s nullglob; $(DOCKER_RUN) melange index \
 		-o packages-out/$(ARCH)/APKINDEX.tar.gz \
 		--signing-key=keys/melange.rsa \
+		$(MERGE_FLAG) \
 		packages-out/$(ARCH)/*.apk
 
 serve-repo:

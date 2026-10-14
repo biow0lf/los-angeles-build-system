@@ -1,7 +1,7 @@
 package:
   name: neovim
   version: "0.12.6"
-  epoch: 1 # fix rebuild + enable jemalloc + add url
+  epoch: 1 # rebuild + enable jemalloc + add url
   description: "Vim-fork focused on extensibility and agility"
   url: https://neovim.io/
   copyright:

@@ -1,0 +1,47 @@
+package:
+  name: py3.14-pluggy
+  version: "1.6.0"
+  epoch: 1
+  description: Plugin management and hook calling for Python
+  copyright:
+    - license: MIT
+
+vars:
+  pypi-package: pluggy
+  python-version: "3.14"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - py${{vars.python-version}}-pip
+      - py${{vars.python-version}}-setuptools-scm
+      - py${{vars.python-version}}-wheel
+      - python-${{vars.python-version}}-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pytest-dev/pluggy
+      tag: ${{package.version}}
+      expected-commit: fd08ab5f811a9b2fa9124ae8cbbd393221151e2c
+
+  - uses: py/pip-build-install
+    with:
+      python: python${{vars.python-version}}
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: python/import
+      with:
+        python: python${{vars.python-version}}
+        import: ${{vars.pypi-package}}
+
+update:
+  enabled: true
+  github:
+    identifier: pytest-dev/pluggy
+    use-tag: true

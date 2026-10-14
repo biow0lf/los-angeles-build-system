@@ -1,0 +1,83 @@
+package:
+  name: py3-pluggy
+  version: "1.6.0"
+  epoch: 8 # go/wolfi-rsc/py3-pluggy
+  description: Plugin management and hook calling for Python
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 4Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+vars:
+  pypi-package: pluggy
+
+data:
+  - name: py-versions
+    items:
+      3.10: '310'
+      3.11: '311'
+      3.12: '312'
+      3.13: '313'
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - py3-supported-pip
+      - py3-supported-python
+      - py3-supported-setuptools-scm
+      - py3-supported-wheel
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pytest-dev/pluggy
+      tag: ${{package.version}}
+      expected-commit: fd08ab5f811a9b2fa9124ae8cbbd393221151e2c
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provides:
+        - py3-${{vars.pypi-package}}
+      provider-priority: ${{range.value}}
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.pypi-package}}
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/metapackage
+
+update:
+  enabled: true
+  github:
+    identifier: pytest-dev/pluggy
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/byproductpackage

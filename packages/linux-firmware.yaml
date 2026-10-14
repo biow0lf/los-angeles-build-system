@@ -1,0 +1,33 @@
+# https://gitlab.alpinelinux.org/alpine/aports/-/blob/master/main/linux-firmware/APKBUILD
+package:
+  name: linux-firmware
+  version: 20260916
+  epoch: 0
+  description: "Firmware files for linux"
+  url: "https://gitlab.com/kernel-firmware/linux-firmware"
+  copyright:
+    - license: "Custom"
+  dependencies:
+    # runtime:
+    #   - amd-ucode=${{package.version}}
+    #   - linux-firmware-amd=${{package.version}}
+    #   - linux-firmware-amdgpu=${{package.version}}
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - xz
+      - rdfind
+      - coreutils
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://gitlab.com/kernel-firmware/${{package.name}}/-/archive/20260916/${{package.name}}-${{package.version}}.tar.bz2
+      expected-sha256: 9304cc78813c643d2a9310ba202037e9aabde9c46f84ac2bcf929c6247001ac8
+
+  - runs: |
+      make DESTDIR="${{targets.destdir}}/" FIRMWAREDIR=/usr/lib/firmware install-xz
+      make DESTDIR="${{targets.destdir}}/" FIRMWAREDIR=/usr/lib/firmware dedup

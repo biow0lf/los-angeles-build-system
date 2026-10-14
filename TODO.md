@@ -1,5 +1,6 @@
 # TODO list
 
+* libxxf86misc.yaml: rename package from libXxf86misc -> libxxf86misc
 * fd.yaml
 * check "why we need gnu-libiconv"?
 * libsrt -> split to libsrt and libsrt-dev

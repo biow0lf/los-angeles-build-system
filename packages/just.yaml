@@ -1,7 +1,7 @@
 package:
   name: just
   version: "1.58.0"
-  epoch: 3 # rust: -> 1.99
+  epoch: 3 # build
   description: "just is a handy way to save and run project-specific commands."
   copyright:
     - license: CC0-1.0

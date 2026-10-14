@@ -1,11 +1,7 @@
-# Deviation from Wolfi's own recipe: go-package changed from "go-1.27"
-# to plain "go" throughout, matching our own single-stream Go package
-# name (see packages/go.yaml's own comment for why we don't carry
-# Wolfi's multi-stream naming).
 package:
   name: apko
-  version: "1.4.5"
-  epoch: 0 # CVE-2026-78662
+  version: "1.4.11"
+  epoch: 0 # CVE-2026-78659
   description: Build OCI images using APK directly without Dockerfile
   copyright:
     - license: Apache-2.0
@@ -19,18 +15,23 @@ package:
 environment:
   contents:
     packages:
-      - go
+      - go-1.27
 
 pipeline:
   - uses: git-checkout
     with:
       repository: https://github.com/chainguard-dev/apko
       tag: v${{package.version}}
-      expected-commit: 739e7ce3f675ffb232e16849b51ff93657f1570c
+      expected-commit: 5b3c3182430465dd2212a656411267f150034255
+
+  - uses: bump
+    with:
+      language: go
+      deps: chainguard.dev/sdk@v0.1.355
 
   - uses: go/build
     with:
-      go-package: go
+      go-package: go-1.27
       output: apko
       packages: .
       ldflags: |

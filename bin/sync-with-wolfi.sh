@@ -178,6 +178,16 @@ packages=(
 	libxt
 	libxtst
 	libxv
+	libxxf86vm
+	linenoise
+	linux-headers
+	linux-pam
+	llvm-22
+	llvm-23
+	lsof
+	lua-lpeg
+	lua-mpack
+	lua5.3-lzlib
 	perl
 )
 

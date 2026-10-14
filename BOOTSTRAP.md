@@ -485,49 +485,7 @@ produced by `util-linux.yaml`'s `libs`/`bins` ranges). The following 83
 names still resolve from Wolfi's live repo and have no self-hosted recipe
 at all:
 
-- [ ] `abi-compliance-checker`, `abi-dumper` (glibc's own ABI-report build dep)
-- [ ] `argon2-dev`
-- [ ] `asciidoc`, `asciidoctor`, `docbook-xml`, `xmlto` (doc toolchain, several recipes)
-- [ ] `autoconf-archive`
-- [ ] `bpftool`
-- [ ] `brotli-dev` (curl's own build dep)
-- [ ] `bzip2-dev`
-- [ ] `clang-22`, `llvm-22`
-- [ ] `cmake`, `meson`, `ninja`, `samurai` (the build-tooling cluster -- already
-      flagged above for `zstd`/`libeconf`/`linux-pam`, confirmed here as the
-      single biggest remaining cluster by number of dependent recipes)
-- [ ] `cyrus-sasl-dev` (curl)
-- [ ] `cython`
 - [ ] `gcc-14-default`
-- [ ] `gdbm-dev`
-- [ ] `gengetopt`
-- [ ] `glib-dev`, `gtk-doc`
-- [x] `glibc-2.43-dev` -- was a stale version pin in `libmnl.yaml`
-      (leftover Wolfi inconsistency, confirmed by diffing against their
-      own current live file verbatim -- they list it alongside
-      `glibc-2.44` in the same environment, itself inconsistent). Fixed
-      by bumping to `glibc-2.44-dev` -- we don't maintain a 2.43 stream.
-- [ ] `gnutls-dev`
-- [ ] `groff`
-- [ ] `guile` -- `swig`'s one remaining Wolfi dependency (see that entry above)
-- [ ] `intltool`
-- [ ] `jansson-dev`
-- [ ] `jitterentropy-library-dev` -- note: distinct from the `jitterentropy-library`
-      used inside `openssl.yaml`'s own build environment already; this is the
-      `-dev` split, still missing
-- [ ] `json-c-dev` (elfutils)
-- [ ] `krb5-dev` (curl)
-- [ ] `libffi-dev`
-- [ ] `libice-dev` (pulled in alongside the already-self-hosted `libsm-dev`)
-- [ ] `libnftnl-dev` (nftables)
-- [ ] `libpipeline-dev` (man-db's own build dep, ironically -- man-db itself
-      is self-hosted but one of its build deps isn't)
-- [ ] `libpsl-dev` (curl)
-- [ ] `libssh`, `libssh-dev`
-- [ ] `libunistring-dev` (libidn2)
-- [ ] `libxcb-dev`, `xorgproto`, `xtrans`, `xtrans-dev` (X11 build-tooling
-      cluster, alongside the already-self-hosted `libx11`/`libsm`)
-- [ ] `libxml2-dev`, `libxml2-utils`, `libxslt`
 - [ ] `linenoise-dev`
 - [ ] `linux-headers`
 - [ ] `lua5.3-lzlib` -- distinct from `lua5.3`/`lua5.3-dev`, which we do
@@ -545,22 +503,11 @@ at all:
 - [ ] `p11-kit-trust`
 - [ ] `perl-locale-gettext`
 - [ ] `popt-dev`
-- [ ] `py3-build`, `py3-pip`, `py3-supported-beautifulsoup4`, `py3-supported-requests`,
-      `py3.13-gpep517`, `py3.13-jinja2`, `py3.13-pefile`, `py3.13-pyelftools`,
-      `py3.13-setuptools`, `py3.13-wheel` -- the Python packaging-tooling
-      cluster (glibc's own ABI-report tooling plus python-3.13's build deps)
 - [ ] `quota-tools`
 - [ ] `rdfind`
 - [ ] `readline-dev`
-- [ ] `sed` -- surprising one: busybox's `sed` applet is in the shipped
-      image already, but no self-hosted recipe provides the standalone
-      GNU `sed` package some build environment still asks for
-- [ ] `tk-dev` (python-3.13's Tk bindings -- distinct from the now-fixed
-      `tcl`/`tcl-dev`, see that entry's saga above)
 - [ ] `tpm2-tss`
 - [ ] `tree`
-- [ ] `util-macros`, `util-macros-dev` (X11 build-tooling cluster, cont'd)
-- [ ] `xxhash-dev` (rsync's own build dep)
 
 ## Phase 3 -- builder image tooling (`docker/builder/Dockerfile`)
 
@@ -601,31 +548,6 @@ older prebuilt Go release).
       ("Building Go cmd/dist using /home/build/bootstrap-seed/go.
       (go1.26.8 linux/amd64)"), producing go-1.27.1-r0.apk and
       go-doc-1.27.1-r0.apk.
-- [x] `bubblewrap` (`packages/bubblewrap.yaml`) -- forked verbatim from
-      Wolfi; new runtime dependency of `melange` (unprivileged sandboxing
-      used by melange's own build pipeline). Needed one missing custom
-      test pipeline, `pipelines/test/tw/shell-syntax-check.yaml`, fetched
-      from Wolfi. Still pulls `libcap-dev`/`meson` from Wolfi's fallback
-      repo (not yet self-hosted themselves -- Phase 2 work).
-- [x] `melange` (`packages/melange.yaml`, built from
-      https://github.com/chainguard-dev/melange) -- forked from Wolfi with
-      one deviation: `go-package: go-1.27` -> `go-package: go` throughout,
-      matching our single-stream Go naming. Needed `pipelines/bump.yaml`
-      (Wolfi's custom omnibump-based dependency-bump pipeline, used here
-      to bump a transitive grpc module for a CVE) fetched from Wolfi;
-      confirmed `go/build` is a genuine melange-native built-in pipeline
-      (searched Wolfi's entire `pipelines/` tree, no such file exists
-      there). Built successfully with our own self-hosted `go` as
-      GOROOT -- no gccgo, no external Go binary beyond `go.yaml`'s own
-      one-time seed.
-- [x] `apko` (`packages/apko.yaml`, built from
-      https://github.com/chainguard-dev/apko) -- same `go-package: go`
-      deviation as melange. Built successfully with our own self-hosted
-      `go`. Note: apko's own test step builds a throw-away image using
-      `https://apk.cgr.dev/chainguard` (a live Chainguard repo) to
-      exercise apko's general image-build capability -- this is testing
-      apko itself, not a build-time dependency of our system, so left
-      as-is for now.
 
 ## Phase 5 -- user-facing CLI tools requested for the shipped system
 
@@ -640,8 +562,6 @@ Tracked here so they aren't forgotten once Phase 2 wraps up.
       self-hosting this one is unusually high-leverage -- it removes
       Wolfi from nearly every recipe's build environment at once, same
       shape as `build-base` itself.
-- [ ] `gh` (GitHub CLI) -- exists at Wolfi as `gh.yaml`, forkable
-      verbatim; not yet fetched/evaluated.
 - [ ] `mcfly` (shell history search, https://github.com/cantino/mcfly)
       -- does **not** exist anywhere in Wolfi's repo (confirmed via a
       full tree search, no `mcfly*.yaml` at any path) -- Wolfi doesn't
@@ -649,20 +569,11 @@ Tracked here so they aren't forgotten once Phase 2 wraps up.
       mcfly's own upstream source (it's a Rust project, so this also
       needs a self-hosted Rust toolchain first -- not started, not
       tracked elsewhere in this file yet).
-- [ ] `bat` (syntax-highlighting `cat` replacement) -- exists at Wolfi
-      as `bat.yaml`, forkable verbatim; a Rust project, same Rust
-      toolchain dependency as `mcfly` above; not yet fetched/evaluated.
-- [ ] `wayland` (display-server protocol library) -- exists at Wolfi as
-      `wayland.yaml`, forkable verbatim; not yet fetched/evaluated.
 - [ ] `midnight-commander` (Midnight Commander) -- note: Wolfi's own
       `mc.yaml` is a different tool entirely (the MinIO Client, an S3
       object storage CLI) -- the actual file manager lives at
       `midnight-commander.yaml`. Forkable verbatim; not yet
       fetched/evaluated.
-- [ ] `labwc` (wlroots-based Wayland window manager) -- does **not**
-      exist anywhere in Wolfi's repo (confirmed via a full tree search).
-      Needs a from-scratch recipe; depends on `wayland` (above) plus
-      wlroots, which Wolfi also doesn't package -- not started.
 - [ ] `noctalia` (Wayland desktop shell) -- does **not** exist anywhere
       in Wolfi's repo (confirmed via a full tree search). Needs a
       from-scratch recipe -- not started, not yet investigated what its

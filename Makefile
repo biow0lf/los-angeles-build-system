@@ -12,12 +12,6 @@ PKG ?=
 # a grub that can't do BIOS-boot installs for our x86_64 target at all.
 PLATFORM := linux/amd64
 
-# Bootstrap repo/keyring: until a given build-time dependency is self-hosted
-# (see BOOTSTRAP.md), melange build environments resolve it from Wolfi's
-# public repo -- same glibc/systemd family, itself melange-built.
-BOOTSTRAP_REPO := https://packages.wolfi.dev/os
-BOOTSTRAP_KEY := https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
-
 # build-packages.yml's CI matrix builds each package in its own isolated
 # checkout -- packages-out (below) only accumulates within a single working
 # directory, so it can't help one matrix leg see another leg's output, or a
@@ -44,7 +38,7 @@ MELANGE_CACHE_DIR := melange-cache
 DOCKER_RUN := docker run --rm --platform $(PLATFORM) -v $(CURDIR):/work -w /work $(BUILDER_IMAGE)
 
 .PHONY: build-builder-image keygen build-package build-index serve-repo \
-        build-rootfs build-image build-iso test-boot clean
+        build-rootfs build-image build-iso test-boot open-console clean
 
 build-builder-image:
 	docker build --platform $(PLATFORM) -t $(BUILDER_IMAGE) -f docker/builder/Dockerfile .
@@ -103,7 +97,6 @@ build-package: build-builder-image
 		--repository-append=packages-out \
 		--repository-append=$(PUBLISHED_REPO) \
 		--keyring-append=keys/melange.rsa.pub \
-		--keyring-append=$(BOOTSTRAP_KEY) \
 		--signing-key=keys/melange.rsa \
 		--out-dir=./packages-out \
 		--pipeline-dir=pipelines \
@@ -164,6 +157,34 @@ KVM_DEVICE := $(if $(wildcard /dev/kvm),--device /dev/kvm,)
 test-boot: build-image
 	docker run --rm --platform $(PLATFORM) -v $(CURDIR):/work -w /work $(KVM_DEVICE) $(BUILDER_IMAGE) \
 		test/boot-smoke-test.sh work/la-linux.img
+
+CONSOLE_IMAGE := la-linux/console
+
+# make open-console
+# Builds a throwaway image from apko/console.yaml (apko, melange,
+# apk-tools, bash, coreutils, build-base, busybox -- Wolfi's own copies,
+# nothing self-hosted) and drops into an interactive shell in it. apko's
+# tar output is already docker-save format (see image/extract-rootfs.sh's
+# comment: manifest.json + one layer tar.gz), so `docker load` consumes it
+# directly -- no Dockerfile/docker build involved, just apko assembling
+# straight from repo packages. The load/run happen on the host, not
+# inside $(DOCKER_RUN), since they talk to the host docker daemon and need
+# a real tty.
+#
+# apko/docker tag the loaded image "<tag>-<arch>", not "<tag>" verbatim
+# (confirmed via `docker load`'s own "Loaded image: ...-amd64" output) --
+# harmless elsewhere in this Makefile since build-rootfs's own output
+# never goes through `docker load`, but it means the run step below has
+# to reference dev-amd64 explicitly, matching PLATFORM's own hardcoded
+# amd64 (see that var's comment).
+open-console: build-builder-image
+	mkdir -p work
+	$(DOCKER_RUN) apko build apko/console.yaml $(CONSOLE_IMAGE):dev \
+		work/console-oci.tar --arch $(ARCH)
+	docker load -i work/console-oci.tar
+	docker run --rm -it --platform $(PLATFORM) \
+		-v $(CURDIR):/work -w /work \
+		$(CONSOLE_IMAGE):dev-amd64
 
 clean:
 	rm -rf work packages-out

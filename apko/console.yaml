@@ -1,0 +1,24 @@
+# Throwaway console image for `make open-console` -- a Wolfi-packaged
+# shell with build tooling, not part of the actual Los Angeles Linux
+# rootfs (see los-angeles-linux.yaml for that). Every package here is
+# Wolfi's own copy, not anything self-hosted, so no @local pin and no
+# melange signing key in the keyring.
+
+contents:
+  repositories:
+    - https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev
+  keyring:
+    - keys/melange.rsa.pub
+  packages:
+    - apko
+    - melange
+    - apk-tools
+    - bash
+    - coreutils
+    - build-base
+    - busybox
+
+archs:
+  - x86_64
+
+cmd: /bin/bash

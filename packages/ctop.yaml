@@ -1,0 +1,62 @@
+package:
+  name: ctop
+  version: 0.7.7
+  epoch: 45 # CVE-2026-61801
+  description: Top-like interface for container metrics
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - git
+      - go-1.27
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 11a1cb10f416b4ca5e36c22c1acc2d11dbb24fb4
+      repository: https://github.com/bcicen/ctop
+      tag: v${{package.version}}
+
+  - uses: patch
+    with:
+      patches: runc-update.patch
+
+  - uses: bump
+    with:
+      deps: |-
+        golang.org/x/sys@v0.28.0
+        github.com/cyphar/filepath-securejoin@v0.2.4
+        github.com/opencontainers/image-spec@v1.0.2
+        google.golang.org/protobuf@v1.33.0
+        github.com/gogo/protobuf@v1.3.2
+        github.com/fsouza/go-dockerclient@v1.11.0
+        github.com/docker/docker@v28.0.0
+        github.com/opencontainers/runc@v1.1.14
+        github.com/containerd/containerd@v1.7.33
+        github.com/moby/sys/user@v0.4.1
+      language: go
+
+  - runs: |
+      make build
+      install -Dm755 ctop "${{targets.destdir}}"/usr/bin/ctop
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: bcicen/ctop
+    strip-prefix: v
+
+test:
+  pipeline:
+    - runs: |
+        set -o pipefail
+        ctop -v | grep "${{package.version}}"
+        ctop --help

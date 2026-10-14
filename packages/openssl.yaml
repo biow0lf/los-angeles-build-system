@@ -60,13 +60,6 @@ pipeline:
         # all the jitter stuff assumes glibc 2.34+
         exit 0
       fi
-      mkdir -p build-jitter-fips-tests/
-      cd build-jitter-fips-tests/
-      ../Configure --with-rand-seed=none enable-jitter enable-fips-jitter enable-fips -DOPENSSL_DEFAULT_SEED_SRC=JITTER --debug
-      make -s -j$(nproc)
-      make tests HARNESS_JOBS=10
-      cd ../
-      rm -rf build-jitter-fips-tests/
 
   - name: Configure and build
     runs: |

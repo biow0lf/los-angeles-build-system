@@ -1,0 +1,96 @@
+# Generated from https://git.alpinelinux.org/aports/plain/community/xcb-util-image/APKBUILD
+package:
+  name: xcb-util-image
+  version: 0.4.1
+  epoch: 7 # glibc: 2.43->2.44
+  description: X C-language Binding - port of Xlib XImage and XShmImage
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - m4
+      - pkgconf-dev
+      - util-macros-dev
+      - xcb-util-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/lib/libxcb-image
+      tag: xcb-util-image-${{package.version}}-gitlab
+      expected-commit: 1abfc17b1e08e46dbdf34b4ef36097a8c307a8ec
+      recurse-submodules: true
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --with-pic \
+        --disable-static \
+        --disable-silent-rules
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - runs: rm -rf ${{targets.destdir}}/usr/lib/*.la
+
+  - uses: strip
+
+subpackages:
+  - name: xcb-util-image-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - xcb-util-image
+        - xcb-util-dev
+    description: xcb-util-image dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 5167
+
+test:
+  environment:
+    contents:
+      packages:
+        - xcb-util-image-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/no-docs
+    - uses: test/tw/ldd-check
+    - name: Test library compilation
+      runs: |
+        tee test.c <<'EOF'
+        #include <xcb/xcb_image.h>
+        int main() {
+            /* Verify xcb_image_create is available */
+            xcb_image_t *(*fn)(uint16_t, uint16_t, xcb_image_format_t,
+                               uint8_t, uint8_t, uint8_t, uint8_t,
+                               xcb_image_order_t, xcb_image_order_t,
+                               void *, uint32_t, uint8_t *) = xcb_image_create;
+            return fn == 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags xcb-image) test.c -o test $(pkg-config --libs xcb-image)
+        ./test

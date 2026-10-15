@@ -1,7 +1,7 @@
 package:
   name: apk-tools
   version: "2.14.10"
-  epoch: 15 # glibc: 2.43->2.44
+  epoch: 17
   description: "apk-tools (Wolfi package manager)"
   copyright:
     - license: GPL-2.0-only
@@ -14,7 +14,7 @@ package:
 vars:
   # Extra CFLAGS passed to every make invocation below.
   apk-build-cflags: '-DAPK_DEFAULT_ALLOW_MISSING_AUTH=\"\*.cgr.dev/\*\"'
-  openssl-version: "3.6"
+  openssl-version: "4.0"
 
 environment:
   contents:
@@ -26,19 +26,14 @@ environment:
       - lua5.3
       - lua5.3-dev
       - lua5.3-lzlib
-      - openssl-hardened-${{vars.openssl-version}}-dev
+      - openssl-${{vars.openssl-version}}-dev
       - scdoc
       - zlib-dev
 
 pipeline:
   - uses: git-checkout
     with:
-      # Temporary mirror: gitlab.alpinelinux.org was down (500/502/403
-      # "GitLab is not responding") for an extended period while this was
-      # being self-hosted. Verified true mirror: v${{package.version}}
-      # peels to the same commit on both
-      # (`git ls-remote <repo> 'refs/tags/v2.14.10^{}'`).
-      repository: https://github.com/alpinelinux/apk-tools.git
+      repository: https://gitlab.alpinelinux.org/alpine/apk-tools.git
       tag: v${{package.version}}
       expected-commit: 9d074efdc12bc41b5d24190595a5269a770e852a
 
@@ -88,7 +83,7 @@ subpackages:
       runtime:
         - apk-tools
         - merged-sbin
-        - openssl-hardened-${{vars.openssl-version}}-dev
+        - openssl-${{vars.openssl-version}}-dev
         - wolfi-baselayout
     test:
       pipeline:

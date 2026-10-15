@@ -1,7 +1,7 @@
 package:
   name: gnutls
   version: "3.8.13"
-  epoch: 1 # go/wolfi-rsc/gnutls
+  epoch: 2 # rebuild
   description: TLS protocol implementation
   copyright:
     - license: LGPL-2.1-or-later
@@ -9,7 +9,7 @@ package:
     runtime:
       # Pin to nettle 3.x until gnutls supports nettle 4.0
       # See: http://www.mail-archive.com/gnutls-devel@lists.gnutls.org/msg03102.html
-      - nettle~3
+      - nettle-3
   resources:
     cpu: "3"
     memory: 9Gi
@@ -25,9 +25,6 @@ environment:
       - busybox
       - ca-certificates-bundle
       - gettext-dev
-      # Deviation from Wolfi's own recipe: same stale glibc-2.43-dev
-      # pin as packages/libmnl.yaml (see that file's own comment) --
-      # we only maintain the 2.44 stream.
       - glibc-2.44
       - glibc-2.44-dev
       - gperf
@@ -38,7 +35,7 @@ environment:
       - libunistring-dev
       - linux-headers
       # Pin to nettle 3.x until gnutls supports nettle 4.0
-      - nettle-dev~3
+      - nettle-3-dev
       - p11-kit-dev
       - patch
       - pkgconf-dev
@@ -99,7 +96,7 @@ subpackages:
       runtime:
         - gnutls
         # Pin to nettle 3.x until gnutls supports nettle 4.0
-        - nettle-dev~3
+        - nettle-3-dev
         - p11-kit-dev
         - libtasn1-dev
     description: gnutls dev

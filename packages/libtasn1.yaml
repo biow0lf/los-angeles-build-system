@@ -1,0 +1,141 @@
+package:
+  name: libtasn1
+  version: "4.21.0"
+  epoch: 6 # glibc: 2.43->2.44
+  description: The ASN.1 library used in GNUTLS
+  copyright:
+    - license: LGPL-2.1-or-later
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - help2man
+      - libtool
+      - patch
+      - python3
+      - texinfo
+      - coreutils
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.com/gnutls/libtasn1
+      tag: v${{package.version}}
+      expected-commit: 4c9554ea0307678abc7952ee301aa5f68aa64aad
+
+  - uses: git/gnulib-bootstrap
+
+  - uses: autoconf/configure
+    with:
+      opts: --disable-static --disable-doc
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libtasn1-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libtasn1
+        - libtasn1-progs
+    description: libtasn1 dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libtasn1-doc
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    description: libtasn1 manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: libtasn1-progs
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr
+          mv ${{targets.destdir}}/usr/bin ${{targets.subpkgdir}}/usr/
+    description: libtasn1 (utilities)
+    test:
+      pipeline:
+        - runs: |
+            asn1Coding --version
+            asn1Coding --help
+            asn1Decoding --version
+            asn1Decoding --help
+            asn1Parser --version
+            asn1Parser --help
+        - name: Test asn1Parser with real ASN.1 definition
+          runs: |
+            # Write a minimal ASN.1 module definition (no leading whitespace)
+            printf 'TestModule DEFINITIONS IMPLICIT TAGS ::= BEGIN\n  TestSeq ::= SEQUENCE {\n    id   INTEGER,\n    name UTF8String\n  }\nEND\n' > /tmp/test.asn1
+
+            # asn1Parser should parse the definition without error
+            asn1Parser /tmp/test.asn1
+
+update:
+  enabled: true
+  git:
+    tag-filter-prefix: v
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - libtasn1-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test libtasn1 library API
+      runs: |
+        # Write a small C program that exercises the libtasn1 API
+        cat > /tmp/test_libtasn1.c << 'EOF'
+        #include <libtasn1.h>
+        #include <stdio.h>
+        #include <string.h>
+
+        int main(void) {
+          const char *ver;
+
+          /* Verify the library version is available */
+          ver = asn1_check_version(NULL);
+          if (ver == NULL) {
+            fprintf(stderr, "asn1_check_version returned NULL\n");
+            return 1;
+          }
+          printf("libtasn1 version: %s\n", ver);
+
+          /* Verify the version string is non-empty */
+          if (strlen(ver) == 0) {
+            fprintf(stderr, "version string is empty\n");
+            return 1;
+          }
+
+          return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libtasn1) /tmp/test_libtasn1.c \
+          -o /tmp/test_libtasn1 \
+          $(pkg-config --libs libtasn1)
+        /tmp/test_libtasn1 | grep -F "libtasn1 version:"

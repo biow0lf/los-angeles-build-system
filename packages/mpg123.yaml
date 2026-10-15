@@ -1,0 +1,40 @@
+package:
+  name: mpg123
+  version: 1.33.7
+  epoch: 0
+  description: "Fast console MPEG Audio Player and decoder library"
+  url: https://mpg123.org
+  copyright:
+    - license: "LGPL 2.1"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - yasm
+      - alsa-lib-dev
+      - pulseaudio-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://mpg123.org/download/${{package.name}}-${{package.version}}.tar.bz2
+      expected-sha256: 31d0e35a4ca567ec9b5ebda6c3062bb4435d6d3eacd6ef0d95cadd7854dc03ee
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: mpg123-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - mpg123
+    description: mpg123 dev

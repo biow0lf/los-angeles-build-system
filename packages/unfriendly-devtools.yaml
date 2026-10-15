@@ -1,0 +1,16 @@
+package:
+  name: unfriendly-devtools
+  version: 0.1
+  epoch: 0
+  description: "Unfrindly Linux Dev Tools"
+  copyright:
+    - license: "MIT"
+  dependencies:
+    runtime:
+      - ruby>=4.0.0
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox

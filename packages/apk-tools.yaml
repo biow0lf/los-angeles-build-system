@@ -33,7 +33,8 @@ environment:
 pipeline:
   - uses: git-checkout
     with:
-      repository: https://gitlab.alpinelinux.org/alpine/apk-tools.git
+      # @biow0lf: use mirror
+      repository: https://github.com/alpinelinux/apk-tools.git
       tag: v${{package.version}}
       expected-commit: 9d074efdc12bc41b5d24190595a5269a770e852a
 

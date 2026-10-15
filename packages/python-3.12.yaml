@@ -2,7 +2,7 @@
 package:
   name: python-3.12
   version: "3.12.15"
-  epoch: 2
+  epoch: 3
   description: "the Python programming language"
   copyright:
     - license: PSF-2.0
@@ -35,7 +35,7 @@ environment:
       - linux-headers
       - mpdecimal-dev
       - ncurses-dev
-      - openssl-hardened-${{vars.openssl-version}}-dev
+      - openssl-${{vars.openssl-version}}-dev
       - readline-dev
       - sqlite-dev
       - tcl-dev

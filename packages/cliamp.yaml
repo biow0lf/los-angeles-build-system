@@ -1,0 +1,33 @@
+package:
+  name: cliamp
+  version: 2.3.0
+  epoch: 0
+  description: "Terminal music player inspired by winamp"
+  url: https://www.cliamp.stream/
+  copyright:
+    - license: "MIT"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - go-1.27
+      - alsa-lib-dev
+      - libogg-dev
+      - libvorbis-dev
+      - flac-dev
+      - mpg123-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/bjarneo/cliamp
+      tag: v${{package.version}}
+      expected-commit: d0501a3709200efdd7b130596187665459897591
+
+  - runs: go build -o cliamp .
+
+  - runs: |
+      mkdir -p "${{targets.destdir}}"/usr/bin
+      install -m 755 cliamp "${{targets.destdir}}"/usr/bin/

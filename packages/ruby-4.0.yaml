@@ -1,0 +1,215 @@
+package:
+  name: ruby-4.0
+  version: "4.0.7"
+  epoch: 4 # rust: 1.98->1.99
+  description: "the Ruby programming language"
+  copyright:
+    - license: Ruby
+    - license: BSD-2-Clause
+  dependencies:
+    provides:
+      - ruby=${{package.full-version}}
+      # These are bundled gems
+      - ruby${{vars.ruby-major-version}}-csv
+      - ruby${{vars.ruby-major-version}}-base64
+      - ruby${{vars.ruby-major-version}}-drb
+      - ruby${{vars.ruby-major-version}}-logger
+      - ruby${{vars.ruby-major-version}}-ostruct
+    runtime:
+      - glibc
+      - gmp
+      - libgcc
+      - ruby${{vars.ruby-major-version}}-json
+      - yaml
+      - zlib
+  resources:
+    cpu: "5"
+    memory: 9Gi
+
+environment:
+  environment:
+    CFLAGS: -DOPENSSL_NO_ENGINE -DOPENSSL_NO_DSA -DOPENSSL_NO_DH
+  contents:
+    packages:
+      - autoconf
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - coreutils
+      - expat-dev
+      - gdbm-dev
+      - glibc-2.44-dev
+      - gmp-dev
+      - graphviz
+      - jemalloc-dev
+      - libffi-dev
+      - libxcrypt-dev
+      - linux-headers
+      - mpdecimal-dev
+      - ncurses-dev
+      - oniguruma-dev
+      - openssl-${{vars.openssl-version}}-dev
+      - pkgconf
+      - readline-dev
+      - ruby-3.4
+      - rust-${{vars.rust-version}}
+      - tk-dev
+      - yaml-dev
+      - zlib-dev
+
+vars:
+  openssl-version: "4.0"
+  prefix: /usr
+  rust-version: "1.99"
+
+var-transforms:
+  - from: ${{package.version}}
+    match: (\d+\.\d+).*
+    replace: $1
+    to: ruby-major-version
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/ruby/ruby
+      tag: v${{package.version}}
+      expected-commit: 229531a6cfbf07e3caef30dbac24a2a3f3fed482
+
+  - uses: git-checkout
+    with:
+      repository: https://github.com/ruby/openssl
+      tag: v4.0.2
+      expected-commit: 6e410b804f4c6a52c146fe651941bafdbb332754
+      destination: upstream/ruby/openssl
+
+  - uses: patch
+    with:
+      patches: |
+        remove-already-provided-gems-from-gems_bundled_gems.patch
+        0001-tools-do-not-escape-build-location.patch
+
+  - uses: patch
+    working-directory: upstream/ruby/openssl
+    with:
+      patches: |
+        ../../../0001-Add-pkcs5-argument-to-OpenSSL-KDF.pbkdf2_hmac.patch
+
+  - name: Update default openssl gems with our patched version
+    runs: |
+      ruby tool/sync_default_gems.rb openssl
+
+  - name: Generate and Configure
+    runs: |
+      ./autogen.sh
+      ./configure \
+         --host=${{host.triplet.gnu}} \
+         --build=${{host.triplet.gnu}} \
+         --target=${{host.triplet.gnu}} \
+         --prefix=${{vars.prefix}} \
+         --enable-shared \
+         --disable-rpath \
+         --sysconfdir=/etc \
+         --enable-mkmf-verbose \
+         --enable-yjit \
+         --with-jemalloc
+
+  - uses: autoconf/make
+
+  # Update and Extract bundled gems
+  - uses: autoconf/make
+    with:
+      opts: update-gems extract-gems
+
+  # Build documentation
+  - uses: autoconf/make
+    with:
+      opts: rdoc capi
+
+  - uses: autoconf/make-install
+
+  - runs: |
+      # Ignore the patch version of ruby since ruby will install under the
+      # version of the latest standard library. Should produce the string 4.0.*
+      RUBYWILD="${{vars.ruby-major-version}}.*"
+
+      RUBYDIR=${{targets.destdir}}${{vars.prefix}}/lib/ruby/$RUBYWILD
+      rm -rf ${RUBYDIR}/bundler
+      rm -f ${RUBYDIR}/bundler.rb
+
+      GEMDIR=${{targets.destdir}}${{vars.prefix}}/lib/ruby/gems/$RUBYWILD
+      rm -rf ${GEMDIR}/gems/bundler-*
+      rm -f ${GEMDIR}/specifications/default/bundler-*.gemspec
+      rm -f ${GEMDIR}/specifications/default/json-*.gemspec
+
+      rm -f ${{targets.destdir}}/usr/bin/bundle \
+         ${{targets.destdir}}/usr/bin/bundler
+
+  - runs: |
+      find ${{targets.destdir}} -name 'mkmf.log' -exec rm {} \;
+
+subpackages:
+  - name: "ruby-${{vars.ruby-major-version}}-doc"
+    description: "ruby documentation"
+    pipeline:
+      - uses: split/manpages
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/share
+          mv "${{targets.destdir}}"/usr/share/doc "${{targets.subpkgdir}}"/usr/share/
+          mv "${{targets.destdir}}"/usr/share/ri "${{targets.subpkgdir}}"/usr/share/
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: "ruby-${{vars.ruby-major-version}}-dev"
+    description: "ruby development headers"
+    dependencies:
+      runtime:
+        - jemalloc-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: ruby/ruby
+    strip-prefix: v
+    use-tag: true
+    tag-filter-prefix: v4.0
+
+test:
+  environment:
+    contents:
+      packages:
+        - ruby${{vars.ruby-major-version}}-bundler
+  pipeline:
+    - name: Test binaries
+      runs: |
+        ruby --version | grep -F ${{package.version}}
+
+        cat <<EOF >> /tmp/hello.rb
+        puts("Hello Wolfi!")
+        EOF
+
+        ruby /tmp/hello.rb
+    - name: Validate HTTPS support
+      runs: |
+        bundle init
+        OUTPUT=$(bundle doctor --ssl 2>&1)
+        echo "$OUTPUT"
+        if echo "$OUTPUT" | grep -Fi "failed"; then
+          exit 1
+        fi
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          gem
+          irb
+          rake
+          rdbg
+          rdoc
+          ri
+          ruby

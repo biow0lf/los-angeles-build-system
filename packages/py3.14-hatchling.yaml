@@ -1,0 +1,64 @@
+package:
+  name: py3.14-hatchling
+  version: "1.32.4"
+  epoch: 0 # replace deprecated tag-filter with tag-filter-prefix
+  description: Modern, extensible Python build backend
+  copyright:
+    - license: MIT
+  dependencies:
+    runtime:
+      - py${{vars.python-version}}-packaging
+      - py${{vars.python-version}}-pathspec
+      - py${{vars.python-version}}-pluggy
+      - py${{vars.python-version}}-tomli
+      - py${{vars.python-version}}-tomlkit
+      - py${{vars.python-version}}-trove-classifiers
+
+vars:
+  pypi-package: hatchling
+  import: hatchling
+  python-version: "3.14"
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - ca-certificates-bundle
+      - py${{vars.python-version}}-build
+      - py${{vars.python-version}}-installer
+      - py${{vars.python-version}}-pathspec
+      - py${{vars.python-version}}-pip
+      - py${{vars.python-version}}-pluggy
+      - py${{vars.python-version}}-tomli
+      - py${{vars.python-version}}-trove-classifiers
+      - py${{vars.python-version}}-wheel
+      - python-${{vars.python-version}}-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: c4abc454f908bb4fc2a92452a82cb33dac14abf3
+      repository: https://github.com/pypa/hatch
+      tag: hatchling-v${{package.version}}
+
+  - uses: py/pip-build-install
+    with:
+      python: python${{vars.python-version}}
+    working-directory: backend
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/tw/pip-check
+    - uses: python/import
+      with:
+        python: python${{vars.python-version}}
+        import: ${{vars.import}}
+
+update:
+  enabled: true
+  github:
+    identifier: pypa/hatch
+    strip-prefix: hatchling-v
+    tag-filter-prefix: hatchling-v

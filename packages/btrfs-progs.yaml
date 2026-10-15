@@ -1,0 +1,123 @@
+package:
+  name: btrfs-progs
+  version: "7.1"
+  epoch: 3 # openssl-hardened: 3.6->4.0
+  description: BTRFS filesystem utilities
+  copyright:
+    - license: GPL-2.0-or-later
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+vars:
+  openssl-version: "4.0"
+  python-version: 3.13
+
+environment:
+  contents:
+    packages:
+      - asciidoc
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - e2fsprogs-dev
+      - glibc-2.44-dev
+      - linux-headers
+      - lzo-dev
+      - openssl-hardened-${{vars.openssl-version}}-dev
+      - pkgconf-dev
+      - py${{vars.python-version}}-build-base-dev
+      - systemd-dev
+      - zlib-dev
+      - zstd-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/kdave/btrfs-progs
+      tag: v${{package.version}}
+      expected-commit: 4ab0e80be9e3bb1db2e6038e6d4316d35fb7ba8b
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        PYTHON=python${{vars.python-version}} \
+        --with-crypto=openssl \
+        --disable-backtrace \
+        --disable-documentation # documentation requires a _ton_ of python3 dependencices that should be added to sphinx instead
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: btrfs-progs-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - btrfs-progs
+    description: btrfs-progs dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: py3-btrfs-progs
+    description: Python 3 bindings for btrfs-progs
+    dependencies:
+      runtime:
+        - btrfs-progs
+    pipeline:
+      - runs: |
+          make install_python DESTDIR="${{targets.subpkgdir}}"
+    test:
+      pipeline:
+        - uses: python/import
+          with:
+            import: btrfsutil
+
+  - name: btrfs-progs-bash-completion
+    description: btrfs-progs bash completion
+    pipeline:
+      - runs: |
+          _out="${{targets.subpkgdir}}"/usr/share/bash-completion/completions
+          mkdir -p $_out
+          install -Dm644 btrfs-completion $_out
+    test:
+      pipeline:
+        - uses: test/tw/shell-syntax-check
+
+update:
+  enabled: true
+  github:
+    identifier: kdave/btrfs-progs
+    strip-prefix: v
+    tag-filter: v
+
+test:
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: btrfs mkfs.btrfs
+    - uses: test/tw/help-check
+      with:
+        bins: btrfs btrfs-convert btrfs-find-root btrfs-image btrfsck btrfstune fsck.btrfs mkfs.btrfs
+    - name: "Create and inspect test filesystem image"
+      runs: |
+        # Create 120MB test image (minimum size is ~109MB)
+        dd if=/dev/zero of=test.img bs=1M count=120
+        mkfs.btrfs -f test.img
+
+        # Verify filesystem
+        btrfs check test.img
+
+        # Show filesystem info
+        btrfs inspect-internal dump-super test.img
+    - uses: test/tw/ldd-check

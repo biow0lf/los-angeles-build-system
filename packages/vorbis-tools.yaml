@@ -1,0 +1,34 @@
+# TODO: add ogg123
+package:
+  name: vorbis-tools
+  version: 1.4.3
+  epoch: 0
+  description: "Vorbis tools"
+  url: https://xiph.org/vorbis/
+  copyright:
+    - license: "GPL-2.0"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - gettext-dev
+      - libogg-dev
+      - libvorbis-dev
+      - flac-dev
+      - curl-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://ftp.osuosl.org/pub/xiph/releases/vorbis/vorbis-tools-1.4.3.tar.gz
+      expected-sha256: a1fe3ddc6777bdcebf6b797e7edfe0437954b24756ffcc8c6b816b63e0460dde
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip

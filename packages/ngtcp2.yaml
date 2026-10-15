@@ -1,7 +1,7 @@
 package:
   name: ngtcp2
   version: "1.25.0"
-  epoch: 5 # openssl-hardened: 3.6->4.0
+  epoch: 6
   description: ngtcp2 project is an effort to implement IETF QUIC protocol
   copyright:
     - license: MIT
@@ -22,7 +22,7 @@ environment:
       - busybox
       - glibc-2.44-dev
       - libtool
-      - openssl-hardened-${{vars.openssl-version}}-dev
+      - openssl-${{vars.openssl-version}}-dev
       - pkgconf-dev
 
 pipeline:

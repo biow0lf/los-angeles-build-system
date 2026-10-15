@@ -91,7 +91,7 @@ build-package: build-builder-image
 		-v /tmp:/tmp \
 		-v $(CURDIR)/$(MELANGE_CACHE_DIR):$(CURDIR)/$(MELANGE_CACHE_DIR) \
 		-v $(CURDIR):/work -w /work $(BUILDER_IMAGE) \
-		melange build --log-level debug packages/$(PKG).yaml \
+		melange build packages/$(PKG).yaml \
 		--arch $(ARCH) \
 		--runner=docker \
 		--repository-append=packages-out \

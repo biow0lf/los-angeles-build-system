@@ -1,0 +1,133 @@
+package:
+  name: py3-pygments
+  version: "2.21.0"
+  epoch: 0 # go/wolfi-rsc/py3-pygments
+  description: Syntax highlighting package written in Python
+  copyright:
+    - license: BSD-2-Clause
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "9"
+    memory: 12Gi
+
+vars:
+  pypi-package: pygments
+
+data:
+  - name: py-versions
+    items:
+      3.10: '310'
+      3.11: '311'
+      3.12: '312'
+      3.13: '313'
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - py3-supported-hatchling
+      - py3-supported-pip
+  environment:
+    # This is needed to work around the error "ValueError: ZIP does not support timestamps before 1980"
+    SOURCE_DATE_EPOCH: 315532800
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pygments/pygments.git
+      tag: ${{package.version}}
+      expected-commit: a43b45dcf081b6010c6ab4428f149f7f6d2499c4
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - name: "move usr/bin executables for -bin"
+        runs: |
+          mkdir -p ./cleanup/${{range.key}}/
+          mv ${{targets.contextdir}}/usr/bin ./cleanup/${{range.key}}/
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.pypi-package}}
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}-bin
+    description: Executable binaries for ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      runtime:
+        - py${{range.key}}-${{vars.pypi-package}}
+      provides:
+        - py3-${{vars.pypi-package}}-bin
+        - py3-${{vars.pypi-package}}
+      provider-priority: ${{range.value}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr/
+          mv ./cleanup/${{range.key}}/bin ${{targets.contextdir}}/usr/
+    test:
+      pipeline:
+        - uses: test/tw/virtualpackage
+          with:
+            virtual-pkg-name: py3-${{vars.pypi-package}}-bin
+        - uses: test/tw/virtualpackage
+          with:
+            virtual-pkg-name: py3-${{vars.pypi-package}}
+
+  - name: py3-${{vars.pypi-package}}-doc
+    description: py3-pygments manpages
+    pipeline:
+      - runs: |
+          destdir=${{targets.subpkgdir}}/usr/share/doc/py3-pygments
+
+          cd "$builddir"
+
+          install -m 644 -D doc/pygmentize.1 \
+            ${{targets.subpkgdir}}/usr/share/man/man1/pygmentize.1
+
+          mkdir -p "$destdir"
+          cp AUTHORS CHANGES LICENSE "$destdir"/
+
+          # Note: The documentation in the doc directory needs to be generated
+          # by py-sphinx
+          cp -R ./doc/docs/* "$destdir"/
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/metapackage
+
+test:
+  pipeline:
+    - uses: test/no-docs
+
+update:
+  enabled: true
+  github:
+    identifier: pygments/pygments

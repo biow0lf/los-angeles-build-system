@@ -1,0 +1,83 @@
+# Generated from https://pypi.org/project/tomlkit/
+package:
+  name: py3-tomlkit
+  version: "0.15.1"
+  epoch: 0 # go/wolfi-rsc/py3-tomlkit
+  description: Style preserving TOML library
+  copyright:
+    - license: MIT
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "2"
+    memory: 5Gi
+
+vars:
+  pypi-package: tomlkit
+
+data:
+  - name: py-versions
+    items:
+      3.10: '310'
+      3.11: '311'
+      3.12: '312'
+      3.13: '313'
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - ca-certificates-bundle
+      - py3-supported-pip
+      - py3-supported-poetry-core
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/sdispater/tomlkit
+      tag: ${{package.version}}
+      expected-commit: 1bd7e3bc5bcc957d359a6c4d8e420163f32ac009
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: python${{range.key}} version of ${{vars.pypi-package}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.pypi-package}}
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+
+update:
+  enabled: true
+  github:
+    identifier: sdispater/tomlkit
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/byproductpackage

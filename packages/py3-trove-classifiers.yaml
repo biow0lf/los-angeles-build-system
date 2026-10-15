@@ -1,0 +1,114 @@
+package:
+  name: py3-trove-classifiers
+  version: "2026.9.21.13"
+  epoch: 0 # go/wolfi-rsc/py3-trove-classifiers
+  description: Canonical source for classifiers on PyPI (pypi.org).
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "4"
+    memory: 6Gi
+
+vars:
+  pypi-package: trove-classifiers
+  module-name: trove_classifiers
+
+data:
+  - name: py-versions
+    items:
+      3.10: '310'
+      3.11: '311'
+      3.12: '312'
+      3.13: '313'
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - py3-supported-calver
+      - py3-supported-pip
+      - py3-supported-python
+      - py3-supported-setuptools-scm
+      - py3-supported-wheel
+  environment:
+    SETUPTOOLS_SCM_PRETEND_VERSION: ${{package.version}}
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pypa/trove-classifiers
+      expected-commit: bc832553ebe6114e7682f09bc59bda6552da37cd
+      tag: ${{package.version}}
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      runtime:
+        - py${{range.key}}-zipp
+      provider-priority: ${{range.value}}
+    pipeline:
+      - name: Fix version (calver generates date-based version which differs from package version)
+        runs: |
+          sed -i 's/use_calver=.*,/version="${{package.version}}",/' setup.py
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - name: move usr/bin executables for -bin
+        runs: |
+          mkdir -p ./cleanup/${{range.key}}/
+          mv ${{targets.contextdir}}/usr/bin ./cleanup/${{range.key}}/
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.module-name}}
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}-bin
+    description: Executable binaries for ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provides:
+        - py3-${{vars.pypi-package}}
+      runtime:
+        - py${{range.key}}-${{vars.pypi-package}}
+      provider-priority: ${{range.value}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr/
+          mv ./cleanup/${{range.key}}/bin ${{targets.contextdir}}/usr/
+    test:
+      pipeline:
+        - uses: test/tw/virtualpackage
+          with:
+            virtual-pkg-name: py3-${{vars.pypi-package}}
+        - runs: |
+            trove-classifiers
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+
+update:
+  enabled: true
+  github:
+    identifier: pypa/trove-classifiers
+
+test:
+  pipeline:
+    - uses: test/tw/byproductpackage

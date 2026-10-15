@@ -2,7 +2,7 @@
 package:
   name: ffmpeg-7
   version: "7.1.5"
-  epoch: 4 # openssl-hardened: 3.6->4.0
+  epoch: 5
   description: ffmpeg multimedia library
   copyright:
     - license: GPL-2.0-or-later AND LGPL-2.1-or-later
@@ -54,7 +54,7 @@ environment:
       - libwebp-dev
       - libxml2-dev
       - openjpeg-dev
-      - openssl-hardened-${{vars.openssl-version}}-dev
+      - openssl-${{vars.openssl-version}}-dev
       - opus-dev
       - perl
       - snappy-dev

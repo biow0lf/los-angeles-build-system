@@ -91,7 +91,7 @@
 
 * git
 * btrfs-progs
-* zsh TODO
+* zsh
 * neovim
 * midnight-commander
 * mcfly

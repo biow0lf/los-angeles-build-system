@@ -102,6 +102,8 @@
 * btop
 * vorbis-tools
 * slk TODO
+* lazygit
+* lazydocker TODO
 
 ## X11
 

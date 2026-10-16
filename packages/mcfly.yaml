@@ -1,0 +1,31 @@
+package:
+  name: mcfly
+  version: 0.9.4
+  epoch: 0
+  description: "Shell history search"
+  url: https://github.com/cantino/mcfly
+  copyright:
+    - license: "MIT"
+
+vars:
+  rust-version: "1.99"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - rust-${{vars.rust-version}}
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/cantino/mcfly
+      tag: v${{package.version}}
+      expected-commit: 17f03db47b5ba9141d7b5df9f652a421b6fb99be
+
+  - uses: cargo/build
+    with:
+      output: mcfly
+
+  - uses: strip

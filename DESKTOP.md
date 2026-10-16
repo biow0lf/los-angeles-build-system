@@ -74,9 +74,16 @@
 * texinfo
 * vim
 * MarkupSafe (python)
-* Jinja2 (python) TODO
+* Jinja2 (python)
+* systemd
+* dbus
+* man-db
+* procps-ng TODO
+* util-linux
+* e2fsprogs
 
 * git
+* btrfs-progs
 * neovim
 * midnight-commander
 * mcfly

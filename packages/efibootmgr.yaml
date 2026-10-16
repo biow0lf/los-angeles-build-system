@@ -1,0 +1,27 @@
+package:
+  name: efibootmgr
+  version: 18
+  epoch: 0
+  description: "EFI Boot Manager"
+  url: "https://github.com/rhboot/efibootmgr"
+  copyright:
+    - license: "GPL-2.0-only"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - popt-dev
+      - efivar-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: "https://github.com/rhboot/efibootmgr/archive/18/efibootmgr-18.tar.gz"
+      expected-sha256: 442867d12f8525034a404fc8af3036dba8e1fc970998af2486c3b940dfad0874
+
+  - runs: |
+      make libdir=/usr/lib sbindir=/usr/bin EFIDIR="unfriendly"
+
+      make libdir=/usr/lib sbindir=/usr/bin EFIDIR="unfriendly" DESTDIR=${{targets.destdir}} install

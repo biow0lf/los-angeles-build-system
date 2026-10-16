@@ -1,5 +1,7 @@
 # TODO list
 
+* remove openssf-compiler-options
+* libao
 * libxxf86misc.yaml: rename package from libXxf86misc -> libxxf86misc
 * fd.yaml
 * check "why we need gnu-libiconv"?
@@ -21,9 +23,8 @@
 * undock
 * vim
 * yaml-language-server.yaml
-* apko
 * llvm
-* melange
-* xterm
 * yam.yaml
 * /bin/sh -> dash
+* py3.13-pygments
+* https://lh.2xlibre.net/locales/

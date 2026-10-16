@@ -87,6 +87,7 @@
 * neovim
 * midnight-commander
 * mcfly
+* bat
 * mpg123
 * cliamp
 * htop

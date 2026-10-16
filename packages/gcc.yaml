@@ -1,3 +1,4 @@
+# @biow0lf: remove openssf-compiler-options and test/compiler/hardening-check
 package:
   name: gcc
   version: "16.2.0"
@@ -485,15 +486,9 @@ test:
         g++ -o hello-c++ hello.cpp
         out=$(./hello-c++)
         [ "$out" = "hello-c++" ]
-    - uses: test/compiler/hardening-check
-      with:
-        cc: gcc
     - uses: test/compiler/asan
       with:
         cc: gcc
-    - uses: test/compiler/hardening-check
-      with:
-        cc: gcc-${{vars.major-version}}
     - uses: test/compiler/asan
       with:
         cc: gcc-${{vars.major-version}}

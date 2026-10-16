@@ -100,6 +100,8 @@
 * cliamp
 * htop
 * btop
+* vorbis-tools
+* slk TODO
 
 ## X11
 

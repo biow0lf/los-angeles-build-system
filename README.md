@@ -2,7 +2,7 @@
 
 ## Description
 
-Simple desktop linux.
+Simple Desktop Linux.
 
 ## Features
 

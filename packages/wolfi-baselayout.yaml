@@ -1,8 +1,8 @@
 package:
   name: wolfi-baselayout
-  version: 20230201
-  epoch: 31 # go/wolfi-rsc/wolfi-baselayout
-  description: "baselayout data for Wolfi"
+  version: 20261016
+  epoch: 32
+  description: "baselayout data"
   copyright:
     - license: MIT
   dependencies:
@@ -42,12 +42,13 @@ pipeline:
   - name: Generate /etc/os-release
     runs: |
       cat >vendor/etc/os-release <<EOF
-      ID=wolfi
-      NAME="Wolfi"
-      PRETTY_NAME="Wolfi"
+      ID=unfriendly
+      ID_LIKE=wolfi
+      NAME="Unfriendly Linux"
+      PRETTY_NAME="Unfriendly Linux"
       VERSION_ID="${{package.version}}"
-      HOME_URL="https://wolfi.dev"
-      BUG_REPORT_URL="https://github.com/wolfi-dev/os/issues"
+      HOME_URL="https://github.com/biow0lf/los-angeles-build-system"
+      BUG_REPORT_URL="https://github.com/biow0lf/los-angeles-build-system/issues"
       EOF
 
   - name: Install

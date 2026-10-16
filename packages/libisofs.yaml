@@ -1,0 +1,56 @@
+# Generated from https://git.alpinelinux.org/aports/plain/main/libisofs/APKBUILD
+package:
+  name: libisofs
+  version: "1.5.8"
+  epoch: 3 # glibc: 2.43->2.44
+  description: Library to pack up hard disk files and directories into a ISO 9660 disk image
+  copyright:
+    - license: GPL-2.0-or-later
+
+environment:
+  contents:
+    packages:
+      - acl-dev
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://dev.lovelyhq.com/libburnia/libisofs
+      tag: release-${{package.version}}
+      expected-commit: 55bf1e6079c9335b645010df79ea4840597a2ce5
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libisofs-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libisofs
+    description: libisofs dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1646
+    strip-suffix: .pl01
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

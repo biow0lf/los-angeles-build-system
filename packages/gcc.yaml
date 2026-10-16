@@ -1,8 +1,9 @@
 # @biow0lf: remove openssf-compiler-options and test/compiler/hardening-check
+# @biow0lf: branding
 package:
   name: gcc
   version: "16.2.0"
-  epoch: 2 # remove openssf-compiler-options
+  epoch: 3
   description: "the GNU compiler collection"
   copyright:
     - license: GPL-3.0-or-later WITH GCC-exception-3.1
@@ -113,7 +114,7 @@ pipeline:
         --prefix=/usr \
         --disable-nls \
         --disable-werror \
-        --with-pkgversion='Wolfi ${{package.full-version}}' \
+        --with-pkgversion='Unfriendly ${{package.full-version}}' \
         --with-glibc-version=2.43 \
         --enable-initfini-array \
         --disable-nls \

@@ -1,5 +1,7 @@
 # List of packages for Desktop
 
+## Base
+
 * man-pages TODO
 * bash
 * bash-completion
@@ -81,9 +83,15 @@
 * procps-ng TODO
 * util-linux
 * e2fsprogs
+* linux kernel TODO
+* linux-firmware
+* dracut TODO
+
+## Extra
 
 * git
 * btrfs-progs
+* zsh TODO
 * neovim
 * midnight-commander
 * mcfly
@@ -92,3 +100,16 @@
 * cliamp
 * htop
 * btop
+
+## X11
+
+* xterm
+* openbox
+* fluxbox
+
+## Wayland
+
+* wayland
+* wayland-protocols
+* noctalia TODO
+* labwc

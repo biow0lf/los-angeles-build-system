@@ -1,0 +1,32 @@
+package:
+  name: efivar
+  version: 39
+  epoch: 0
+  description: "Tools to manage UEFI variables"
+  url: https://github.com/rhboot/efivar/
+  copyright:
+    - license: "LGPL-2.1-only"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://github.com/rhboot/efivar/archive/39/efivar-39.tar.gz
+      expected-sha256: c9edd15f2eeeea63232f3e669a48e992c7be9aff57ee22672ac31f5eca1609a6
+
+  - uses: patch
+    with:
+      patches: |
+        efivar-39-upstream_fixes-1.patch
+
+  - runs: |
+      make ENABLE_DOCS=0
+
+  - runs: |
+      mkdir -p "${{targets.destdir}}"
+      make install DESTDIR=${{targets.destdir}} ENABLE_DOCS=0

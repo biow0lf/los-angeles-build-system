@@ -30,3 +30,12 @@ pipeline:
   - runs: |
       mkdir -p "${{targets.destdir}}"
       make install DESTDIR=${{targets.destdir}} ENABLE_DOCS=0
+
+subpackages:
+  - name: efivar-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - efivar
+    description: efivar dev

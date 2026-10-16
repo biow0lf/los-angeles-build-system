@@ -102,8 +102,6 @@
 * btop
 * vorbis-tools
 * slk TODO
-* lazygit
-* lazydocker TODO
 
 ## X11
 
@@ -117,3 +115,9 @@
 * wayland-protocols
 * noctalia TODO
 * labwc
+
+## Development tools
+
+* lazygit
+* lazydocker TODO
+* yaml-language-server TODO

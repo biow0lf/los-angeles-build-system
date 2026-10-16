@@ -1,7 +1,7 @@
 package:
   name: efivar
   version: 39
-  epoch: 0
+  epoch: 1
   description: "Tools to manage UEFI variables"
   url: https://github.com/rhboot/efivar/
   copyright:
@@ -25,11 +25,11 @@ pipeline:
         efivar-39-upstream_fixes-1.patch
 
   - runs: |
-      make ENABLE_DOCS=0
+      make ENABLE_DOCS=0 LIBDIR=/usr/lib
 
   - runs: |
       mkdir -p "${{targets.destdir}}"
-      make install DESTDIR=${{targets.destdir}} ENABLE_DOCS=0
+      make install DESTDIR=${{targets.destdir}} LIBDIR=/usr/lib ENABLE_DOCS=0
 
 subpackages:
   - name: efivar-dev

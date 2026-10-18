@@ -80,7 +80,7 @@
 * systemd
 * dbus
 * man-db
-* procps-ng TODO
+* procps-ng
 * util-linux
 * e2fsprogs
 * linux kernel TODO

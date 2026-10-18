@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: dracut
+  version: 112
+  epoch: 0
+  description: "Initramfs generator using udev"
+  url: https://github.com/dracut-ng/dracut
+  copyright:
+    - license: "GPL-2.0-or-later AND LGPL-2.1-or-later AND GPL-2.0-only"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - bash
+      - kmod-dev
+      - asciidoctor
+      - systemd-dev
+      - rust-1.99
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://github.com/dracut-ng/dracut/archive/refs/tags/112.tar.gz
+      expected-sha256: 839d21eb4bd27bb0ee40d74c9da46df088c2e1425fcd8c3ea62b7e3a3dd28a91
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --enable-dracut-cpio
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip

@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: libgudev
+  version: 238
+  epoch: 0
+  description: "GObject-based wrapper library for libudev"
+  url: "https://wiki.gnome.org/Projects/libgudev"
+  copyright:
+    - license: "GPL-2.1-or-later"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - glib-dev
+      - libudev-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://download.gnome.org/sources/libgudev/${{package.version}}/${{package.name}}-${{package.version}}.tar.xz
+      expected-sha256: 61266ab1afc9d73dbc60a8b2af73e99d2fdff47d99544d085760e4fa667b5dd1
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: "libgudev-dev"
+    description: "libgudev dev"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libgudev=${{package.full-version}}

@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: libmbim
+  version: 1.26.4
+  epoch: 0
+  description: "Support library for the Mobile Broadband Interface Model protocol"
+  url: https://gitlab.freedesktop.org/mobile-broadband/libmbim/
+  copyright:
+    - license: "LGPL-2.1-or-later"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - glib-dev
+      - python-3.13
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://www.freedesktop.org/software/libmbim/libmbim-${{package.version}}.tar.xz
+      expected-sha256: f688cec4c4586a17575f5e327448ce62f2000ef6a07c9e4589873d4a68568ad9
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "libmbim-dev"
+    description: "libmbim dev"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libmbim=${{package.full-version}}

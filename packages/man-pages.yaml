@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: man-pages
+  version: 6.19
+  epoch: 0
+  description: "Linux kernel and C library user-space interface documentation"
+  url: http://www.kernel.org/doc/man-pages/
+  copyright:
+    - license: "BSD-2-Clause AND BSD-3-Clause AND BSD-4.3TAHOE AND BSD-4-Clause-UC AND GPL-1.0-or-later AND GPL-2.0-only AND GPL-2.0-or-later AND LicenseRef-Fedora-Public-Domain AND LicenseRef-Fedora-UltraPermissive AND Linux-man-pages-1-para AND Linux-man-pages-copyleft AND Linux-man-pages-copyleft-2-para AND Linux-man-pages-copyleft-var AND MIT AND Spencer-94"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - bash
+      - coreutils
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://mirrors.edge.kernel.org/pub/linux/docs/man-pages/man-pages-${{package.version}}.tar.gz
+      expected-sha256: fc0c620f07b4eba8ede128fbc267db5ebb4a67bab1aca3b01e5734956baf5572
+
+  - runs: |
+      make -R install prefix=/usr DESTDIR=${{targets.destdir}}

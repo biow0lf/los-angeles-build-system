@@ -1,0 +1,58 @@
+package:
+  name: py3.14-docutils
+  version: "0.23"
+  epoch: 3 # go/wolfi-rsc/py3.14-docutils
+  description: Documentation Utilities for Python3
+  copyright:
+    - license: BSD-2-Clause AND GPL-3.0-or-later AND Python-2.0
+  resources:
+    cpu: "1"
+    memory: 2Gi
+  test-resources:
+    cpu: "1"
+    memory: 3Gi
+
+vars:
+  pypi-package: docutils
+  import: docutils
+  python-version: "3.14"
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - py${{vars.python-version}}-flit-core
+      - py${{vars.python-version}}-pip
+      - python-${{vars.python-version}}-base
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://files.pythonhosted.org/packages/source/d/docutils/docutils-${{package.version}}.tar.gz
+      expected-sha256: 746f5060322511280a1e50eb76846ed6bf2342984b2ac04dc42caa1a8d78799e
+
+  - uses: py/pip-build-install
+    with:
+      python: python${{vars.python-version}}
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/tw/pip-check
+    - uses: python/import
+      with:
+        python: python${{vars.python-version}}
+        imports: |
+          import ${{vars.pypi-package}}
+    - uses: test/tw/ver-check
+      with:
+        bins: docutils
+    - uses: test/tw/ver-check
+      with:
+        bins: rst2html
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 3849

@@ -1,0 +1,114 @@
+package:
+  name: py3-docutils
+  version: "0.23"
+  epoch: 0 # go/wolfi-rsc/py3-docutils
+  description: Documentation Utilities for Python3
+  copyright:
+    - license: BSD-2-Clause AND GPL-3.0-or-later AND Python-2.0
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "1"
+    memory: 3Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+vars:
+  pypi-package: docutils
+  import: docutils
+
+data:
+  - name: py-versions
+    items:
+      3.10: '310'
+      3.11: '311'
+      3.12: '312'
+      3.13: '313'
+
+environment:
+  contents:
+    packages:
+      - py3-supported-build-base
+      - py3-supported-flit-core
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://files.pythonhosted.org/packages/source/d/docutils/docutils-${{package.version}}.tar.gz
+      expected-sha256: 746f5060322511280a1e50eb76846ed6bf2342984b2ac04dc42caa1a8d78799e
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: python${{range.key}} version of ${{vars.pypi-package}}
+    dependencies:
+      provider-priority: ${{range.value}}
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - name: move usr/bin executables for -bin
+        runs: |
+          mkdir -p ./cleanup/${{range.key}}/
+          mv ${{targets.contextdir}}/usr/bin ./cleanup/${{range.key}}/
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            imports: |
+              import ${{vars.import}}
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}-bin
+    description: Executable binaries for ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}
+        - py3-${{vars.pypi-package}}-bin
+      runtime:
+        - py${{range.key}}-${{vars.pypi-package}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr/
+          mv ./cleanup/${{range.key}}/bin ${{targets.contextdir}}/usr/
+    test:
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: docutils rst2html rst2html4 rst2html5 rst2latex rst2man rst2odt rst2pseudoxml rst2s5 rst2xetex rst2xml
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/metapackage
+
+test:
+  pipeline:
+    - uses: python/import
+      with:
+        imports: |
+          import ${{vars.import}}
+    - uses: test/tw/ver-check
+      with:
+        bins: docutils rst2html rst2html4 rst2html5 rst2latex rst2man rst2odt rst2pseudoxml rst2s5 rst2xetex rst2xml
+        version: ${{package.version}}
+    - uses: test/tw/help-check
+      with:
+        bins: docutils rst2html rst2html4 rst2html5 rst2latex rst2man rst2odt rst2pseudoxml rst2s5 rst2xetex rst2xml
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 3849

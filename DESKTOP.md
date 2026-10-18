@@ -86,6 +86,7 @@
 * linux kernel TODO
 * linux-firmware
 * dracut TODO
+* cpio TODO
 
 ## Extra
 

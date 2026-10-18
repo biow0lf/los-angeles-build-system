@@ -1,0 +1,61 @@
+package:
+  name: py3.14-requests
+  version: "2.34.2"
+  epoch: 1 # go/wolfi-rsc/py3.14-requests
+  description: Python HTTP for Humans.
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - py${{vars.python-version}}-certifi
+      - py${{vars.python-version}}-charset-normalizer
+      - py${{vars.python-version}}-idna
+      - py${{vars.python-version}}-urllib3
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  pypi-package: requests
+  import: requests
+  python-version: "3.14"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - py${{vars.python-version}}-flit-core
+      - py${{vars.python-version}}-pip
+      - python-${{vars.python-version}}-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/psf/requests.git
+      tag: v${{package.version}}
+      expected-commit: 6e83187b8feb273ed4c6cdab5efd8d54901dfab3
+
+  - uses: py/pip-build-install
+    with:
+      python: python${{vars.python-version}}
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/tw/pip-check
+    - uses: python/import
+      with:
+        python: python${{vars.python-version}}
+        import: ${{vars.import}}
+
+update:
+  enabled: true
+  github:
+    identifier: psf/requests
+    strip-prefix: v
+    tag-filter: v

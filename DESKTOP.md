@@ -102,7 +102,7 @@
 * btop
 * vorbis-tools
 * slk TODO
-* dysk TODO
+* dysk
 
 ## X11
 

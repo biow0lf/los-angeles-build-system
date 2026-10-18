@@ -1,0 +1,52 @@
+package:
+  name: yam
+  version: "0.2.69"
+  epoch: 0 # toolchain rebuild for  go-1.27-1.27.1
+  description: A sweet little formatter for YAML
+  copyright:
+    - license: Apache-2.0
+  resources:
+    cpu: "1"
+    memory: 2Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/chainguard-dev/yam
+      tag: v${{package.version}}
+      expected-commit: 9c427c0419c95d185548ca27a3f85cf8e806801f
+
+  - uses: go/build
+    with:
+      packages: .
+      output: yam
+      go-package: go-1.27
+
+update:
+  enabled: true
+  github:
+    identifier: chainguard-dev/yam
+    use-tag: true
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/help-check
+      with:
+        bins: yam
+    - name: Format a simple YAML file
+      runs: |
+        echo "key:  value" > test.yaml
+        echo "key: value" > expected.yaml
+
+        yam test.yaml
+        cmp test.yaml expected.yaml
+
+environment:
+  contents:
+    packages:
+      - go-1.27

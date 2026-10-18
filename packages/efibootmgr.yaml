@@ -1,7 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
 package:
   name: efibootmgr
   version: 18
-  epoch: 0
+  epoch: 1
   description: "EFI Boot Manager"
   url: "https://github.com/rhboot/efibootmgr"
   copyright:

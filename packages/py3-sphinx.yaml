@@ -1,0 +1,138 @@
+package:
+  name: py3-sphinx
+  version: "9.1.0"
+  epoch: 3 # go/wolfi-rsc/py3-sphinx
+  description: Python Documentation Generator
+  copyright:
+    - license: MIT
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "1"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+
+vars:
+  pypi-package: sphinx
+  import: sphinx
+
+data:
+  - name: py-versions
+    items:
+      3.12: '312'
+      3.13: '313'
+
+environment:
+  contents:
+    packages:
+      - py3-supported-build-base
+      - py3-supported-flit-core
+      - py3-supported-gpep517
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/sphinx-doc/sphinx
+      tag: v${{package.version}}
+      expected-commit: cc7c6f435ad37bb12264f8118c8461b230e6830c
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: python${{range.key}} version of ${{vars.pypi-package}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      runtime:
+        - py${{range.key}}-alabaster
+        - py${{range.key}}-babel
+        - py${{range.key}}-docutils
+        - py${{range.key}}-imagesize
+        - py${{range.key}}-jinja2
+        - py${{range.key}}-packaging
+        - py${{range.key}}-pygments
+        - py${{range.key}}-requests
+        - py${{range.key}}-roman-numerals-py
+        - py${{range.key}}-snowballstemmer
+        - py${{range.key}}-sphinxcontrib-applehelp
+        - py${{range.key}}-sphinxcontrib-devhelp
+        - py${{range.key}}-sphinxcontrib-htmlhelp
+        - py${{range.key}}-sphinxcontrib-jsmath
+        - py${{range.key}}-sphinxcontrib-qthelp
+        - py${{range.key}}-sphinxcontrib-serializinghtml
+        - py${{range.key}}-tomli
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - name: move usr/bin executables for -bin
+        runs: |
+          mkdir -p ./cleanup/${{range.key}}/
+          mv ${{targets.contextdir}}/usr/bin ./cleanup/${{range.key}}/
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            imports: |
+              import ${{vars.import}}
+              from sphinx.writers.latex import LaTeXTranslator, LaTeXWriter
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}-bin
+    description: Executable binaries for ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}
+        - py3-${{vars.pypi-package}}-bin
+      runtime:
+        - py${{range.key}}-${{vars.pypi-package}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr/
+          mv ./cleanup/${{range.key}}/bin ${{targets.contextdir}}/usr/
+    test:
+      environment:
+        contents:
+          packages:
+            - apk-tools
+      pipeline:
+        - runs: |
+            set -euo pipefail
+            apk info -L py${{range.key}}-${{vars.pypi-package}}-bin > "pkg.list"
+            grep usr/bin/ pkg.list > bins.list
+
+            while read -r line; do
+              echo "== $line =="
+              "/$line" --help
+            done < bins.list
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/metapackage
+
+test:
+  pipeline:
+    - uses: python/import
+      with:
+        imports: |
+          import ${{vars.import}}
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - rc
+  github:
+    identifier: sphinx-doc/sphinx
+    strip-prefix: v

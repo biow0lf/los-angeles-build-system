@@ -3,7 +3,7 @@
 
 package:
   name: libmbim
-  version: 1.26.4
+  version: 1.34.0
   epoch: 0
   description: "Support library for the Mobile Broadband Interface Model protocol"
   url: https://gitlab.freedesktop.org/mobile-broadband/libmbim/
@@ -15,20 +15,25 @@ environment:
     packages:
       - build-base
       - busybox
+      - bash-completion
       - glib-dev
+      - gobject-introspection-dev
       - python-3.13
+      - help2man
+      - glib-gir
 
 pipeline:
-  - uses: fetch
+  - uses: git-checkout
     with:
-      uri: https://www.freedesktop.org/software/libmbim/libmbim-${{package.version}}.tar.xz
-      expected-sha256: f688cec4c4586a17575f5e327448ce62f2000ef6a07c9e4589873d4a68568ad9
+      repository: https://gitlab.freedesktop.org/mobile-broadband/libmbim/
+      tag: ${{package.version}}
+      expected-commit: 2bca5d22137883f348cb117597746483637491db
 
-  - uses: autoconf/configure
+  - uses: meson/configure
 
-  - uses: autoconf/make
+  - uses: meson/compile
 
-  - uses: autoconf/make-install
+  - uses: meson/install
 
   - uses: strip
 

@@ -2,7 +2,7 @@
 
 ## Base
 
-* man-pages TODO
+* man-pages
 * bash
 * bash-completion
 * iana-etc TODO
@@ -114,8 +114,15 @@
 
 * wayland
 * wayland-protocols
+* wlroots 0.20.2
 * noctalia TODO
 * labwc
+
+## Desktop
+
+* pulseaudio
+* pipewire
+* wireplumber
 
 ## Development tools
 

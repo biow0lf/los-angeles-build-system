@@ -1,0 +1,139 @@
+package:
+  name: mercurial
+  version: "7.2.4"
+  epoch: 2 # go/wolfi-rsc/mercurial
+  description: "Scalable distributed SCM tool"
+  copyright:
+    - license: GPL-2.0-or-later
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "2"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+vars:
+  pypi-package: mercurial
+
+data:
+  - name: py-versions
+    items:
+      3.10: '310'
+      3.11: '311'
+      3.12: '312'
+      3.13: '313'
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext-dev
+      - glibc-2.44-dev
+      - py3-supported-flit-core
+      - py3-supported-gpep517
+      - py3-supported-python-dev
+      - py3-supported-setuptools
+      - py3-supported-setuptools-scm
+      - py3-supported-wheel
+      - wolfi-base
+      - zlib-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://www.mercurial-scm.org/release/mercurial-${{package.version}}.tar.gz
+      expected-sha256: 85839e0f39e6cb893a88932aa36ef661759f3c5c5de4551ad26bd9df53cb71a2
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}
+        - mercurial
+      runtime:
+        - python-${{range.key}}
+    pipeline:
+      - runs: |
+          # Build the wheel for this python version
+          python${{range.key}} -m gpep517 build-wheel \
+            --wheel-dir dist \
+            --output-fd 3 3>&1 >&2
+
+          # Install the built wheel
+          python${{range.key}} -m installer -d "${{targets.subpkgdir}}" dist/mercurial-${{package.version}}-cp*.whl
+
+          # Copy the hg bins to the right location
+          install -Dm755 contrib/hg-ssh hgeditor -t "${{targets.subpkgdir}}/usr/bin"
+
+          # Cleanup the wheel so the other subpackages don't try to install it too
+          rm -f dist/mercurial-${{package.version}}-cp*.whl
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+        - uses: test/tw/ver-check
+          with:
+            bins: hg
+            version: ${{package.version}}
+        - uses: test/tw/help-check
+          with:
+            bins: hg
+        - name: Test core VCS operations
+          runs: |
+            # Initialize a new repository
+            hg init /tmp/testrepo
+            cd /tmp/testrepo
+
+            # Create a test file and add it
+            echo "hello mercurial" > file.txt
+            hg add file.txt
+            hg status | grep -F "A file.txt"
+
+            # Commit the file
+            hg commit -m "initial commit" -u "test@test.com"
+
+            # Verify the commit appears in log
+            hg log | grep -F "initial commit"
+            hg log | grep -F "test@test.com"
+
+            # Verify summary shows clean working directory
+            hg summary | grep -F "commit:"
+
+            # Modify the file and test diff
+            echo "modified content" >> file.txt
+            hg diff | grep -F "modified content"
+            hg status | grep -F "M file.txt"
+
+            # Commit the modification
+            hg commit -m "second commit" -u "test@test.com"
+            hg log | grep -F "second commit"
+
+  - name: "mercurial-doc"
+    description: "mercurial documentation"
+    pipeline:
+      - runs: |
+          for man in doc/*.?; do
+            install -Dm644 "$man" \
+              "${{targets.subpkgdir}}"/usr/share/man/man${man##*.}/${man##*/}
+          done
+      - uses: strip
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1969
+
+test:
+  pipeline:
+    - uses: test/tw/byproductpackage

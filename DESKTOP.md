@@ -128,5 +128,5 @@
 ## Development tools
 
 * lazygit
-* lazydocker TODO
+* lazydocker
 * yaml-language-server TODO

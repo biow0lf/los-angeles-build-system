@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: libqmi
+  version: 1.38.0
+  epoch: 0
+  description: "Support library to use the Qualcomm MSM Interface (QMI) protocol"
+  url: https://gitlab.freedesktop.org/mobile-broadband/libqmi
+  copyright:
+    - license: "LGPL-2.1-or-later"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - python-3.13
+      - glib-dev
+      - libgudev-dev
+      - bash-completion
+      - libmbim-dev
+      - libqrtr-glib-dev
+      - gobject-introspection-dev
+      - help2man
+      - glib-gir
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/mobile-broadband/libqmi
+      tag: ${{package.version}}
+      expected-commit: e3d79ed3f7fdc6a7fa8b374860b1c23a8f172812
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: "libqmi-dev"
+    description: "libqmi dev"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libqmi=${{package.full-version}}

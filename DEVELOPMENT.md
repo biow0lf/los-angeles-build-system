@@ -16,7 +16,7 @@ At this stage we are adding packages:
 
 Goal: bootable linux system
 
-Status: planned
+Status: in progress.
 
 ## Stage 3: Wayland / X11 graphical system
 

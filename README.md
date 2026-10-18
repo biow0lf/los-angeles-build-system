@@ -11,7 +11,7 @@ Simple Desktop Linux.
 * x86_64 only (for now?)
 * apk as package manager
 * apko + melange
-* builded by AI
+* built by AI
 * fixed by humans
 * vanilla packages with minimal patches
 * Noctalia Shell v5 (with umbriel or labwc wayland compositor)

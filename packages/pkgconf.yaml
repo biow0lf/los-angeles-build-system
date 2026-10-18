@@ -1,6 +1,6 @@
 package:
   name: pkgconf
-  version: "3.0.7"
+  version: "3.0.9"
   epoch: 0 # glibc: 2.43->2.44
   description: "An implementation of pkg-config"
   copyright:
@@ -24,7 +24,7 @@ pipeline:
     with:
       repository: https://github.com/pkgconf/pkgconf
       tag: pkgconf-${{package.version}}
-      expected-commit: 0c9e506b64124d8727b68d8af0ed73739e66e2ba
+      expected-commit: de4aff448030f98a5cb06292234bc14e07bacc83
 
   - runs: |
       autoreconf -fiv

@@ -4,7 +4,7 @@
 package:
   name: procps-ng
   version: 4.0.7
-  epoch: 0
+  epoch: 1
   description: "System and process monitoring utilities"
   url: https://gitlab.com/procps-ng/procps/
   copyright:
@@ -46,3 +46,12 @@ pipeline:
   - uses: autoconf/make-install
 
   - uses: strip
+
+subpackages:
+  - name: "procps-ng-dev"
+    description: "procps-ng dev"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - procps-ng=${{package.full-version}}

@@ -1,0 +1,27 @@
+package:
+  name: dysk
+  version: 3.8.1
+  epoch: 0
+  description: "A linux utility to get information on filesystems"
+  url: https://dystroy.org/dysk/
+  copyright:
+    - license: "MIT"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Canop/dysk
+      tag: v${{package.version}}
+      expected-commit: c002b844cfc33d56aaa7a4c46b80b033b07e0dee
+
+  - uses: cargo/build
+    with:
+      output: dysk
+
+  - uses: strip

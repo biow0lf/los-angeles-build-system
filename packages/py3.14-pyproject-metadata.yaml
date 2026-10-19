@@ -1,0 +1,58 @@
+package:
+  name: py3.14-pyproject-metadata
+  version: "0.12.1"
+  epoch: 0
+  description: PEP 621 metadata parsing
+  copyright:
+    - license: MIT
+  dependencies:
+    runtime:
+      - py${{vars.python-version}}-packaging
+
+vars:
+  import: pyproject_metadata
+  pypi-package: pyproject-metadata
+  python-version: "3.14"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - py${{vars.python-version}}-flit-core
+      - py${{vars.python-version}}-pip
+      - python-${{vars.python-version}}-base
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pypa/pyproject-metadata
+      tag: ${{package.version}}
+      expected-commit: 737644a1482a750ce8a38927b69bbbe07d4e8b65
+
+  - uses: py/pip-build-install
+    with:
+      python: python${{vars.python-version}}
+
+  - uses: strip
+
+test:
+  pipeline:
+    - uses: test/tw/pip-check
+    - uses: python/import
+      with:
+        python: python${{vars.python-version}}
+        import: ${{vars.import}}
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - a
+    - b
+    - rc
+    - post
+  github:
+    identifier: pypa/pyproject-metadata
+    use-tag: true

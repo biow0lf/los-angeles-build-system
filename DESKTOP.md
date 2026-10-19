@@ -119,7 +119,7 @@
 * wlroots 0.20.2
 * noctalia TODO
 * umbriel
-* mangowm TODO
+* mangowm
 * labwc
 
 ## Desktop

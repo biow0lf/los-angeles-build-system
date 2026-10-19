@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: mangowm
+  version: 0.18.2
+  epoch: 0
+  description: "A fast, feature-rich Wayland compositor built on dwl"
+  url: https://mangowm.github.io/
+  copyright:
+    - license: "GPL-3.0-or-later"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - wayland-dev
+      - wayland-protocols-dev
+      - libdrm-dev
+      - libxcb-dev
+      - xcb-util-wm-dev
+      - wlroots-dev
+      - scenefx-dev
+      - cjson-dev
+      - pango-dev
+      - xwayland-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/mangowm/mango/
+      tag: ${{package.version}}
+      expected-commit: 8ab8dd6da49de0c26b8355806ed3d3684c261aca
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip

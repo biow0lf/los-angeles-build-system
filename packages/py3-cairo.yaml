@@ -1,0 +1,137 @@
+package:
+  name: py3-cairo
+  version: "1.29.2"
+  epoch: 0 # glibc: 2.43->2.44
+  description: Python3 bindings for the cairo graphics library
+  copyright:
+    - license: LGPL-2.1
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "2"
+    memory: 2Gi
+
+vars:
+  pypi-package: cairo
+  import: cairo
+
+data:
+  - name: py-versions
+    items:
+      3.10: "310"
+      3.11: "311"
+      3.12: "312"
+      3.13: "313"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cairo-dev
+      - cmake
+      - expat-dev
+      - fontconfig-dev
+      - freetype-dev
+      - glibc-2.44-dev
+      - libpng-dev
+      - py3-supported-meson-python
+      - py3-supported-pip
+      - py3-supported-python-dev
+      - python3
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pygobject/pycairo
+      expected-commit: 5617d48b204e817779c259d958470527f034cb96
+      tag: v${{package.version}}
+
+  - uses: meson/configure
+    with:
+      opts: |
+        -Db_lto=true
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - runs: |
+      # python-version-specific files will be provided by subpackages
+      rm -rf ${{targets.destdir}}/usr/lib/python*
+
+  - uses: strip
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: python${{range.key}} version of ${{vars.pypi-package}}
+    dependencies:
+      provides:
+        - py3-${{vars.pypi-package}}
+      provider-priority: ${{range.value}}
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+          with:
+            python: python${{range.key}}
+        - uses: test/tw/virtualpackage
+          with:
+            virtual-pkg-name: py3-${{vars.pypi-package}}
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.import}}
+        - runs: |
+            include="$(python${{range.key}} -c 'import cairo; print(cairo.get_include())')"
+            test -f "$include/py3cairo.h"
+      environment:
+        contents:
+          packages:
+            - py3-supported-${{vars.pypi-package}}
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+        - uses: python/import
+          with:
+            python: python3.10
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.11
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.12
+            import: ${{vars.import}}
+        - uses: python/import
+          with:
+            python: python3.13
+            import: ${{vars.import}}
+
+update:
+  enabled: true
+  github:
+    identifier: pygobject/pycairo
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/pkgconf
+    - uses: test/tw/byproductpackage

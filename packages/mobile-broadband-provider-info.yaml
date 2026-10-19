@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: mobile-broadband-provider-info
+  version: 20251101
+  epoch: 0
+  description: "Mobile broadband provider database"
+  url: https://gitlab.gnome.org/GNOME/mobile-broadband-provider-info/
+  copyright:
+    - license: "CC-PDDC"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - grep
+      - libxslt
+      - libxml2-utils
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.gnome.org/GNOME/mobile-broadband-provider-info/
+      tag: 20251101
+      expected-commit: 18cb97517d9c831e1d2ec057e62d04fd3665e10f
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install

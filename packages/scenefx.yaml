@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: scenefx
+  version: 0.5
+  epoch: 0
+  description: "A drop-in replacement for the wlroots scene API"
+  url: https://github.com/wlrfx/scenefx
+  copyright:
+    - license: "MIT"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - wayland-dev
+      - wayland-protocols-dev
+      - wlroots-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/wlrfx/scenefx
+      tag: ${{package.version}}
+      expected-commit: 37ccd723bef49e6891156ffafce8f549f01446cc
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: scenefx-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - scenefx=${{package.full-version}}
+    description: scenefx dev

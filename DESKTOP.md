@@ -85,7 +85,7 @@
 * e2fsprogs
 * linux kernel TODO
 * linux-firmware
-* dracut TODO
+* dracut
 * cpio TODO
 
 ## Extra

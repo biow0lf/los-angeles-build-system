@@ -118,6 +118,8 @@
 * wayland-protocols
 * wlroots 0.20.2
 * noctalia TODO
+* umbriel
+* mangowm TODO
 * labwc
 
 ## Desktop

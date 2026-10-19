@@ -4,7 +4,7 @@
 package:
   name: wlroots
   version: 0.20.2
-  epoch: 5
+  epoch: 6
   description: "A modular Wayland compositor library"
   url: https://gitlab.freedesktop.org/wlroots/wlroots/
   copyright:
@@ -22,6 +22,10 @@ environment:
       - pixman-dev
       - libudev-dev
       - hwdata-dev
+      - hwdata-usb
+      - hwdata-pci
+      - hwdata-pnp
+      - hwdata-net
       - cairo-dev
       - libinput-dev
       - xcb-util-renderutil-dev
@@ -33,6 +37,8 @@ environment:
       - vulkan-loader-dev
       - xwayland-dev
       - xcb-util-wm-dev
+      - libliftoff-dev
+      - libdisplay-info-dev
 
 pipeline:
   - uses: git-checkout
@@ -41,6 +47,7 @@ pipeline:
       tag: ${{package.version}}
       expected-commit: d783533489e1f75d6886c2ab5c5960090ef268f8
 
+  # TODO: Run-time dependency xcb-errors found: NO  (tried pkg-config and cmake)
   - uses: meson/configure
 
   - uses: meson/compile

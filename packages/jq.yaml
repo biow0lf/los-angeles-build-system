@@ -1,0 +1,110 @@
+package:
+  name: jq
+  version: "1.8.2"
+  epoch: 3 # glibc: 2.43->2.44
+  description: "a lightweight and flexible JSON processor"
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - libtool
+      - oniguruma-dev
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/jqlang/jq.git
+      tag: jq-${{package.version}}
+      expected-commit: 34f7186b86743a083a589741b6cea95293524108
+
+  - runs: |
+      autoreconf -vfi
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: "jq-dev"
+    description: "headers for libjq"
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: "jq-doc"
+    description: "jq documentation"
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: jqlang/jq
+    strip-prefix: jq-
+    tag-filter: jq-
+
+# Required for xcover to load the BPF uprobe. Declarative under QEMU.
+capabilities:
+  add:
+    - CAP_SYS_ADMIN
+    - CAP_SYS_RESOURCE
+
+test:
+  pipeline:
+    - uses: xcover/profile
+      with:
+        executable-path: /usr/bin/jq
+    - name: Verify jq installation
+      runs: |
+        jq --version || exit 1
+        jq --help
+    - name: Basic JSON parsing
+      runs: |
+        echo '{"name":"John", "age":31, "city":"New York"}' | jq '.name' | grep 'John' || exit 1
+    - name: Complex JSON parsing
+      runs: |
+        echo '{"employees":[{"firstName":"John", "lastName":"Doe"},{"firstName":"Anna", "lastName":"Smith"},{"firstName":"Peter", "lastName":"Jones"}]}' | jq '.employees[] | select(.firstName=="Anna").lastName' | grep 'Smith' || exit 1
+    - name: JSON construction
+      runs: |
+        echo '{"name":"John", "age":31}' | jq '. + {"city":"New York"}' | grep 'New York' || exit 1
+    - name: Filtering JSON arrays
+      runs: |
+        echo '[{"id":1,"name":"John"},{"id":2,"name":"Jane"},{"id":3,"name":"Doe"}]' | jq '.[] | select(.id > 1)' | grep -E 'Jane|Doe' || exit 1
+    - name: Using jq to transform JSON structure
+      runs: |
+        echo '[{"id":1,"name":"John"},{"id":2,"name":"Jane"}]' | jq '{users: map({userId: .id, userName: .name})}' | grep -E '"userId": 1|"userId": 2' || exit 1
+    - uses: test/tw/ldd-check
+    - name: CVE-2024-53427
+      runs: |
+        output=$(echo '["NaN"]' | jq -r '.[] | try (fromjson | isnan) catch .')
+        [ "$output" = "true" ]
+        output=$(echo '["NaN1"]' | jq -r '.[] | try (fromjson | isnan) catch .')
+        [ "$output" = "Invalid numeric literal at EOF at line 1, column 4 (while parsing 'NaN1')" ]
+    - uses: test/no-docs
+    - uses: xcover/stop
+    - uses: xcover/ensure
+      with:
+        min-coverage: 65

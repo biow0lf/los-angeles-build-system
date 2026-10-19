@@ -4,7 +4,7 @@
 package:
   name: networkmanager
   version: 1.58.1
-  epoch: 0
+  epoch: 0 # build
   description: Network Management daemon
   url: https://networkmanager.dev/
   copyright:

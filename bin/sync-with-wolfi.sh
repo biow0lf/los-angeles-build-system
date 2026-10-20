@@ -5,6 +5,8 @@ set -euo pipefail
 raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 
 # TODO: aws-cli-2
+#       cmatrix
+#       command-not-found
 
 packages=(
     7zip
@@ -50,9 +52,13 @@ packages=(
 	cargo-c
 	cdparanoia
 	check
-	# chezmoi
-	# cmake
-	# coreutils
+	chezmoi
+	cjson
+	cmake
+	cmake-3
+	cmatrix
+	cmocka
+	coreutils
 	# cryptsetup
 	# cyrus-sasl-heimdal
 	# dash

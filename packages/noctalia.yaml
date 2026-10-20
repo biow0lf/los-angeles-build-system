@@ -43,6 +43,8 @@ environment:
       - stb
       - libjxl-dev
       - libsndfile-dev
+      - gmp-dev
+      - openssl-4.0-dev
 
 pipeline:
   - uses: git-checkout

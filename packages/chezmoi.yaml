@@ -1,7 +1,7 @@
 package:
   name: chezmoi
-  version: "2.73.0"
-  epoch: 0 # CVE-2026-78662
+  version: "2.73.2"
+  epoch: 0 # CVE-2026-78659
   description: Manage your dotfiles across multiple diverse machines, securely.
   copyright:
     - license: MIT
@@ -12,16 +12,12 @@ package:
     cpu: "1"
     memory: 1Gi
 
-# Deviation from Wolfi's own recipe: Wolfi maintains several parallel Go
-# release streams (go-1.27, etc.); we only maintain a single stream named
-# plain "go" (see packages/go.yaml). Renamed go-1.27 -> go below and in
-# the go/build step's go-package input.
 environment:
   contents:
     packages:
       - busybox
       - ca-certificates-bundle
-      - go
+      - go-1.27
   environment:
     CGO_ENABLED: "0"
 
@@ -30,7 +26,15 @@ pipeline:
     with:
       repository: https://github.com/twpayne/chezmoi
       tag: v${{package.version}}
-      expected-commit: 24b71e4cf9d98cce0801cfc68e7553355efeaff7
+      expected-commit: 54c760f1c2e9f6612d8615bef2e50abaf8fa5ef7
+
+  - uses: bump
+    with:
+      language: go
+      deps: |-
+        golang.org/x/crypto@v0.58.0
+        golang.org/x/sys@v0.49.0
+        golang.org/x/term@v0.47.0
 
   - uses: go/build
     with:
@@ -41,7 +45,7 @@ pipeline:
         -X main.date=$(date -u -d "@$SOURCE_DATE_EPOCH" +"%Y-%m-%dT%H:%M:%SZ")
         -X main.buildSource=wolfiRelease
       output: chezmoi
-      go-package: go
+      go-package: go-1.27
 
 update:
   enabled: true

@@ -1,7 +1,7 @@
 package:
   name: bison
   version: 3.8.2
-  epoch: 63 # go/wolfi-rsc/bison
+  epoch: 64 # go/wolfi-rsc/bison
   description: "The GNU general-purposes parser generator"
   copyright:
     - license: GPL-3.0-or-later
@@ -44,24 +44,14 @@ pipeline:
       expected-commit: 9beba1919cad5dd08b0cac277c27896808719e4b
 
   - uses: git/gnulib-bootstrap
-    with:
-      # ./bootstrap otherwise wgets translation .po files from
-      # translationproject.org -- same slow/unreliable hang observed
-      # self-hosting coreutils, make, and m4 (see packages/coreutils.yaml).
-      bootstrap-args: --skip-po
 
   - name: 'Configure bison'
     runs: |
-      # --disable-nls: --skip-po above means the po/*.po translation
-      # files were never fetched, but po/Makefile still tries to build
-      # po/*.gmo from them unless NLS is disabled outright (confirmed via
-      # self-hosting make, which hit exactly this failure).
       ./configure \
         --prefix=/usr \
         --sysconfdir=/etc \
         --host=${{host.triplet.gnu}} \
-        --target=${{host.triplet.gnu}} \
-        --disable-nls
+        --target=${{host.triplet.gnu}}
 
   - runs: |
       make -j$(nproc) V=1

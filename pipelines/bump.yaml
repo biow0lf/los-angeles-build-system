@@ -8,7 +8,7 @@ name: Unified dependency version bumping tool (omnibump)
 needs:
   packages:
     - git
-    - omnibump
+    - omnibump # @biow0lf: remove version pin
 
 inputs:
   language:

@@ -106,6 +106,7 @@
 * dysk
 * dive
 * jq
+* direnv
 
 ## X11
 

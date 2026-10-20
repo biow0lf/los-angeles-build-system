@@ -14,7 +14,7 @@ Simple Desktop Linux.
 * built by AI
 * fixed by humans
 * vanilla packages with minimal patches
-* Noctalia Shell v5 (with umbriel or labwc wayland compositor)
+* Noctalia Shell v5 (with umbriel, mangowm or labwc wayland compositor)
 
 ## TODO
 

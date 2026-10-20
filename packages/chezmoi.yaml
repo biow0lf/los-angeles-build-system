@@ -3,6 +3,7 @@ package:
   version: "2.73.2"
   epoch: 0 # CVE-2026-78659
   description: Manage your dotfiles across multiple diverse machines, securely.
+  url: https://chezmoi.io/
   copyright:
     - license: MIT
   resources:

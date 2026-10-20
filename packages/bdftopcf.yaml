@@ -1,0 +1,96 @@
+package:
+  name: bdftopcf
+  version: 1.1.2
+  epoch: 10 # glibc: 2.43->2.44
+  description: X.org font bdftopcf
+  copyright:
+    - license: MIT-open-group
+  dependencies:
+    provides:
+      - font-bdftopcf-dev=${{package.full-version}}
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - pkgconf-dev
+      - util-macros-dev
+      - xorgproto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/xorg/util/bdftopcf
+      tag: bdftopcf-${{package.version}}
+      expected-commit: 0ee2c68b5d3ea3eb36f895d9dfcc4ebe1416f176
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 15054
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: bdftopcf
+    - name: Test BDF to PCF font conversion
+      runs: |
+        # Create a minimal BDF font file
+        cat > /tmp/test.bdf <<'EOF'
+        STARTFONT 2.1
+        FONT -misc-test-medium-r-normal--1-10-75-75-c-10-iso8859-1
+        SIZE 1 75 75
+        FONTBOUNDINGBOX 1 1 0 0
+        STARTPROPERTIES 2
+        FONT_ASCENT 1
+        FONT_DESCENT 0
+        ENDPROPERTIES
+        CHARS 1
+        STARTCHAR space
+        ENCODING 32
+        SWIDTH 100 0
+        DWIDTH 1 0
+        BBX 1 1 0 0
+        BITMAP
+        00
+        ENDCHAR
+        ENDFONT
+        EOF
+
+        # Convert BDF to PCF
+        bdftopcf /tmp/test.bdf > /tmp/test.pcf
+
+        # Verify the PCF output file was created and is non-empty
+        [ -s /tmp/test.pcf ] || { echo "FAIL: PCF output file is empty or missing"; exit 1; }
+
+        echo "SUCCESS: BDF to PCF conversion produced valid output"
+
+subpackages:
+  - name: bdftopcf-doc
+    description: bdftopcf documentation
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      provides:
+        - font-bdftopcf-doc=${{package.full-version}}

@@ -4,7 +4,7 @@
 package:
   name: noctalia
   version: 5.3.0
-  epoch: 0
+  epoch: 1
   description: "A sleek, customizable desktop shell crafted for Wayland"
   url: https://noctalia.dev/
   copyright:
@@ -45,7 +45,7 @@ environment:
       - libsndfile-dev
       - gmp-dev
       - mpfr-dev
-      - openssl-4.0-dev
+      - openssl-4.0
 
 pipeline:
   - uses: git-checkout

@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: stb_image_resize
+  version: 2.50
+  epoch: 0
+  description: "single-file image resizing library"
+  url: https://github.com/nothings/stb_image_resize/
+  copyright:
+    - license: MIT or Public Domain
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/nothings/stb_image_resize
+      depth: -1
+      expected-commit: 2768987dbd7119eb840104b7a3f96ff09d21a7b4
+
+  - runs: |
+      install -D -m 644 stb_image_resize2.h ${{targets.destdir}}/usr/include/stb/stb_image_resize2.h

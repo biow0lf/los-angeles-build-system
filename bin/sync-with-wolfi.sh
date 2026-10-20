@@ -7,6 +7,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 # TODO: aws-cli-2
 #       cmatrix
 #       command-not-found
+#       dbus-glib
 
 packages=(
     7zip
@@ -59,15 +60,21 @@ packages=(
 	cmatrix
 	cmocka
 	coreutils
-	# cryptsetup
-	# cyrus-sasl-heimdal
-	# dash
-	# dav1d
-	# db
-	# dbus
-	# delta
-	# diffutils
-	# direnv
+	cppunit
+	cryptsetup
+	ctop
+	cups
+	curl
+	cyrus-sasl-heimdal
+	cython-0
+	dash
+	dav1d
+	db
+	dbus
+	delta
+	diffutils
+	direnv
+	dive
 	# docbook-xml
 	# dosfstools
 	# doxygen

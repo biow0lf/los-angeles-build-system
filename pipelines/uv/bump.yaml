@@ -21,7 +21,8 @@ needs:
 # The venv input should point to the already-staged venv in the destdir
 # (i.e. ${{targets.contextdir}}${{vars.venv-home}}). Use uv/install or
 # uv/venv to set up and stage the venv before calling this pipeline.
-
+# A staged venv is moved back to its runtime path for the install and then
+# staged again, so the console scripts uv rewrites keep runtime shebangs.
 inputs:
   packages:
     description: |
@@ -35,7 +36,8 @@ inputs:
   venv:
     description: |
       Path to the virtual environment to install packages into.
-      VIRTUAL_ENV is exported to this path before running uv pip install.
+      VIRTUAL_ENV is exported to this path, or for a staged venv to its
+      runtime path, before running uv pip install.
     required: true
 
 pipeline:
@@ -43,7 +45,29 @@ pipeline:
     runs: |
       set -euo pipefail
 
-      export VIRTUAL_ENV="${{inputs.venv}}"
+      # uv writes console-script shebangs from the venv's current path, so
+      # install into a staged venv at its runtime path and stage it again.
+      # Any package dir under outdir counts, so subpackages work too.
+      _venv="${{inputs.venv}}"
+      _staged=""
+      _aside=""
+      case "$_venv" in
+        "${{targets.outdir}}"/*/*)
+          _staged="$_venv"
+          _venv="/${_venv#"${{targets.outdir}}"/*/}"
+          ;;
+      esac
+      if [ -n "$_staged" ]; then
+        # A venv staged with cp -a leaves its original here; park it.
+        if [ -e "$_venv" ] || [ -L "$_venv" ]; then
+          _aside="$(mktemp -d "$(dirname "$_venv")/.uv-bump.XXXXXX")"
+          mv "$_venv" "$_aside/"
+        fi
+        mkdir -p "$(dirname "$_venv")"
+        mv "$_staged" "$_venv"
+      fi
+
+      export VIRTUAL_ENV="$_venv"
 
       # Validate that all package specs use == pinning.
       _invalid=""
@@ -97,3 +121,11 @@ pipeline:
 
       # Verify the environment is consistent after bumping.
       uv pip check
+
+      if [ -n "$_staged" ]; then
+        mv "$_venv" "$_staged"
+        if [ -n "$_aside" ]; then
+          mv "$_aside/$(basename "$_venv")" "$_venv"
+          rmdir "$_aside"
+        fi
+      fi

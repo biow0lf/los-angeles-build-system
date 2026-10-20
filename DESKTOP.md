@@ -105,6 +105,7 @@
 * slk TODO
 * dysk
 * dive
+* jq
 
 ## X11
 

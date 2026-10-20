@@ -44,6 +44,7 @@ environment:
       - libjxl-dev
       - libsndfile-dev
       - gmp-dev
+      - mpfr-dev
       - openssl-4.0-dev
 
 pipeline:

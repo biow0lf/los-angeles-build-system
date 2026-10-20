@@ -125,6 +125,10 @@
 * mangowm
 * labwc
 
+## Wayland utils
+
+* wlr-randr
+
 ## Desktop
 
 * pulseaudio

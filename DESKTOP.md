@@ -107,6 +107,7 @@
 * dive
 * jq
 * direnv
+* fzf
 
 ## X11
 

@@ -3,6 +3,7 @@ package:
   version: "2.38.2"
   epoch: 0 # CVE-2026-78659
   description: unclutter your .profile
+  url: https://direnv.net/
   copyright:
     - license: MIT
   resources:

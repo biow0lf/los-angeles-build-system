@@ -119,7 +119,7 @@
 * wayland
 * wayland-protocols
 * wlroots 0.20.2
-* noctalia TODO
+* noctalia
 * umbriel
 * mangowm
 * labwc
@@ -134,4 +134,5 @@
 
 * lazygit
 * lazydocker
+* zizmor
 * yaml-language-server TODO

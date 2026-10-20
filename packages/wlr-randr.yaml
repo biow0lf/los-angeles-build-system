@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: wlr-randr
+  version: 0.5.0
+  epoch: 0
+  description: "Utility to manage outputs of a Wayland compositor"
+  url: https://gitlab.freedesktop.org/emersion/wlr-randr
+  copyright:
+    - license: "MIT"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - wayland-dev
+      - scdoc
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.freedesktop.org/emersion/wlr-randr
+      tag: v${{package.version}}
+      expected-commit: 7d06fafc35e2d951f251a89a05d414ee726cccfd
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip

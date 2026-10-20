@@ -1,0 +1,67 @@
+package:
+  name: fzf
+  version: "0.74.5"
+  epoch: 1 # toolchain rebuild for  go-1.27-1.27.3
+  description: A command-line fuzzy finder
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - git
+      - go-1.27
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/junegunn/fzf
+      tag: v${{package.version}}
+      expected-commit: c0a193e031f01fb50bf6f7be4381990a3753f7cf
+
+  - uses: go/build
+    with:
+      packages: .
+      output: fzf
+      ldflags: -X main.version=v${{ package.version }} -X main.revision=$(git rev-parse --short HEAD)
+
+update:
+  enabled: true
+  github:
+    identifier: junegunn/fzf
+    strip-prefix: v
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - bash
+        - coreutils
+        - findutils
+  pipeline:
+    - name: "Check fzf version"
+      runs: |
+        fzf --version
+    - name: "Test help output"
+      runs: |
+        fzf --help
+    - name: "Test basic fuzzy finding"
+      runs: |
+        echo -e "apple\nbanana\ncherry" | fzf --filter=ana
+    - name: "Test multi-select mode"
+      runs: |
+        echo -e "red\ngreen\nblue\nyellow" | fzf -m --filter=e | wc -l | grep -q "4"
+    - name: "Test with a larger dataset"
+      runs: |
+        find /usr -type f | fzf --filter="/bin" | grep -q "bin"
+    - name: "Test preview functionality"
+      runs: |
+        echo -e "file1\nfile2\nfile3" | fzf --preview 'echo "Preview: {}"' --filter=file2
+    - name: "Test with environment variables"
+      runs: |
+        export FZF_DEFAULT_OPTS="--reverse --border"
+        fzf --version

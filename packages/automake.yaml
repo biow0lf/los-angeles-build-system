@@ -1,7 +1,7 @@
 package:
   name: automake
   version: "1.19"
-  epoch: 0 # go/wolfi-rsc/automake
+  epoch: 1 # go/wolfi-rsc/automake
   description: "GNU tool for generating makefiles"
   copyright:
     - license: GPL-2.0
@@ -19,14 +19,6 @@ environment:
   contents:
     packages:
       - autoconf
-      - automake # self-dependency: doc/amhello (bundled example project)
-        # is rebuilt via `make`'s default target using autoreconf, which
-        # invokes the versioned `aclocal-1.19` -- that binary doesn't
-        # exist yet this early in automake's own build (only produced,
-        # not yet installed, further along in the same build), so an
-        # already-installed automake needs to already be on PATH to
-        # provide it. Same self-dependency shape as busybox/flex/
-        # wolfi-baselayout elsewhere in this repo.
       - build-base
       - busybox
       - ca-certificates-bundle

@@ -43,11 +43,13 @@ packages=(
 	build-base
 	busybox
 	bzip2
-	# c-ares
-	# ca-certificates
-	# cargo-c
-	# cdparanoia
-	# check
+	c-ares
+	ca-certificates
+	cairo
+	cargo-auditable
+	cargo-c
+	cdparanoia
+	check
 	# chezmoi
 	# cmake
 	# coreutils

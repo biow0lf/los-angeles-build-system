@@ -3,6 +3,7 @@ package:
   version: "1.4.12"
   epoch: 0 # toolchain rebuild for  go-1.27-1.27.3
   description: Build OCI images using APK directly without Dockerfile
+  url: https://github.com/chainguard-dev/apko
   copyright:
     - license: Apache-2.0
   dependencies:

@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: hyprlang
+  version: 0.6.8
+  epoch: 0
+  description: "The official implementation library for the hypr config language"
+  url: https://github.com/hyprwm/hyprlang
+  copyright:
+    - license: "LGPL-3.0-Only"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - hyprutils-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/hyprwm/hyprlang
+      tag: v${{package.version}}
+      expected-commit: 3a1c1b25b059dae2c6bbc46991562ba1158d125c
+
+  - uses: cmake/configure
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: hyprlang-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - hyprlang=${{package.full-version}}
+    description: hyprlang dev

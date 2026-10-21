@@ -24,6 +24,7 @@ contents:
     - htop
     - btop
     - bc
+    - tree
     - bzip2
     - xz
     - zstd

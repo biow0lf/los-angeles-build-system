@@ -13,6 +13,20 @@ contents:
     - bash
     - bash-binsh
     - coreutils
+    - gnutar
+    - gawk
+    - grep
+    - gzip
+    - less
+    - man-db
+    - man-pages
+    - sed
+    - htop
+    - btop
+    - bc
+    - bzip2
+    - xz
+    - zstd
     - linux-firmware
     - apko
     - melange

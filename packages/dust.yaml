@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: dust
+  version: 1.2.6
+  epoch: 0
+  description: "A more intuitive version of du in rust"
+  url: https://github.com/bootandy/dust
+  copyright:
+    - license: Apache-2.0
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/bootandy/dust
+      tag: v${{package.version}}
+      expected-commit: 5cc5828d3b6b1c70c8ed6b952fda127639da4d7b
+
+  # TODO: install man and bash/etc completions
+  - uses: cargo/build
+    with:
+      output: dust
+
+  - uses: strip

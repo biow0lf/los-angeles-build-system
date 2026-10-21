@@ -1,0 +1,152 @@
+package:
+  name: libzip
+  version: "1.12.1"
+  epoch: 0 # glibc: 2.43->2.44
+  description: "A C library for reading, creating, and modifying zip archives."
+  copyright:
+    - license: BSD-3-Clause
+  dependencies:
+    runtime:
+      - bzip2
+      - zlib
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - bzip2-dev
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - openssl
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/nih-at/libzip
+      tag: v${{package.version}}
+      expected-commit: 8e037534ccd62f444abbe4ce265443ee74bbfeb3
+
+  - uses: cmake/configure
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: libzip-dev
+    description: Development files for libzip
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libzip
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: libzip-doc
+    description: libzip documentation
+    pipeline:
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/share/doc
+          mv "${{targets.destdir}}"/usr/share/doc/libzip/* "${{targets.subpkgdir}}"/usr/share/doc/
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: nih-at/libzip
+    tag-filter-prefix: v
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - gcc
+        - glibc-dev
+        - libzip-dev
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          zipcmp
+          zipmerge
+          ziptool
+    - name: Compile and run a program that creates and reads a zip archive
+      runs: |
+        # Write a minimal C program that uses the libzip API to create a zip
+        # archive with one entry, then open and verify the entry count.
+        cat > /tmp/test_libzip.c <<'EOF'
+        #include <zip.h>
+        #include <stdio.h>
+        #include <string.h>
+        #include <stdlib.h>
+
+        int main(void) {
+            int err;
+            const char *path = "/tmp/test_libzip_out.zip";
+            const char *content = "hello from libzip";
+
+            /* Create a new zip archive */
+            zip_t *za = zip_open(path, ZIP_CREATE | ZIP_TRUNCATE, &err);
+            if (!za) {
+                zip_error_t error;
+                zip_error_init_with_code(&error, err);
+                fprintf(stderr, "zip_open failed: %s\n", zip_error_strerror(&error));
+                zip_error_fini(&error);
+                return 1;
+            }
+
+            /* Add an in-memory buffer as a file entry */
+            zip_source_t *src = zip_source_buffer(za, content, strlen(content), 0);
+            if (!src) {
+                fprintf(stderr, "zip_source_buffer failed: %s\n", zip_strerror(za));
+                zip_discard(za);
+                return 1;
+            }
+            if (zip_file_add(za, "hello.txt", src, ZIP_FL_OVERWRITE) < 0) {
+                fprintf(stderr, "zip_file_add failed: %s\n", zip_strerror(za));
+                zip_source_free(src);
+                zip_discard(za);
+                return 1;
+            }
+
+            if (zip_close(za) < 0) {
+                fprintf(stderr, "zip_close failed\n");
+                return 1;
+            }
+
+            /* Re-open and verify the archive contains exactly one entry */
+            za = zip_open(path, ZIP_RDONLY, &err);
+            if (!za) {
+                fprintf(stderr, "zip_open (read) failed\n");
+                return 1;
+            }
+            zip_int64_t num = zip_get_num_entries(za, 0);
+            zip_close(za);
+
+            if (num != 1) {
+                fprintf(stderr, "expected 1 entry, got %lld\n", (long long)num);
+                return 1;
+            }
+            printf("libzip functional test passed: archive has %lld entry\n", (long long)num);
+            return 0;
+        }
+        EOF
+        # word splitting of $(pkg-config ...) is intentional for compiler flags
+        gcc -o /tmp/test_libzip /tmp/test_libzip.c $(pkg-config --cflags --libs libzip)
+        /tmp/test_libzip | grep -F "libzip functional test passed"

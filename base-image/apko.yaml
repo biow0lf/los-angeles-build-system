@@ -36,6 +36,7 @@ contents:
     - xfsprogs-core
     - xfs-scrub
     - xfsprogs-extra
+    - dosfstools
     - linux-firmware
     - apko
     - melange

@@ -5,16 +5,17 @@ contents:
   repositories:
     - https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev
 
-packages:
-  - unfriendly-keys
-  - wolfi-baselayout
-  - wolfi-base
-  - apk-tools
-  - bash
-  - bash-binsh
-  - coreutils
-  - apko
-  - melange
+  packages:
+    - unfriendly-keys
+    - wolfi-baselayout
+    - wolfi-base
+    - apk-tools
+    - bash
+    - bash-binsh
+    - coreutils
+    - linux-firmware
+    - apko
+    - melange
 
 accounts:
   groups:
@@ -31,4 +32,3 @@ entrypoint:
 
 archs:
   - x86_64
-

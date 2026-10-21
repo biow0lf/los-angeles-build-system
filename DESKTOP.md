@@ -125,6 +125,12 @@
 * mangowm
 * labwc
 
+## Wayland with Hyprland
+
+* hyprwayland-scanner
+* hyprutils
+* hyprwire
+
 ## Wayland utils
 
 * wlr-randr

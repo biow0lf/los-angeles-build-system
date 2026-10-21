@@ -1,0 +1,79 @@
+package:
+  name: inih
+  version: "62"
+  epoch: 5 # glibc: 2.43->2.44
+  description: Simple .INI file parser for embedded systems
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "1"
+    memory: 1Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - meson
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/benhoyt/inih
+      tag: r${{package.version}}
+      expected-commit: 26254ee9de7681f8825433415443e7116ff24b98
+
+  - uses: meson/configure
+    with:
+      opts: |
+        -Ddefault_library=both \
+        -Ddistro_install=true \
+        -Dwith_INIReader=true \
+        -Dmulti-line_entries=true \
+        -Dutf-8_bom=true \
+        -Dinline_comments=true \
+        -Duse_heap=false
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: inih-static
+    description: inih static
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: inih-dev
+    description: inih dev
+    dependencies:
+      runtime:
+        - inih
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: benhoyt/inih
+    strip-prefix: r
+    use-tag: true
+    tag-filter: r
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

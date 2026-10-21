@@ -21,6 +21,7 @@ contents:
     - man-db
     - man-pages
     - sed
+    - procps-ng
     - htop
     - btop
     - bc
@@ -28,6 +29,13 @@ contents:
     - bzip2
     - xz
     - zstd
+    - e2fsprogs
+    - e2fsprogs-extra
+    - btrfs-progs
+    - xfsprogs
+    - xfsprogs-core
+    - xfs-scrub
+    - xfsprogs-extra
     - linux-firmware
     - apko
     - melange

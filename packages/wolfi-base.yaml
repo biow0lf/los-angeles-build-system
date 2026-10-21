@@ -1,7 +1,7 @@
 package:
   name: wolfi-base
   version: 1
-  epoch: 8
+  epoch: 9 # drop wolfi-keys
   description: "Wolfi base metapackage"
   copyright:
     - license: MIT
@@ -9,7 +9,6 @@ package:
     runtime:
       - apk-tools
       - busybox
-      - wolfi-keys
       - unfriendly-keys
 
 environment:

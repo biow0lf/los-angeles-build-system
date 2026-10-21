@@ -1,0 +1,45 @@
+package:
+  name: libxfce4util
+  version: 4.20.0
+  epoch: 0
+  description: "libxfce4util is used to share commonly used non-GTK+ utilities among the Xfce applications"
+  url: https://www.xfce.org
+  copyright:
+    - license: LGPL-2.0-or-later
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - glib-dev
+      - gobject-introspection-dev
+      - vala
+      - gtk-doc
+      - glib-gir
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://archive.xfce.org/xfce/4.20/src/libxfce4util-4.20.0.tar.bz2
+      expected-sha256: 21493f9c9995a282823db93839f6b9f06ae31edb094191ba9acf04d932a2b592
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --sbindir=/usr/bin
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libxfce4util-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libxfce4util=${{package.full-version}}
+    description: libxfce4util dev

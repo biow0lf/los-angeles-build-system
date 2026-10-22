@@ -122,6 +122,7 @@
 * xfconf
 * libxfce4ui
 * exo
+* garcon
 
 ## Wayland
 

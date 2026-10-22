@@ -120,6 +120,8 @@
 
 * libxfce4util
 * xfconf
+* libxfce4ui
+* exo
 
 ## Wayland
 
@@ -127,6 +129,7 @@
 * wayland-protocols
 * wlroots 0.20.2
 * noctalia
+* noctalia-greeter TODO
 * umbriel
 * mangowm
 * labwc

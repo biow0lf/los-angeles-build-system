@@ -30,6 +30,7 @@ contents:
     - util-linux
     - ed
     - findutils
+    - sudo
     - systemd-init
     - dbus
     - shadow

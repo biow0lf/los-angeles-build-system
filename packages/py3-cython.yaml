@@ -1,0 +1,112 @@
+package:
+  name: py3-cython
+  version: "3.3.0"
+  epoch: 2 # glibc: 2.43->2.44
+  description: Cython is an optimising static compiler for both the Python & the extended Cython programming languages.
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    provider-priority: 0
+
+vars:
+  pypi-package: cython
+
+data:
+  - name: py-versions
+    items:
+      3.10: "310"
+      3.11: "311"
+      3.12: "312"
+      3.13: "313"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - glibc-2.44-dev
+      - py3-supported-pip
+      - py3-supported-python-dev
+      - py3-supported-wheel
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/cython/cython
+      tag: ${{package.version}}
+      expected-commit: bcd04a2966842d80de6ecff4e68e8d892bec5ef7
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-cython # This does not provide the binary
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - runs: |
+          mkdir -p ./cleanup/${{range.key}}/
+          mv ${{targets.contextdir}}/usr/bin ./cleanup/${{range.key}}/
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: test/tw/virtualpackage
+          with:
+            virtual-pkg-name: py3-cython
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}-bin
+    description: Executable binaries for ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      runtime:
+        - py${{range.key}}-${{vars.pypi-package}}
+      provides:
+        - cython
+      provider-priority: ${{range.value}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr/
+          mv ./cleanup/${{range.key}}/bin ${{targets.contextdir}}/usr/
+    test:
+      pipeline:
+        - uses: test/tw/ver-check
+          with:
+            bins: cython
+            version: ${{package.version}}
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/tw/metapackage
+
+  - name: py3-wheels-${{vars.pypi-package}}
+    pipeline:
+      - uses: py/collect-wheels
+    test:
+      pipeline:
+        - uses: test/tw/contains-files
+          with:
+            dir: "/usr/share/wheels/"
+            name: "*.whl"
+
+update:
+  enabled: true
+  github:
+    identifier: cython/cython
+
+test:
+  pipeline:
+    - uses: python/import
+      with:
+        import: cython

@@ -1,0 +1,94 @@
+package:
+  name: fmt
+  version: "12.2.0"
+  epoch: 0
+  description: Modern formatting library
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "3"
+    memory: 8Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - make
+
+var-transforms:
+  - from: ${{package.version}}
+    match: ^(\d+)\..*$
+    replace: ${1}
+    to: soversion
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 1be298e1bd68957e4cd352e1f676f00e07dcfb57
+      repository: https://github.com/fmtlib/fmt
+      tag: ${{package.version}}
+
+  - uses: cmake/configure
+    with:
+      opts: |
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DBUILD_SHARED_LIBS=True \
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: lib${{package.name}}${{vars.soversion}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr/lib
+          mv ${{targets.destdir}}/usr/lib/*.so.* ${{targets.contextdir}}/usr/lib/
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+
+  - name: ${{package.name}}-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: ${{package.name}}-dev
+
+update:
+  enabled: true
+  github:
+    identifier: fmtlib/fmt
+
+test:
+  environment:
+    contents:
+      packages:
+        - ${{package.name}}-dev
+        - gcc
+        - glibc-dev
+  pipeline:
+    - runs: |
+        cat <<EOF > test_fmt.cc
+        #include <fmt/core.h>
+        int main() {
+            fmt::print("hello {}\n", "world");
+            return 0;
+        }
+        EOF
+        g++ -o test_fmt test_fmt.cc -lfmt
+        ./test_fmt | grep -F "hello world"
+    - uses: test/tw/ldd-check

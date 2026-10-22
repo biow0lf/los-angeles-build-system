@@ -2,7 +2,7 @@
 package:
   name: librsvg
   version: "2.63.3"
-  epoch: 0 # toolchain rebuild for  rust-1.99-1.99.1
+  epoch: 0 # rebuild
   description: SAX-based renderer for SVG files into a GdkPixbuf
   copyright:
     - license: LGPL-2.1-or-later

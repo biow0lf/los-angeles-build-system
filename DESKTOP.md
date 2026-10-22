@@ -108,12 +108,18 @@
 * jq
 * direnv
 * fzf
+* dust
 
 ## X11
 
 * xterm
 * openbox
 * fluxbox
+
+## XFCE
+
+* libxfce4util
+* xfconf
 
 ## Wayland
 
@@ -130,6 +136,13 @@
 * hyprwayland-scanner
 * hyprutils
 * hyprwire
+* hyprlang
+* aquamarine
+* hyprgraphics
+* hyprcursor
+* hyprtoolkit
+* hyprpaper
+* hyprland TODO
 
 ## Wayland utils
 

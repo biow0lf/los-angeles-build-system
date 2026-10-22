@@ -46,6 +46,10 @@ contents:
     - xfsprogs-extra
     - dosfstools
     - linux-firmware
+    - efivar
+    - efibootmgr
+    - vim
+    - midnight-commander
     - apko
     - melange
 

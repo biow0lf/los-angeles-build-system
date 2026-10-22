@@ -58,11 +58,11 @@ accounts:
       gid: 65532
   run-as: 0        # wolfi-base runs as root; use 65532 for nonroot
 
-#entrypoint:
-#  command: /bin/sh -l
-
 entrypoint:
-  command: /bin/init
+  command: /bin/sh -l
+
+#entrypoint:
+#  command: /bin/init
 
 archs:
   - x86_64

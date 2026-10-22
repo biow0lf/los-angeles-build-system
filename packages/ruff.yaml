@@ -1,0 +1,85 @@
+package:
+  name: ruff
+  version: "0.17.1"
+  epoch: 1 # toolchain rebuild for  rust-1.99-1.99.1
+  description: An extremely fast Python linter, written in Rust.
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "13"
+    memory: 24Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cargo-auditable
+      - clang-${{vars.llvm-version}}
+      - glibc-2.44-dev
+      - rust-${{vars.rust-version}}
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/astral-sh/ruff
+      tag: ${{package.version}}
+      expected-commit: 4683270c69cbdaf6ad64d3f983fc458d5a43b41f
+
+  - uses: bump
+    with:
+      language: rust
+      deps: |-
+        crossbeam-channel@0.5.16
+        tracing-subscriber@0.3.20
+        thin-vec@0.2.16
+
+  - uses: cargo/build
+    with:
+      output: ruff
+
+  - uses: strip
+
+subpackages:
+  - name: ruff-python-formatter
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/bin
+          ls target/release/
+          mv target/release/ruff_python_formatter ${{targets.subpkgdir}}/usr/bin/
+    test:
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: ruff_python_formatter
+
+update:
+  enabled: true
+  github:
+    identifier: astral-sh/ruff
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: ruff
+    - uses: test/tw/help-check
+      with:
+        bins: ruff
+    - name: Lint a Python file
+      runs: |
+        echo 'print("Hello, world!")' > test.py
+        ruff check test.py || exit 1
+    - name: Lint with specific rules
+      runs: |
+        echo 'print("Hello, world!")' > test.py
+        ruff check --select F401 test.py || exit 1
+
+vars:
+  llvm-version: 23
+  rust-version: "1.99"

@@ -27,6 +27,7 @@ contents:
     - bc
     - lsof
     - util-linux
+    - ed
     - shadow
     - tree
     - bzip2

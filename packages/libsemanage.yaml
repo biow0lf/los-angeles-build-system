@@ -1,0 +1,98 @@
+#nolint:depends-on-unversioned-py-provides
+package:
+  name: libsemanage
+  version: "3.11"
+  epoch: 0
+  description: "SELinux library and simple utilities"
+  copyright:
+    - license: LGPL-2.1-only
+  dependencies:
+    runtime:
+      - libselinux
+  resources:
+    cpu: "1"
+    memory: 2Gi
+
+environment:
+  contents:
+    packages:
+      - audit-dev
+      - bison
+      - build-base
+      - busybox
+      - bzip2-dev
+      - coreutils
+      - docbook-xml
+      - flex
+      - gcc
+      - gettext
+      - glib-dev
+      - glibc-2.44-dev
+      - libcap-dev
+      - libselinux-dev
+      - libsepol-dev
+      - libxml2-utils
+      - linux-headers
+      - make
+      - pcre2-dev
+      - py3-pip
+      - python3
+      - wolfi-base
+      - xmlto
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/SELinuxProject/selinux.git
+      tag: ${{package.name}}-${{package.version}}
+      expected-commit: 2233a23a4d4f1bf29054037babec13f30d038e65
+
+  - working-directory: ${{package.name}}
+    runs: |
+      {
+        echo
+        echo '# Whether or not to check "neverallow" rules when executing all commands.'
+        echo '# It can be set to either "0" (disabled) or "1" (enabled).'
+        echo '# There might be a large penalty in execution time if this option is enabled.'
+        echo 'expand-check = 0'
+      } >>src/semanage.conf
+      [ "$(grep -Fc expand-check src/semanage.conf)" = 1 ]
+
+  - working-directory: ${{package.name}}
+    pipeline:
+      - uses: autoconf/make-install
+
+  # This depends on libsemanage-python, which we don't yet package.
+  - runs: |
+      rm ${{targets.destdir}}/usr/libexec/selinux/semanage_migrate_store
+
+subpackages:
+  - name: ${{package.name}}-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: libsemanage-dev
+
+  - name: ${{package.name}}-doc
+    description: ${{package.name}} manpages
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: SELinuxProject/selinux
+    tag-filter: libsemanage-
+    strip-prefix: libsemanage-
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check

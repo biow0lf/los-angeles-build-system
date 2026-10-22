@@ -13,6 +13,7 @@ contents:
     - bash
     - bash-binsh
     - coreutils
+    - posix-libc-utils
     - gnutar
     - gawk
     - grep

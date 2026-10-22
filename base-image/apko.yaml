@@ -28,6 +28,7 @@ contents:
     - lsof
     - util-linux
     - ed
+    - dbus
     - shadow
     - tree
     - bzip2

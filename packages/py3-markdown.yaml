@@ -1,0 +1,127 @@
+package:
+  name: py3-markdown
+  version: "3.11.2"
+  epoch: 0
+  description: Python implementation of John Gruber's Markdown.
+  copyright:
+    - license: BSD-3-Clause
+  dependencies:
+    provider-priority: 0
+
+vars:
+  pypi-package: markdown
+  import: markdown
+
+# markdown_py --version prints markdown.__version__, which is PEP
+# 440-normalized: a trailing ".0" patch component is dropped (e.g. 3.11.0
+# reports as "3.11"). Compute that display form here so ver-check matches
+# what the binary actually prints.
+var-transforms:
+  - from: ${{package.version}}
+    match: \.0$
+    replace: ""
+    to: display-version
+
+data:
+  - name: py-versions
+    items:
+      3.11: '311'
+      3.12: '312'
+      3.13: '313'
+
+environment:
+  contents:
+    packages:
+      - py3-supported-build-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Python-Markdown/markdown
+      tag: ${{package.version}}
+      expected-commit: b41e0aaf1181f1a8cb200cf5a815aad7c0020d23
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: python${{range.key}} version of ${{vars.pypi-package}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      runtime:
+        - py${{range.key}}-importlib-metadata
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - name: move usr/bin executables for -bin
+        runs: |
+          mkdir -p ./cleanup/${{range.key}}/
+          mv ${{targets.contextdir}}/usr/bin ./cleanup/${{range.key}}/
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            imports: |
+              import ${{vars.import}}
+
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}-bin
+    description: Executable binaries for ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - ${{package.name}}
+        - py3-${{vars.pypi-package}}
+        - py3-${{vars.pypi-package}}-bin
+      runtime:
+        - py${{range.key}}-${{vars.pypi-package}}
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.contextdir}}/usr/
+          mv ./cleanup/${{range.key}}/bin ${{targets.contextdir}}/usr/
+    test:
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: markdown_py
+        - uses: test/tw/ver-check
+          with:
+            bins: markdown_py
+            version: ${{vars.display-version}}
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/metapackage
+
+test:
+  pipeline:
+    - uses: python/import
+      with:
+        imports: |
+          import ${{vars.import}}
+    - uses: test/tw/help-check
+      with:
+        bins: markdown_py
+    - uses: test/tw/ver-check
+      with:
+        bins: markdown_py
+        version: ${{vars.display-version}}
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - ^\d+\.\d+\.final$
+    - ^\d+\.\d+.\d+\.final$
+  github:
+    identifier: Python-Markdown/markdown
+    use-tag: true

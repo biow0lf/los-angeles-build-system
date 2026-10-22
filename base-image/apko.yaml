@@ -49,6 +49,7 @@ contents:
     - efivar
     - efibootmgr
     - vim
+    - nano
     - midnight-commander
     - apko
     - melange

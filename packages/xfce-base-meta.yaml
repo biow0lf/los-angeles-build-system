@@ -4,7 +4,7 @@
 package:
   name: xfce-base-meta
   version: 4.20.0
-  epoch: 0
+  epoch: 1
   description: "XFCE base"
   dependencies:
     runtime:
@@ -12,6 +12,7 @@ package:
       - xfconf
       - libxfce4ui
       - exo
+      - garcon
 
 environment:
   contents:

@@ -1,7 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
 package:
   name: greetd
   version: 0.10.3
-  epoch: 0
+  epoch: 1 # use fixed scdoc.pc
   description: "Minimal and flexible login manager daemon"
   url: https://man.sr.ht/~kennylevinsen/greetd/
   copyright:
@@ -30,7 +33,7 @@ pipeline:
       cargo build --release
 
   - runs: |
-      make -C man all SCDOC=scdoc
+      make -C man all
 
   - runs: |
       mkdir -p "${{targets.destdir}}/usr/bin"
@@ -58,4 +61,3 @@ update:
   enabled: true
   github:
     identifier: kennylevinsen/greetd
-

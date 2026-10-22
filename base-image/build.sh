@@ -7,5 +7,5 @@ apko build \
 	--arch x86_64 \
 	--format tar \
 	--cache-dir .cache/ \
-	apko.yaml latest output.tar
+	apko.yaml unfriendly-base-test:latest output.tar
 

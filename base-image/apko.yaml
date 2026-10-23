@@ -9,6 +9,8 @@ contents:
     - unfriendly-keys
     - wolfi-baselayout
     - wolfi-base
+    - attr
+    - acl
     - apk-tools
     - bash
     - bash-binsh

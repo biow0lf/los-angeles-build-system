@@ -1,7 +1,7 @@
 package:
   name: melange
-  version: "0.63.0"
-  epoch: 0 # CVE-2026-78659
+  version: "0.63.1"
+  epoch: 0 # toolchain rebuild for  go-1.27-1.27.3
   description: build APKs from source code
   copyright:
     - license: Apache-2.0
@@ -19,7 +19,7 @@ package:
 pipeline:
   - uses: git-checkout
     with:
-      expected-commit: cd366b69285d8b7d5ac7e1c352bd96b609c8b26a
+      expected-commit: 04c0a4045867d1462842d383487f1f02f80ff7ac
       repository: https://github.com/chainguard-dev/melange
       tag: v${{package.version}}
 

@@ -30,11 +30,17 @@ contents:
     - bc
     - lsof
     - util-linux
+    - util-linux-bins
+    - util-linux-misc
+    - iproute2
     - ed
     - findutils
     - file
     - sudo
+    - kbd
+    - kmod
     - systemd-init
+    - systemd
     - dbus
     - shadow
     - tree

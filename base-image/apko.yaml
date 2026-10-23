@@ -30,11 +30,15 @@ contents:
     - util-linux
     - ed
     - findutils
+    - file
     - sudo
     - systemd-init
     - dbus
     - shadow
     - tree
+    - diffutils
+    - unzip
+    - texinfo
     - bzip2
     - xz
     - zstd

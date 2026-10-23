@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: psmisc
+  version: 23.7
+  epoch: 0
+  description: "This package contains miscellaneous utilities that use the proc file-system"
+  url: https://gitlab.com/psmisc/psmisc
+  copyright:
+    - license: GPL-2.0-or-later
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - gettext
+      - gettext-dev
+      - ncurses-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://gitlab.com/psmisc/psmisc
+      tag: v${{package.version}}
+      expected-commit: 9091d6dbcce3d8fb87adf9249a2eb346d25a562c
+
+  - runs: ./autogen.sh
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip

@@ -39,6 +39,7 @@ contents:
     - sudo
     - kbd
     - kmod
+    - psmisc
     - systemd-init
     - systemd
     - dbus

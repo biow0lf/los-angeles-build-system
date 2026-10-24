@@ -40,6 +40,7 @@ contents:
     - kbd
     - kmod
     - psmisc
+    - cpio
     - systemd-init
     - systemd
     - dbus

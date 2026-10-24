@@ -1,6 +1,6 @@
 package:
   name: iproute2
-  version: "7.2.0"
+  version: "7.3.0"
   epoch: 0 # glibc: 2.43->2.44
   description: IP Routing Utilities
   copyright:
@@ -39,7 +39,7 @@ pipeline:
     with:
       repository: https://kernel.googlesource.com/pub/scm/network/iproute2/iproute2
       tag: v${{package.version}}
-      expected-commit: 880505966c17d90243c39e446d79da6236fb06ba
+      expected-commit: 19d1276f766daa458fb55096edb38818a7d19606
 
   - uses: autoconf/configure
     with:
@@ -89,7 +89,7 @@ test:
         - grep
   pipeline:
     - name: "Version and help checks for core utilities"
-    - runs: |
+      runs: |
         bridge -V
         ctstat --help
         genl -V

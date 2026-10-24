@@ -1,0 +1,97 @@
+package:
+  name: cpio
+  version: "2.15"
+  epoch: 0 # go/wolfi-rsc/cpio
+  description: tool to copy files into or out of a cpio or tar archive
+  copyright:
+    - license: GPL-3.0-or-later
+  dependencies:
+    runtime:
+      - gnutar-rmt
+  resources:
+    cpu: "4"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 2Gi
+
+vars:
+  rmt-path: /usr/libexec/rmt
+  glibc-version: "2.44"
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bison
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - coreutils
+      - gettext-dev
+      - glibc-${{vars.glibc-version}}-dev
+      - rsync # for gnulib translations
+      - texinfo
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.savannah.gnu.org/git/cpio.git
+      tag: v${{package.version}}
+      expected-commit: 900bab656ff24db5e3099941fb909c79c07962ed
+
+  - name: git.savannah.gnu.org is flaky
+    runs: git submodule set-url gnulib https://github.com/coreutils/gnulib.git
+
+  - runs: ./bootstrap
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        CFLAGS="$CFLAGS -std=gnu17"
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+  - runs: |
+      rm ${{targets.destdir}}/${{vars.rmt-path}}
+
+subpackages:
+  - name: cpio-doc
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    description: cpio manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  - name: ${{package.name}}-lang
+    pipeline:
+      - uses: split/locales
+    description: ${{package.name}} locales
+    test:
+      pipeline:
+        - uses: test/tw/langpackage
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 353
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: cpio version
+      runs: cpio --version | grep ${{package.version}}
+    - runs: |
+        find /usr/local -print -depth | cpio -ov > foo.cpio
+    - runs: |
+        p=${{vars.rmt-path}}
+        [ -x "$p" ] && [ -f "$p" ] && echo "PASS: $p is an executable file" ||
+          { echo "FAIL: $p is an executable file"; exit 1; }
+    - uses: test/no-docs

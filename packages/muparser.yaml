@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: muparser
+  version: 2.3.5
+  epoch: 0
+  description: "fast math parser library for C/C++ with (optional) OpenMP support"
+  url: https://github.com/beltoforion/muparser
+  copyright:
+    - license: BSD-2
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/beltoforion/muparser
+      tag: v${{package.version}}
+      expected-commit: fbafd7f8774af2b53f4d2de07c57353fcfc09216
+
+  - uses: cmake/configure
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: muparser-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - muparser=${{package.full-version}}
+    description: muparser dev

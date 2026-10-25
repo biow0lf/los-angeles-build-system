@@ -24,6 +24,9 @@ environment:
       - elfutils-dev
       - diffutils
       - findutils
+      - bash
+      - bash-binsh
+      - gnutar
       # - posix-libc-utils
       # - dash
       # - dash-binsh
@@ -63,7 +66,18 @@ pipeline:
   - runs: |
       set -x
 
-      tar xvf linux-7.2.11.tar.xz
+      wget --version
+      zstdcat --version
+      patch --version
+      sh --version
+      bash --version
+      tar --version
+      find --version
+      diff --version
+      flex --version
+      bison --version
+
+      tar xf linux-7.2.11.tar.xz
 
       pwd
 
@@ -82,7 +96,11 @@ pipeline:
 
         echo "Prepared linux-zen version $(<version)"
 
-        make all V=1
+        # make all V=1
 
-        make install V=1 DESTDIR=${{targets.destdir}}
+        make all
+
+        # make install V=1 DESTDIR=${{targets.destdir}}
+
+        make install DESTDIR=${{targets.destdir}}
       popd

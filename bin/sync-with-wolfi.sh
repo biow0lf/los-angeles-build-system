@@ -9,9 +9,15 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       command-not-found
 #       dbus-glib
 #       brew
+#       cargo-audit
+#       ccache
+#       chrpath
+#       codex
 
 # Our package:
 #   aquamarine
+#   cliamp
+#   concord
 
 packages=(
     7zip
@@ -52,28 +58,30 @@ packages=(
     build-base
     busybox
     bzip2
+    c-ares
+    ca-certificates
+    cabextract
+    cairo
+    cargo-auditable
+    cargo-c
+    cdparanoia
+    check
+    chezmoi
+    cjson.yaml
+    cmake-3
+    cmake
+    cmocka
+    command-not-found
+    coreutils
+    cpio
+    cppunit
+    cryptsetup
+    ctop
+    cups
+    curl
+    cyrus-sasl-heimdal
+    cython-0
 
-	c-ares
-	ca-certificates
-	cairo
-	cargo-auditable
-	cargo-c
-	cdparanoia
-	check
-	chezmoi
-	cjson
-	cmake
-	cmake-3
-	cmatrix
-	cmocka
-	coreutils
-	cppunit
-	cryptsetup
-	ctop
-	cups
-	curl
-	cyrus-sasl-heimdal
-	cython-0
 	dash
 	dav1d
 	db

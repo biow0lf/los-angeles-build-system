@@ -67,7 +67,7 @@ packages=(
     cdparanoia
     check
     chezmoi
-    cjson.yaml
+    cjson
     cmake-3
     cmake
     cmocka

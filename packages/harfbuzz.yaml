@@ -1,7 +1,7 @@
 package:
   name: harfbuzz
-  version: "14.5.1"
-  epoch: 0 # glibc: 2.43->2.44
+  version: "15.0.0"
+  epoch: 1 # upstream-tests/meson-test
   description: Text shaping library
   copyright:
     - license: MIT
@@ -38,7 +38,7 @@ pipeline:
   - uses: git-checkout
     with:
       repository: https://github.com/harfbuzz/harfbuzz
-      expected-commit: eb033319fc2ebe723597fa497d4bb4331bab8b6b
+      expected-commit: 35f656a1a2bab548ea7f54a6dd3fba2b09680d14
       tag: ${{package.version}}
 
   # oldglibc has redundant declarations, which is harmless
@@ -58,6 +58,8 @@ pipeline:
         -Dcairo=enabled
 
   - uses: meson/compile
+
+  - uses: upstream-tests/meson-test
 
   - uses: meson/install
 

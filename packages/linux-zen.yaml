@@ -27,6 +27,8 @@ environment:
       - bash
       - bash-binsh
       - gnutar
+      - perl
+      - grep
       # - posix-libc-utils
       # - dash
       # - dash-binsh
@@ -76,6 +78,8 @@ pipeline:
       diff --version
       flex --version
       bison --version
+      perl --version
+      grep --version
 
       tar xf linux-7.2.11.tar.xz
 

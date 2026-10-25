@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: hyprland-protocols
+  version: 0.8.0
+  epoch: 0
+  description: "Wayland protocol extensions for Hyprland"
+  url: https://github.com/hyprwm/hyprland-protocols
+  copyright:
+    - license: "BSD-3"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/hyprwm/hyprland-protocols
+      tag: v${{package.version}}
+      expected-commit: 044a434ec371f985655389bcef09286b1af3d77c
+
+  - uses: cmake/configure
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip

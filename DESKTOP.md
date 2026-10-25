@@ -147,6 +147,7 @@
 * hyprcursor
 * hyprtoolkit
 * hyprpaper
+* hyprland-protocols
 * hyprland TODO
 
 ## Wayland utils

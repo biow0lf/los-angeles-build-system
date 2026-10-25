@@ -15,14 +15,16 @@ environment:
     packages:
       - build-base
       - busybox
+      - libxcb-dev
+      - util-macros-dev
+      - doxygen
+      - python-3.13
 
 pipeline:
-  - uses: git-checkout
+  - uses: fetch
     with:
-      repository: https://gitlab.freedesktop.org/xorg/lib/libxcb-errors/
-      tag: xcb-util-errors-${{package.version}}
-      expected-commit: 517dd82c079de762a7426f20166a44f11e8d38c5
-      recurse-submodules: true
+      uri: https://xcb.freedesktop.org/dist/xcb-util-errors-1.0.1.tar.xz
+      expected-sha256: 5628c87b984259ad927bacd8a42958319c36bdf4b065887803c9d820fb80f357
 
   - uses: autoconf/configure
 

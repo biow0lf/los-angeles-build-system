@@ -1,11 +1,12 @@
 package:
   name: btop
-  version: "1.4.7"
-  epoch: 3 # move from /usr/local to /usr
+  version: "1.4.8"
+  epoch: 0 # glibc: 2.43->2.44
   description: Resource monitor
   copyright:
     - license: Apache-2.0
 
+# TODO: Command 'lowdown' not found: skipping generating man page btop.1
 environment:
   contents:
     packages:
@@ -19,15 +20,17 @@ environment:
 pipeline:
   - uses: git-checkout
     with:
-      expected-commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+      expected-commit: cf1da5900b1e9eaa1c20fd7148dd812b43340b8a
       repository: https://github.com/aristocratos/btop
       tag: v${{package.version}}
 
+  # @biow0lf: use PREFIX to build
   - uses: autoconf/make
     with:
       opts: |
         PREFIX="/usr"
 
+  # @biow0lf: use PREFIX to install
   - uses: autoconf/make-install
     with:
       opts: |

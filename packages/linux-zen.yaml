@@ -90,7 +90,7 @@ pipeline:
 
         make olddefconfig V=1
 
-        diff -u .config.old .config
+        diff -u .config.old .config || true
 
         make -s kernelrelease > version
 

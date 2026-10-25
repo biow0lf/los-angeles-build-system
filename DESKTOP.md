@@ -31,7 +31,7 @@
 * acl
 * libcap
 * libxcrypt
-* shadow TODO
+* shadow
 * gawk
 * gcc
 * ncurses

@@ -20,6 +20,7 @@ environment:
       - flex
       - bison
       - rust-1.99
+      - openssl-4.0
       - openssl-4.0-dev
       - elfutils-dev
       - diffutils
@@ -80,6 +81,7 @@ pipeline:
       bison --version
       perl --version
       grep --version
+      openssl --version
 
       tar xf linux-7.2.11.tar.xz
 

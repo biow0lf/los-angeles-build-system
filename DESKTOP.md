@@ -109,6 +109,7 @@
 * direnv
 * fzf
 * dust
+* atop
 
 ## X11
 
@@ -163,4 +164,5 @@
 * lazygit
 * lazydocker
 * zizmor
+* undock
 * yaml-language-server TODO

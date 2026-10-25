@@ -1,7 +1,7 @@
 package:
   name: vim
   version: "9.2.1225"
-  epoch: 0 # glibc: 2.43->2.44
+  epoch: 0 # rebuild
   description: "Improved vi-style text editor"
   copyright:
     - license: Vim

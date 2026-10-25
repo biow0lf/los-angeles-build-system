@@ -1,17 +1,7 @@
-# Deviation from Wolfi's own recipe: the "make check" step's TESTS list
-# is narrowed to just test/attr.run. The other two upstream tests --
-# test/root/getfattr.run and test/restore.run -- reproducibly fail in
-# this environment (Docker build sandbox on Apple Silicon): both
-# exercise trusted/security-namespace xattr operations that need real
-# root-level filesystem xattr support the build container's overlayfs
-# doesn't provide, unrelated to whether libattr/attr/getfattr/setfattr
-# themselves work correctly (they link and install fine). Same category
-# as openssl's jitter/fips canary tests and systemd's
-# -Dbpf-framework=false -- an environment limitation, not a code bug.
 package:
   name: attr
   version: "2.6.0"
-  epoch: 3 # glibc: 2.43->2.44
+  epoch: 4 # glibc: 2.43->2.44
   description: "utilities for managing filesystem extended attributes"
   copyright:
     - license: GPL-2.0-or-later
@@ -46,6 +36,7 @@ pipeline:
   - runs: |
       ./autogen.sh
 
+  # TODO: enable nls
   - runs: |
       ./configure \
          --prefix=/usr \
@@ -55,6 +46,7 @@ pipeline:
 
   - uses: autoconf/make
 
+  # @biow0lf: tests fails under docker
   - runs: |
       make check TESTS='test/attr.run'
 

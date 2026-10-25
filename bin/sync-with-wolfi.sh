@@ -9,27 +9,31 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       command-not-found
 #       dbus-glib
 
+# Our package:
+#   aquamarine
+
 packages=(
     7zip
     abi-compliance-checker
     abi-dumper
     abseil-cpp-20250127
     acl
-	actionlint
-	alsa-lib
-	aom
-	apk-tools
-	apko
-	argon2
-	asciidoc
-	asciidoctor
-	at-spi2-core
-	attr
-	audit
-	autoconf
-	autoconf-archive
-	automake
-	avahi
+    actionlint
+    alsa-lib
+    aom
+    apk-tools
+    apko
+    argon2
+    asciidoc
+    asciidoctor
+    at-spi2-core
+    atop
+    attr
+    audit
+    autoconf-archive
+    autoconf
+    automake
+    avahi
 	bash
 	bash-completion
 	bat
@@ -239,6 +243,7 @@ packages=(
 	# perl-yaml-pp
 	# perl-yaml-syck
 	# perl
+	systemd
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

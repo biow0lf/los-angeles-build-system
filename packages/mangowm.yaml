@@ -3,8 +3,8 @@
 
 package:
   name: mangowm
-  version: 0.18.2
-  epoch: 1 # add runtime dependency scenefx
+  version: 0.18.3
+  epoch: 0
   description: "A fast, feature-rich Wayland compositor built on dwl"
   url: https://mangowm.github.io/
   copyright:
@@ -34,7 +34,7 @@ pipeline:
     with:
       repository: https://github.com/mangowm/mango/
       tag: ${{package.version}}
-      expected-commit: 8ab8dd6da49de0c26b8355806ed3d3684c261aca
+      expected-commit: 8b876cb31d4b0a393f4438e5a89b2f33a865d77b
 
   - uses: meson/configure
 

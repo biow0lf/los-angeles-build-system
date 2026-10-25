@@ -1,0 +1,111 @@
+package:
+  name: libnotify
+  version: "0.8.9"
+  epoch: 0 # glibc: 2.43->2.44
+  description: "GNOME/libnotify mirror"
+  copyright:
+    - license: LGPL-2.1-or-later
+  resources:
+    cpu: "3"
+    memory: 9Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - cairo-dev
+      - dbus-dev
+      - dbus-libs
+      - fribidi-dev
+      - gdk-pixbuf-dev
+      - glib-dev
+      - glib-gir
+      - glibc-2.44-dev
+      - gobject-introspection-dev
+      - gtk-4-dev
+      - harfbuzz-dev
+      - libxcomposite-dev
+      - libxcursor-dev
+      - libxdamage-dev
+      - libxft-dev
+      - libxrandr-dev
+      - libxtst-dev
+      - meson
+      - pango-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/GNOME/libnotify
+      tag: ${{package.version}}
+      expected-commit: 9b53a46b0307fe3a7ddd2545de1e395ee2f94d18
+
+  - uses: meson/configure
+    with:
+      opts: |
+        -Dman=false -Dgtk_doc=false
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: libnotify-dev
+    pipeline:
+      - uses: split/dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - ".*@"
+  github:
+    identifier: GNOME/libnotify
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - pkgconf
+        - libnotify-dev
+  pipeline:
+    - runs: |
+        notify-send --version
+        notify-send --help
+    - uses: test/tw/ldd-check
+    - name: "Test compilation with development files"
+      runs: |
+        cat > test.c << 'EOF'
+        #include <libnotify/notify.h>
+        #include <stdio.h>
+
+        int main(void) {
+            if (!notify_init("test-app")) {
+                return 1;
+            }
+
+            /* Test version macros */
+            printf("Notify version: %d.%d.%d\n",
+                   NOTIFY_VERSION_MAJOR,
+                   NOTIFY_VERSION_MINOR,
+                   NOTIFY_VERSION_MICRO);
+
+            notify_uninit();
+            return 0;
+        }
+        EOF
+
+        gcc test.c $(pkg-config --cflags --libs libnotify) -o test
+
+        # Verify the binary was created and run it
+        test -x test
+        ./test

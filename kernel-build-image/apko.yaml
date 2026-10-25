@@ -1,0 +1,27 @@
+contents:
+  keyring:
+    - ../keys/melange.rsa.pub
+
+  repositories:
+    - https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev
+
+  packages:
+    - build-base
+    - busybox
+    - apk-tools
+
+accounts:
+  groups:
+    - groupname: nonroot
+      gid: 65532
+  users:
+    - username: nonroot
+      uid: 65532
+      gid: 65532
+  run-as: 0        # wolfi-base runs as root; use 65532 for nonroot
+
+entrypoint:
+  command: /bin/sh -l
+
+archs:
+  - x86_64

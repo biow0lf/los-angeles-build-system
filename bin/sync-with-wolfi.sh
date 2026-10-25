@@ -8,6 +8,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       cmatrix
 #       command-not-found
 #       dbus-glib
+#       brew
 
 # Our package:
 #   aquamarine
@@ -34,22 +35,24 @@ packages=(
     autoconf
     automake
     avahi
-	bash
-	bash-completion
-	bat
-	bc
-	bind
-	binutils
-	bison
-	bluez
-	bpftool
-	brotli
-	btop
-	btrfs-progs
-	bubblewrap
-	build-base
-	busybox
-	bzip2
+    bash-completion
+    bash
+    bat
+    bc
+    bdftopcf
+    bind
+    binutils
+    bison
+    bluez
+    bpftool
+    brotli
+    btop
+    btrfs-progs
+    bubblewrap
+    build-base
+    busybox
+    bzip2
+
 	c-ares
 	ca-certificates
 	cairo

@@ -36,7 +36,7 @@
 * gcc
 * ncurses
 * sed
-* psmisc TODO
+* psmisc
 * gettext
 * bison
 * grep
@@ -86,7 +86,7 @@
 * linux kernel TODO
 * linux-firmware
 * dracut
-* cpio TODO
+* cpio
 
 ## Extra
 

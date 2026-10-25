@@ -30,7 +30,7 @@ contents:
     - bc
     - lsof
     - util-linux
-    - util-linux-bins
+    # - util-linux-bins
     - util-linux-misc
     - iproute2
     - ed

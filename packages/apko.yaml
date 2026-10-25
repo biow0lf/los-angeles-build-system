@@ -1,9 +1,8 @@
 package:
   name: apko
-  version: "1.4.12"
-  epoch: 0 # toolchain rebuild for  go-1.27-1.27.3
+  version: "1.4.13"
+  epoch: 0 # upstream-tests/go-test
   description: Build OCI images using APK directly without Dockerfile
-  url: https://github.com/chainguard-dev/apko
   copyright:
     - license: Apache-2.0
   dependencies:
@@ -23,7 +22,7 @@ pipeline:
     with:
       repository: https://github.com/chainguard-dev/apko
       tag: v${{package.version}}
-      expected-commit: 0c659afba7f7842a3b18cdd5108675455339912b
+      expected-commit: 217f25a71fd6f18f00fb1024f9b251dc7127bfd5
 
   - uses: bump
     with:
@@ -41,6 +40,15 @@ pipeline:
         -X sigs.k8s.io/release-utils/version.gitCommit=$(git rev-parse HEAD) \
         -X sigs.k8s.io/release-utils/version.gitTreeState=$(shell git diff --quiet >/dev/null 2>&1 || echo "dirty" || echo "clean") \
         -X sigs.k8s.io/release-utils/version.buildDate=$(date -u -d "@$SOURCE_DATE_EPOCH" +'%Y-%m-%dT%H:%M:%SZ')
+
+  # These tests fetch from the internet (alpinelinux.org releases.json,
+  # dl-cdn.alpinelinux.org, apk.cgr.dev apk-configuration) and are not gated
+  # behind -short upstream; builds must not depend on network access:
+  #   TestLock (apko-discover), TestFetchPackage, TestInitDB_ChainguardDiscovery
+  # TODO(upstream-tests): gate them behind testing.Short() upstream and drop the ignore.
+  - uses: upstream-tests/go-test
+    with:
+      ignore: TestLock TestFetchPackage TestInitDB_ChainguardDiscovery
 
 test:
   pipeline:

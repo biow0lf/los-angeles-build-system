@@ -1,0 +1,88 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: linux-zen
+  version: 7.2.11
+  epoch: 0
+  description: Linux ZEN
+  url: https://github.com/zen-kernel/zen-kernel
+  copyright:
+    - license: "GPL-2.0-only"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - patch
+      - zstd
+      - flex
+      - bison
+      - rust-1.99
+      - openssl-4.0-dev
+      - elfutils-dev
+      - diffutils
+      - findutils
+      # - posix-libc-utils
+      # - dash
+      # - dash-binsh
+      # - bash
+      # - coreutils
+      # - zstd
+      # - patch
+      # - flex
+      # - bison
+      # - gawk
+      # - sed
+      # - gnutar
+      # - bc
+      # - openssl-4.0
+      # - openssl-4.0-dev
+      # - elfutils-dev
+      # - diffutils
+      # - findutils
+      # - grep
+      # # - cpio
+      # - gettext
+      # # - python-3.13
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.11.tar.xz
+      expected-sha256: fd0fc479f983a8c05313f13e9c36330fe6651cf725396748c40d5cd93fa1e6a4
+      extract: false
+
+  - uses: fetch
+    with:
+      uri: https://github.com/zen-kernel/zen-kernel/releases/download/v7.2.11-zen1/linux-v7.2.11-zen1.patch.zst
+      expected-sha256: 402d4211ddbb462456f6ed6525db4bf7153020193b708a77080ccac9e91d5610
+      extract: false
+
+  - runs: |
+      set -x
+
+      tar xvf linux-7.2.11.tar.xz
+
+      pwd
+
+      pushd linux-7.2.11
+        zstdcat ../linux-v7.2.11-zen1.patch.zst | patch -p1
+
+        echo "Setting config..."
+
+        cp ../config.x86_64 .config
+
+        make olddefconfig V=1
+
+        diff -u .config.old .config
+
+        make -s kernelrelease > version
+
+        echo "Prepared linux-zen version $(<version)"
+
+        make all V=1
+
+        make install V=1 DESTDIR=${{targets.destdir}}
+      popd

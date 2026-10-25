@@ -1,10 +1,11 @@
 package:
   name: bat
   version: "0.26.1"
-  epoch: 14
+  epoch: 17 # set bump language
   description: "A cat(1) clone with wings"
   copyright:
     - license: MIT OR Apache-2.0
+  # @biow0lf: make bat more useful with less
   dependencies:
     runtime:
       - less
@@ -42,6 +43,8 @@ pipeline:
       cp assets/manual/bat.1.in "${{targets.destdir}}/usr/share/man/man1/"
 
   - uses: bump
+    with:
+      language: rust
 
   - uses: cargo/build
     with:

@@ -1,0 +1,88 @@
+package:
+  name: undock
+  version: "0.14.1"
+  epoch: 0 # toolchain rebuild for  go-1.27-1.27.3
+  description: Extract contents of a container image in a local folder
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - btrfs-progs-dev
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - gpgme-dev
+      - libassuan-dev
+      - libgpg-error-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/crazy-max/undock
+      tag: v${{package.version}}
+      expected-commit: 33bb81fb50e872fd21b7d02a67cb03ed944985e7
+
+  - uses: bump
+    with:
+      deps: |-
+        github.com/sigstore/fulcio@v1.8.6
+        go.opentelemetry.io/otel@v1.44.0
+        golang.org/x/net@v0.60.0
+        google.golang.org/grpc@v1.83.2
+        golang.org/x/sync@v0.23.0
+        golang.org/x/sys@v0.48.0
+        chainguard.dev/apko@v1.4.5
+        github.com/stretchr/testify@v1.12.1
+        go.podman.io/image/v5@v5.41.2
+        github.com/moby/moby/client@v0.5.1
+      language: go
+
+  - uses: go/build
+    with:
+      ldflags: -X main.version=v${{package.version}}
+      output: undock
+      packages: ./cmd/
+      vendor: true
+      go-package: go-1.27
+
+update:
+  enabled: true
+  github:
+    identifier: crazy-max/undock
+    strip-prefix: v
+    use-tag: true
+
+test:
+  environment:
+    accounts:
+      groups:
+        - groupname: nginx
+          gid: 65532
+      users:
+        - username: nginx
+          gid: 65532
+          uid: 65532
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: undock
+    - uses: test/tw/help-check
+      with:
+        bins: undock
+    # https://crazymax.dev/undock/usage/examples/
+    # The `handling file: dev/console: cannot handle file mode: Dcrw--w----` error is expected
+    # since the `dev/console` file is a device and cannot be extracted.
+    # undock exits non-zero when it encounters device files, so capture output
+    # to a temp file and grep it separately to avoid pipefail masking success.
+    - name: Simple
+      runs: |
+        undock --rm-dist cgr.dev/chainguard/busybox:latest /home/build/out >/tmp/undock-out.txt 2>&1 || true
+        grep -F "Extracting" /tmp/undock-out.txt
+    - name: Extract a multi-platform image
+      runs: |
+        undock --rm-dist --all cgr.dev/chainguard/busybox:latest /home/build/out >/tmp/undock-out.txt 2>&1 || true
+        grep -F "Extracting" /tmp/undock-out.txt

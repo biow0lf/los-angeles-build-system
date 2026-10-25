@@ -1,10 +1,15 @@
 package:
   name: glycin-2
-  version: "2.2.2"
-  epoch: 0 # rust: 1.98->1.99
+  version: "2.2.4"
+  epoch: 0 # runtime dep on bubblewrap (loaders run inside bwrap)
   description: Glycin allows to decode, edit, and create images and read metadata.
   copyright:
     - license: MPL-2.0 OR LGPL-2.1-or-later
+  dependencies:
+    runtime:
+      # glycin sandboxes each loader with bwrap at runtime; without it,
+      # glycin still reports sandboxing as available but fails to run loaders.
+      - bubblewrap
   resources:
     cpu: "2"
     memory: 10Gi
@@ -47,7 +52,7 @@ pipeline:
     with:
       repository: https://gitlab.gnome.org/GNOME/glycin.git
       tag: ${{package.version}}
-      expected-commit: c66668a0fe73c6c54608b3ebea62653945ad8a2b
+      expected-commit: 3df434b79c6276dfd289e521c5718a36468bcbf6
 
   - uses: meson/configure
 
@@ -133,6 +138,9 @@ test:
   pipeline:
     - uses: test/tw/ldd-check
     - uses: test/no-docs
+    - name: bubblewrap runtime dependency resolves
+      runs: |
+        bwrap --version
     - name: Compile and link against glycin-2
       runs: |
         tee test.c <<'EOF'

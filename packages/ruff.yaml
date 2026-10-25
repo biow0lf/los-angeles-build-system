@@ -1,7 +1,7 @@
 package:
   name: ruff
   version: "0.17.2"
-  epoch: 0 # toolchain rebuild for  rust-1.99-1.99.1
+  epoch: 0 # rebuild
   description: An extremely fast Python linter, written in Rust.
   copyright:
     - license: MIT

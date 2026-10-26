@@ -26,6 +26,11 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   dejagnu
 #   dos2unix
 #   dust
+#   edgepad
+#   efibootmgr
+#   efivar
+#   exo
+#   expect
 
 packages=(
     7zip
@@ -104,6 +109,13 @@ packages=(
     doxygen
     dua
     duktape
+    e2fsprogs
+    ed
+    elfutils
+    ell
+    encodings
+    execline
+    expat
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

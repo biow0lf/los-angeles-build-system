@@ -109,6 +109,7 @@
 * direnv
 * fzf
 * dust
+* dua
 * atop
 
 ## X11

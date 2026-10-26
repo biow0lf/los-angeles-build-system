@@ -31,6 +31,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   efivar
 #   exo
 #   expect
+#   calamares
 
 packages=(
     7zip

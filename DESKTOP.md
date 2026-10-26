@@ -92,6 +92,7 @@
 
 * git
 * btrfs-progs
+* screen
 * zsh
 * neovim
 * midnight-commander

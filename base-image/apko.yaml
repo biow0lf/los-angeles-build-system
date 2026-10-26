@@ -66,6 +66,7 @@ contents:
     - vim
     - nano
     - midnight-commander
+    - screen
     - apko
     - melange
 

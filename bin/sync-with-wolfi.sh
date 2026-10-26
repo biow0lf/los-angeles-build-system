@@ -102,6 +102,7 @@ packages=(
     docbook-xml
     dosfstools
     doxygen
+    dua
     duktape
 )
 

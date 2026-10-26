@@ -4,7 +4,7 @@
 package:
   name: umbriel
   version: 0.1.0
-  epoch: 1
+  epoch: 2
   description: "A Wayland compositor built on wlroots"
   url: https://noctalia.dev/
   copyright:
@@ -25,13 +25,14 @@ environment:
       - cairo-dev
       - pango-dev
       - bash
+      - libei-dev
 
 pipeline:
   - uses: git-checkout
     with:
       repository: https://github.com/noctalia-dev/umbriel
       depth: -1
-      expected-commit: 7097aeeb80e7b50d22c995b3905ce722e4fdbfaf
+      expected-commit: 366739955d3905d7600638eb637941b2782c0c68
 
   - uses: meson/configure
 

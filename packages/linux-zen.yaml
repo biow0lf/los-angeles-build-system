@@ -30,28 +30,14 @@ environment:
       - gnutar
       - perl
       - grep
-      # - posix-libc-utils
-      # - dash
-      # - dash-binsh
-      # - bash
-      # - coreutils
-      # - zstd
-      # - patch
-      # - flex
-      # - bison
-      # - gawk
-      # - sed
-      # - gnutar
-      # - bc
-      # - openssl-4.0
-      # - openssl-4.0-dev
-      # - elfutils-dev
-      # - diffutils
-      # - findutils
-      # - grep
-      # # - cpio
-      # - gettext
-      # # - python-3.13
+      - xz
+      - make
+      - coreutils
+      - gawk
+      - cpio
+      - sed
+      - bc
+      - posix-libc-utils
 
 pipeline:
   - uses: fetch
@@ -69,7 +55,14 @@ pipeline:
   - runs: |
       set -x
 
+      make --version
+      ls --version
+      gawk --version
+      cpio --version
       wget --version
+      sed --version
+      bc --version
+      ldd --version
       zstdcat --version
       patch --version
       sh --version
@@ -104,9 +97,25 @@ pipeline:
 
         # make all V=1
 
-        make all
+        make all -j$(nproc)
 
         # make install V=1 DESTDIR=${{targets.destdir}}
 
-        make install DESTDIR=${{targets.destdir}}
+        mkdir -p ${{targets.destdir}}/usr/lib/modules
+
+        make modules_install INSTALL_MOD_PATH=${{targets.destdir}}/usr/lib/modules
+
+        mkdir -p ${{targets.destdir}}/boot
+
+        # 7.2.11-zen1
+
+        # cp arch/x86/boot/bzImage /tmp/kernel-pkg/boot/vmlinuz-custom
+        # cp System.map /tmp/kernel-pkg/boot/System.map-custom
+        # cp .config /tmp/kernel-pkg/boot/config-custom
+
+        cp arch/x86/boot/bzImage ${{targets.destdir}}/boot/vmlinuz-7.2.11-zen1
+        cp System.map ${{targets.destdir}}/boot/System.map-7.2.11-zen1
+        cp .config ${{targets.destdir}}/boot/config-7.2.11-zen1
+
+        # make install DESTDIR=${{targets.destdir}}
       popd

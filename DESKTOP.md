@@ -83,7 +83,7 @@
 * procps-ng
 * util-linux
 * e2fsprogs
-* linux kernel TODO
+* linux kernel (zen)
 * linux-firmware
 * dracut
 * cpio

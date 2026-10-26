@@ -6,18 +6,26 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 
 # TODO: aws-cli-2
 #       cmatrix
-#       command-not-found
 #       dbus-glib
 #       brew
 #       cargo-audit
 #       ccache
 #       chrpath
 #       codex
+#       dart
+#       docker-29
+#       dua
 
 # Our package:
 #   aquamarine
 #   cliamp
 #   concord
+#   dbus-broker
+#   dracut
+#   dysk
+#   dejagnu
+#   dos2unix
+#   dust
 
 packages=(
     7zip
@@ -81,9 +89,20 @@ packages=(
     curl
     cyrus-sasl-heimdal
     cython-0
-
-
-
+    dash
+    dav1d
+    db
+    dbus
+    delta
+    diffutils
+    direnv
+    dive
+    dns-root-hints
+    dnssec-root
+    docbook-xml
+    dosfstools
+    doxygen
+    duktape
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

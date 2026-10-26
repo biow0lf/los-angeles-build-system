@@ -38,6 +38,7 @@ environment:
       - sed
       - bc
       - posix-libc-utils
+      - kmod
 
 pipeline:
   - uses: fetch
@@ -75,6 +76,7 @@ pipeline:
       perl --version
       grep --version
       openssl --version
+      kmod --version
 
       tar xf linux-7.2.11.tar.xz
 
@@ -102,20 +104,15 @@ pipeline:
         # make install V=1 DESTDIR=${{targets.destdir}}
 
         mkdir -p "${{targets.destdir}}/usr/lib/modules"
-
-        make modules_install INSTALL_MOD_PATH="${{targets.destdir}}/usr/lib/modules"
-
         mkdir -p "${{targets.destdir}}/boot"
 
-        # 7.2.11-zen1
+        ln -s usr/lib/ ${{targets.destdir}}/lib
 
-        # cp arch/x86/boot/bzImage /tmp/kernel-pkg/boot/vmlinuz-custom
-        # cp System.map /tmp/kernel-pkg/boot/System.map-custom
-        # cp .config /tmp/kernel-pkg/boot/config-custom
+        make modules_install INSTALL_MOD_PATH="${{targets.destdir}}" INSTALL_MOD_STRIP=1
 
         cp arch/x86/boot/bzImage "${{targets.destdir}}/boot/vmlinuz-7.2.11-zen1"
         cp System.map "${{targets.destdir}}/boot/System.map-7.2.11-zen1"
         cp .config "${{targets.destdir}}/boot/config-7.2.11-zen1"
 
-        # make install DESTDIR=${{targets.destdir}}
+        rm -f "${{targets.destdir}}/lib/modules/7.2.11-zen1/build"
       popd

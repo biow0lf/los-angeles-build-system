@@ -3,8 +3,8 @@
 
 package:
   name: noctalia
-  version: 5.3.0
-  epoch: 1
+  version: 5.4.0
+  epoch: 0
   description: "A sleek, customizable desktop shell crafted for Wayland"
   url: https://noctalia.dev/
   copyright:
@@ -46,13 +46,14 @@ environment:
       - gmp-dev
       - mpfr-dev
       - openssl-4.0
+      - libheif-dev
 
 pipeline:
   - uses: git-checkout
     with:
       repository: https://github.com/noctalia-dev/noctalia
       tag: v${{package.version}}
-      expected-commit: a33122c4208a385e19c9a252e65e2751b2c44fbb
+      expected-commit: 125a30d4f13e86200e704a013d17ac0ed88a8044
 
   - uses: meson/configure
 

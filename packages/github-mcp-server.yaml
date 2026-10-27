@@ -1,7 +1,7 @@
 package:
   name: github-mcp-server
-  version: "1.14.0"
-  epoch: 0 # toolchain rebuild for  go-1.27-1.27.1
+  version: "2.0.3"
+  epoch: 2 # CVE-2026-114437
   description: GitHub's official MCP Server
   copyright:
     - license: MIT
@@ -12,31 +12,34 @@ package:
     cpu: "1"
     memory: 1Gi
 
-# Deviation from Wolfi's own recipe: Wolfi maintains several parallel Go
-# release streams (go-1.27, etc.); we only maintain a single stream named
-# plain "go" (see packages/go.yaml). Renamed go-1.27 -> go below and in
-# the go/build step's go-package input.
 environment:
   contents:
     packages:
-      - go
+      - go-1.27
 
 pipeline:
   - uses: git-checkout
     with:
       repository: https://github.com/github/github-mcp-server
-      expected-commit: f10e4e1f923d46b86f2e80e849aa74084c847184
+      expected-commit: b98d115bbb080e9555466a96656ec4df605aea21
       tag: v${{package.version}}
+
+  - uses: bump
+    with:
+      language: go
+      deps: github.com/go-chi/chi/v5@v5.4.0
 
   - uses: go/build
     with:
-      go-package: go
+      go-package: go-1.27
       packages: ./cmd/github-mcp-server
       ldflags: |
         -X  main.version=${{package.version}}
         -X  main.commit=$(git rev-parse HEAD)
         -X  main.date=$(date -u -d "@$SOURCE_DATE_EPOCH" +"%Y-%m-%dT%H:%M:%SZ")
       output: github-mcp-server
+
+  - uses: upstream-tests/go-test
 
   - uses: strip
 

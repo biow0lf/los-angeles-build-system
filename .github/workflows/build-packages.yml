@@ -16,7 +16,7 @@ name: Build packages
 # Trigger is packages/** only now -- Makefile, pipelines/**,
 # docker/builder/**, apko/**, image/** and test/** changes no longer
 # auto-trigger this workflow at all (they used to, specifically so a
-# broken apko config got caught by boot-test before landing on main).
+# broken apko config got caught by a boot test before landing on main).
 # Verify those manually via rebuild-all-packages.yml instead.
 #
 # Each package gets its own matrix job (rather than one job looping over
@@ -25,8 +25,6 @@ name: Build packages
 # total wall-clock is the slowest single package, not the sum of all of
 # them.
 #
-# boot-test (below) downloads this workflow's own packages-out artifact
-# rather than rebuilding from source a second time.
 on:
   push:
     branches: [main]
@@ -134,7 +132,7 @@ jobs:
         with:
           name: apks-${{ matrix.package }}
           path: packages-out/x86_64/*.apk
-          retention-days: 14
+          retention-days: 90
 
   # Merges this run's own fresh .apk files into the *currently published*
   # index -- not the currently published .apk files themselves. We only
@@ -223,89 +221,14 @@ jobs:
         with:
           name: packages-out
           path: packages-out/
-          retention-days: 14
-
-  # Assembles the disk image from the packages just built above (no
-  # rebuild -- downloads this run's own packages-out artifact) and
-  # boot-tests it in QEMU. Doesn't need the melange signing key: apko
-  # only verifies against the already-committed public key
-  # (keys/melange.rsa.pub), it doesn't sign anything itself.
-  boot-test:
-    needs: index
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Download built packages
-        uses: actions/download-artifact@v8
-        with:
-          name: packages-out
-          path: packages-out/
-
-      # apko/los-angeles-linux.yaml and apko/self-hosted.yaml pin a fixed
-      # set of package names directly to the "@local packages-out"
-      # repository (solver-conflict/transitive-edge workarounds -- see
-      # those files' own comments). @local forces resolution to that
-      # literal local directory, so those specific names' .apk bytes must
-      # physically exist here -- they can't fall back to a URL the way
-      # everything else in the image's dependency graph now can (both
-      # apko configs also list the published R2 repo as a plain,
-      # untagged repository). The index artifact just downloaded already
-      # describes every one of these by metadata (melange's merge keeps
-      # every untouched entry), but only this run's own freshly-built
-      # packages have bytes on disk -- fetch just the handful that are
-      # still missing, by plain public HTTP (no AWS credentials needed).
-      - name: Fetch @local-pinned packages not built this run
-        run: |
-          tar -xzOf packages-out/x86_64/APKINDEX.tar.gz APKINDEX > /tmp/APKINDEX
-          awk -v RS='' -v FS='\n' '
-            { P=""; V="";
-              for (i=1;i<=NF;i++) {
-                if ($i ~ /^P:/) P=substr($i,3);
-                if ($i ~ /^V:/) V=substr($i,3);
-              }
-              if (P!="" && V!="") print P"\t"P"-"V".apk";
-            }' /tmp/APKINDEX > /tmp/name-to-file.tsv
-
-          grep -vE '^\s*#' apko/los-angeles-linux.yaml apko/self-hosted.yaml \
-            | grep -oE '[A-Za-z0-9_.+-]+@local' \
-            | sed 's/@local$//' \
-            | sort -u > /tmp/local-pinned-names.txt
-
-          while read -r name; do
-            [ -z "$name" ] && continue
-            fname=$(awk -F'\t' -v n="$name" '$1==n{print $2}' /tmp/name-to-file.tsv)
-            if [ -z "$fname" ]; then
-              echo "::error::no index entry for @local-pinned package $name"
-              exit 1
-            fi
-            if [ ! -f "packages-out/x86_64/$fname" ]; then
-              curl -fsSL "https://pub-3a8f2e6595544a6a883e17caa4383bdd.r2.dev/x86_64/$fname" \
-                -o "packages-out/x86_64/$fname"
-            fi
-          done < /tmp/local-pinned-names.txt
-
-      - name: Build disk image
-        run: make build-image
-
-      - name: Boot smoke test (QEMU)
-        run: make test-boot
-
-      - name: Upload boot log
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: boot-log
-          path: work/boot.log
-          retention-days: 14
+          retention-days: 90
 
   # Publishes the repo to our own Cloudflare R2 bucket (public-read via its
   # r2.dev dev subdomain) so `apk add`/`apk upgrade` on a booted Los
   # Angeles Linux system (the mutable runtime model) has something real to
-  # point at -- only from main, never from a PR, and only once the packages
-  # built above are confirmed to actually produce a bootable image (needs:
-  # boot-test, not just index) -- a package that indexes fine but breaks
-  # the final image should never reach the public repo.
+  # point at -- only from main, never from a PR. Boot-testing the image is
+  # no longer a gate here; see rebuild-all-packages.yml to verify a change
+  # doesn't break the bootable image.
   #
   # packages-out here only physically contains this run's fresh .apk files
   # plus the newly merged+signed index -- NOT a full mirror of the bucket
@@ -328,7 +251,7 @@ jobs:
   # the literal string "auto", not a real AWS region -- R2's own S3 API
   # convention.
   publish:
-    needs: boot-test
+    needs: index
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     steps:

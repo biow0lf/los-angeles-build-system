@@ -1,7 +1,7 @@
 package:
   name: terraform-mcp-server
-  version: "1.3.0"
-  epoch: 4 # CVE-2026-84445
+  version: "1.4.1"
+  epoch: 0 # toolchain rebuild for  go-1.27-1.27.3
   description: Terraform MCP Server
   copyright:
     - license: MIT
@@ -12,27 +12,26 @@ package:
     cpu: "1"
     memory: 2Gi
 
-# Deviation from Wolfi's own recipe: Wolfi maintains several parallel Go
-# release streams (go-1.27, etc.); we only maintain a single stream named
-# plain "go" (see packages/go.yaml). Renamed go-${{vars.go-version}} -> go
-# below and dropped the now-unused vars.go-version.
+vars:
+  go-version: "1.27"
+
 environment:
   contents:
     packages:
-      - go
+      - go-${{vars.go-version}}
 
 pipeline:
   - uses: git-checkout
     with:
       repository: https://github.com/hashicorp/terraform-mcp-server
-      expected-commit: 943a44eb28dc58432b34efdf08f7fc846adc446d
+      expected-commit: 3781509a674482ca7e2821fab8159a25e3b29bdf
       tag: v${{package.version}}
 
   - uses: bump
     with:
       deps: |-
-        google.golang.org/grpc@v1.83.2
         github.com/hashicorp/go-slug@v0.18.3
+      language: go
 
   - uses: go/build/v2
     with:

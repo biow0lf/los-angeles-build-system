@@ -87,6 +87,7 @@
 * linux-firmware
 * dracut
 * cpio
+* which
 
 ## Extra
 

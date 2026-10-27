@@ -14,7 +14,10 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       codex
 #       dart
 #       docker-29
-#       dua
+#       firefox
+#       fish
+#       freerdp-3
+#       fuse3
 
 # Our package:
 #   aquamarine
@@ -33,6 +36,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   expect
 #   calamares
 #   iana-etc
+#   fwupd
 
 packages=(
     7zip
@@ -118,6 +122,27 @@ packages=(
     encodings
     execline
     expat
+    fastfetch
+    fd
+    ffmpeg-7
+    ffmpeg-9.0
+    fftw
+    fig2dev
+    file
+    findutils
+    flac
+    flex
+    fluxbox
+    fmt
+    font-misc
+    font-util
+    font-xorg-dirs
+    fontconfig
+    fontforge
+    freetype
+    fribidi
+    fstrm
+    fzf
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

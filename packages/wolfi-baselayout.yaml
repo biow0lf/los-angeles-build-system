@@ -1,13 +1,14 @@
 package:
   name: wolfi-baselayout
   version: 20261016
-  epoch: 33 # add /boot
+  epoch: 34 # remove /etc/protocols and /etc/services
   description: "baselayout data"
   copyright:
     - license: MIT
   dependencies:
     runtime:
       - ca-certificates-bundle
+      - iana-etc
     provides:
       - merged-sbin
       - merged-bin
@@ -44,8 +45,8 @@ pipeline:
       cat >vendor/etc/os-release <<EOF
       ID=unfriendly
       ID_LIKE=wolfi
-      NAME="Unfriendly Linux"
-      PRETTY_NAME="Unfriendly Linux"
+      NAME="Unfriendly OS"
+      PRETTY_NAME="Unfriendly OS"
       VERSION_ID="${{package.version}}"
       HOME_URL="https://github.com/biow0lf/los-angeles-build-system"
       BUG_REPORT_URL="https://github.com/biow0lf/los-angeles-build-system/issues"
@@ -75,7 +76,7 @@ pipeline:
       # /var/run merge
       ln -sf ../run ${{targets.destdir}}/var/run
 
-      for i in etc/passwd etc/group etc/shadow etc/services etc/hosts etc/profile etc/shells etc/protocols etc/profile.d/locale.sh etc/nsswitch.conf etc/os-release etc/secfixes.d/wolfi; do
+      for i in etc/passwd etc/group etc/shadow etc/hosts etc/profile etc/shells etc/profile.d/locale.sh etc/nsswitch.conf etc/os-release etc/secfixes.d/wolfi; do
         install -m644 vendor/${i} "${{targets.destdir}}"/${i}
       done
 

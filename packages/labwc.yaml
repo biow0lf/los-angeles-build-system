@@ -4,7 +4,7 @@
 package:
   name: labwc
   version: 0.20.2
-  epoch: 4 # rebuild with xcb-util-errors
+  epoch: 5 # enable tests
   description: "A Wayland window-stacking compositor"
   url: https://labwc.github.io/
   copyright:
@@ -30,6 +30,7 @@ environment:
       - scdoc
       - xcb-util-wm-dev
       - xwayland-dev
+      - cmocka-dev
 
 pipeline:
   - uses: git-checkout
@@ -39,8 +40,13 @@ pipeline:
       expected-commit: 97f28877a343e062f3178d201f0248cd9c2610cf
 
   - uses: meson/configure
+    with:
+      opts: |
+        -Dtest=enabled
 
   - uses: meson/compile
+
+  - uses: upstream-tests/meson-test
 
   - uses: meson/install
 

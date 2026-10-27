@@ -5,7 +5,7 @@
 * man-pages
 * bash
 * bash-completion
-* iana-etc TODO
+* iana-etc
 * glibc
 * zlib
 * bzip2

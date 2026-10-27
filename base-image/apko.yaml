@@ -9,6 +9,7 @@ contents:
     - unfriendly-keys
     - wolfi-baselayout
     - wolfi-base
+    - iana-etc
     - attr
     - acl
     - apk-tools

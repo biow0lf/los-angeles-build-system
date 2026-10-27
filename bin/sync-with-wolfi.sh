@@ -18,6 +18,8 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       fish
 #       freerdp-3
 #       fuse3
+#       gperftools
+#       gst-libav
 
 # Our package:
 #   aquamarine
@@ -37,6 +39,9 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   calamares
 #   iana-etc
 #   fwupd
+#   garcon
+#   grub
+#   greetd
 
 packages=(
     7zip
@@ -143,6 +148,53 @@ packages=(
     fribidi
     fstrm
     fzf
+    gawk
+    gc
+    gcc
+    gd
+    gdbm
+    gdk-pixbuf
+    gengen
+    gengetopt
+    gettext
+    gh
+    ghostscript
+    gi-docgen
+    giflib
+    git
+    github-mcp-server
+    glib-gir
+    glib
+    glibc-2.44
+    glslang
+    glycin-2
+    gmp
+    gnu-libiconv
+    gnulib
+    gnupg
+    gnutar
+    gnutls
+    go-1.27
+    gobject-introspection
+    gperf
+    gpgme
+    graphene
+    graphite2
+    graphviz
+    grep
+    groff
+    gsl
+    gst-plugins-bad
+    gst-plugins-base
+    gst-plugins-good
+    gstreamer
+    gtest
+    gtk-2.0
+    gtk-3
+    gtk-4
+    gtk-doc
+    guile
+    gzip
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

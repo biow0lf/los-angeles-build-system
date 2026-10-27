@@ -1,7 +1,7 @@
 package:
   name: delta
   version: "0.20.1"
-  epoch: 0 # glibc: 2.43->2.44
+  epoch: 3 # upstream-tests/cargo-test
   description: Syntax-highlighting pager for git and diff output
   copyright:
     - license: MIT
@@ -13,7 +13,7 @@ package:
     memory: 1Gi
 
 vars:
-  rust-version: 1.99
+  rust-version: "1.99"
 
 environment:
   contents:
@@ -32,10 +32,14 @@ pipeline:
       expected-commit: b88d2290468449d75950bfa150ea7c1291fe2977
 
   - uses: bump
+    with:
+      language: rust
 
   - runs: |
       cargo build --release
       install -Dm755 target/release/delta "${{targets.destdir}}"/usr/bin/delta
+
+  - uses: upstream-tests/cargo-test
 
   - uses: strip
 

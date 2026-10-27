@@ -20,6 +20,8 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       fuse3
 #       gperftools
 #       gst-libav
+#       howdy-yall
+#       hunspell-dictionaries-all
 
 # Our package:
 #   aquamarine
@@ -42,6 +44,16 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   garcon
 #   grub
 #   greetd
+#   hyprcursor
+#   hyprgraphics
+#   hyprland-protocols
+#   hyprland
+#   hyprlang
+#   hyprpaper
+#   hyprtoolkit
+#   hyprutils
+#   hyprwayland-scanner
+#   hyprwire
 
 packages=(
     7zip
@@ -195,6 +207,14 @@ packages=(
     gtk-doc
     guile
     gzip
+    harfbuzz
+    heimdal
+    help2man
+    hicolor-icon-theme
+    highway
+    htop
+    hunspell
+    hwdata
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

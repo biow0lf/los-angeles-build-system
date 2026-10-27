@@ -32,6 +32,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   exo
 #   expect
 #   calamares
+#   iana-etc
 
 packages=(
     7zip

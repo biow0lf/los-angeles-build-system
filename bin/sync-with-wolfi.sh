@@ -90,6 +90,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   modemmanager
 #   mpg123
 #   muparser
+#   libao
 
 packages=(
     7zip

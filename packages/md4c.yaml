@@ -1,7 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
 package:
   name: md4c
   version: 0.6.0
-  epoch: 0
+  epoch: 1
   description: "Fast, compact, dependency-free Markdown parser for C"
   url: https://github.com/mity/md4c
   copyright:
@@ -35,6 +38,5 @@ subpackages:
       - uses: split/dev
     dependencies:
       runtime:
-        - md4c
+        - md4c=${{package.full-version}}
     description: md4c dev
-

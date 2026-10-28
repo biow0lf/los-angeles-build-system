@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: difi
+  version: 0.3.0
+  epoch: 0
+  description: "Review and refine Git diffs before you push"
+  url: https://github.com/xguot/difi
+  copyright:
+    - license: "MIT"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - go-1.27
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/xguot/difi
+      tag: v${{package.version}}
+      expected-commit: 59e3b0dc699e1cfe51df8282c73e77bd1b975541
+
+  - runs: |
+      make build
+
+  - runs: |
+      mkdir -p "${{targets.destdir}}/usr/bin"
+      mkdir -p "${{targets.destdir}}/usr/share/man/man1"
+
+      make install PREFIX="${{targets.destdir}}/usr"

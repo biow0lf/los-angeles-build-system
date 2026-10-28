@@ -56,6 +56,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   hyprwire
 #   difi
 #   iana-etc
+#   kanshi
 
 packages=(
     7zip
@@ -239,6 +240,11 @@ packages=(
     json-c
     jsoncpp
     just
+    kbd
+    keyutils
+    kmod
+    krb5-conf
+    krb5
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

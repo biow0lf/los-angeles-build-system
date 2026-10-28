@@ -25,6 +25,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       libass
 #       libXxf86misc
 #       lshw
+#       mtools
 
 # Our package:
 #   aquamarine
@@ -79,6 +80,16 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   los-angeles-linux-base
 #   los-angeles-linux-release
 #   lowdown
+#   mpv
+#   munit ???
+#   man-pages
+#   mangowm
+#   mcfly
+#   md4c
+#   mobile-broadband-provider-info
+#   modemmanager
+#   mpg123
+#   muparser
 
 packages=(
     7zip
@@ -413,6 +424,22 @@ packages=(
     lz4
     lzip
     lzo
+    m4
+    make
+    man-db
+    melange
+    mercurial
+    mesa
+    meson
+    midnight-commander
+    mkfontscale
+    mold
+    mosquitto
+    mpc
+    mpdecimal
+    mpfr
+    msgpack-c
+    mtdev
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

@@ -54,6 +54,8 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   hyprutils
 #   hyprwayland-scanner
 #   hyprwire
+#   difi
+#   iana-etc
 
 packages=(
     7zip
@@ -215,6 +217,28 @@ packages=(
     htop
     hunspell
     hwdata
+    icu
+    imlib2
+    inih
+    iniparser
+    inotify-tools
+    intltool
+    iperf
+    iproute2
+    iptables
+    iputils
+    isl
+    iso-codes
+    itstool
+    jack
+    jansson
+    jbig2dec
+    jemalloc
+    jitterentropy-library
+    jq
+    json-c
+    jsoncpp
+    just
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

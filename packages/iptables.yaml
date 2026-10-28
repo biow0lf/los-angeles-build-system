@@ -1,12 +1,7 @@
-# Deviation from Wolfi's own recipe: none needed in the YAML itself --
-# needed the ebtables.confd/ip6tables.confd/iptables.confd OpenRC
-# service config files from Wolfi's own iptables/ aux directory,
-# missed on the initial fork (`install: can't stat 'iptables.confd':
-# No such file or directory`).
 package:
   name: iptables
   version: "1.8.13"
-  epoch: 4 # glibc: 2.43->2.44
+  epoch: 5 # glibc: 2.43->2.44
   description: Linux kernel firewall, NAT and packet mangling tools
   copyright:
     - license: GPL-2.0-or-later

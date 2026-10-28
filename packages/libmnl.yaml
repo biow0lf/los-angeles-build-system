@@ -1,7 +1,7 @@
 package:
   name: libmnl
   version: 1.0.5
-  epoch: 8
+  epoch: 10 # glibc: 2.43->2.44
   description: Library for minimalistic netlink
   copyright:
     - license: LGPL-2.1-or-later
@@ -14,11 +14,6 @@ environment:
       - build-base
       - busybox
       - ca-certificates-bundle
-      # Deviation from Wolfi's own recipe: they list glibc-2.43-dev
-      # alongside glibc-2.44 (leftover inconsistency from a version
-      # transition on their end, confirmed by diffing against their
-      # current live file verbatim) -- we only maintain the 2.44 stream,
-      # so this is glibc-2.44-dev instead, not a separate 2.43 fork.
       - glibc-2.44
       - glibc-2.44-dev
       - libtool

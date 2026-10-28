@@ -169,4 +169,5 @@
 * lazydocker
 * zizmor
 * undock
+* difi
 * yaml-language-server TODO

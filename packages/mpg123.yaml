@@ -1,7 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
 package:
   name: mpg123
   version: 1.33.7
-  epoch: 0
+  epoch: 1
   description: "Fast console MPEG Audio Player and decoder library"
   url: https://mpg123.org
   copyright:
@@ -12,9 +15,9 @@ environment:
     packages:
       - build-base
       - busybox
-      - yasm
       - alsa-lib-dev
       - pulseaudio-dev
+      - jack-dev
 
 pipeline:
   - uses: fetch
@@ -23,10 +26,19 @@ pipeline:
       expected-sha256: 31d0e35a4ca567ec9b5ebda6c3062bb4435d6d3eacd6ef0d95cadd7854dc03ee
 
   - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-silent-rules \
+        --enable-modules=yes \
+        --disable-static \
+        --with-default-audio=alsa \
+        --with-audio=alsa,jack,pulse,dummy
 
   - uses: autoconf/make
 
   - uses: autoconf/make-install
+
+  - uses: upstream-tests/make-check
 
   - uses: strip
 
@@ -36,5 +48,5 @@ subpackages:
       - uses: split/dev
     dependencies:
       runtime:
-        - mpg123
+        - mpg123=${{package.full-version}}
     description: mpg123 dev

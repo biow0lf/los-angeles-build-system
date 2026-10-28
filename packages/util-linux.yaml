@@ -1,7 +1,7 @@
 package:
   name: util-linux
   version: "2.42.4"
-  epoch: 0 # update: poll GitHub tags (use-tag)
+  epoch: 1 # newgrp: set suid bit
   description: Random collection of Linux utilities
   copyright:
     - license: |-
@@ -66,15 +66,10 @@ pipeline:
 
   - runs: ./autogen.sh
 
-  # Wolfi's own recipe has a bare "cp ttydefaults.h include/" here, which
-  # can't resolve: sys/ttydefaults.h is a *system* header (see
-  # configure.ac's AC_CHECK_HEADERS list), not something util-linux's own
-  # source tree ships -- it isn't present anywhere in this tag's commit.
-  # Our glibc-2.44-dev does provide usr/include/sys/ttydefaults.h, so vendor
-  # the real path instead.
   - runs: |
-      cp /usr/include/sys/ttydefaults.h include/
+      cp ttydefaults.h include/
 
+  # udev? nls?
   - uses: autoconf/configure
     with:
       opts: |
@@ -261,9 +256,13 @@ subpackages:
           for cmd in newgrp last lastb login lslogins nologin sulogin; do
             mv ${{targets.destdir}}/usr/bin/$cmd ${{targets.subpkgdir}}/usr/bin/
           done
+
+          # The autotools install hook only sets suid on su; meson sets it on newgrp too.
+          chmod 4755 ${{targets.subpkgdir}}/usr/bin/newgrp
     test:
       pipeline:
         - runs: |
+            test -u /usr/bin/newgrp
             login --version
             login --help
             su --version

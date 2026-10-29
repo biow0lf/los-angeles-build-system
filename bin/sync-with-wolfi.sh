@@ -99,6 +99,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   noctalia-greeter
 #   noctalia
 #   sound-theme-freedesktop
+#   libcanberra
 
 packages=(
     7zip

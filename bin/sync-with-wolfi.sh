@@ -26,8 +26,11 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       libXxf86misc
 #       lshw
 #       mtools
+#       netcat-openbsd
+#       nss-mdns
+#       nushell
 
-# Our package:
+# Our packages:
 #   aquamarine
 #   cliamp
 #   concord
@@ -91,6 +94,10 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   mpg123
 #   muparser
 #   libao
+#   nettle-3
+#   networkmanager
+#   noctalia-greeter
+#   noctalia
 
 packages=(
     7zip
@@ -441,6 +448,20 @@ packages=(
     mpfr
     msgpack-c
     mtdev
+    nano
+    nasm
+    ncurses
+    neovim
+    nettle
+    nfs-utils
+    nftables
+    nghttp2
+    nghttp3
+    ngtcp2
+    ninja-build
+    nlohmann-json
+    npth
+    nss
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

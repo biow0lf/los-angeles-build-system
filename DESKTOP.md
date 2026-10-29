@@ -171,4 +171,5 @@
 * zizmor
 * undock
 * difi
+* libtree
 * yaml-language-server TODO

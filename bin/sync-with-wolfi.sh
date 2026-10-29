@@ -128,6 +128,16 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   umbriel
 #   unfriendly-devtools
 #   unfriendly-keys
+#   unix2dos
+#   vibez
+#   vlc
+#   vorbis-tools
+#   vte
+#   which
+#   wireplumber
+#   wlopm
+#   wlr-randr
+#   wlroots
 
 packages=(
     7zip
@@ -841,43 +851,33 @@ packages=(
     tzdata
     undock
     unibilium
+    unixodbc
+    unrtf
+    unzip
+    userspace-rcu
+    utf8proc
+    util-linux
+    util-macros
+    utmps
+    uv
+    vala-bootstrap
+    vala
+    valgrind
+    vim
+    vulkan-headers
+    vulkan-loader
+    wasi-libc
+    wasi-sdk
+    wayland-protocols
+    wayland
+    wget
+    woff2
+    wolfi-base
+    wolfi-baselayout
+    wolfi-keys
+    x264
+    x265
 
-    unix2dos.yaml
-    unixodbc.yaml
-    unrtf.yaml
-    unzip.yaml
-    userspace-rcu.yaml
-    utf8proc.yaml
-    util-linux.yaml
-    util-macros.yaml
-    utmps.yaml
-    uv.yaml
-    vala-bootstrap.yaml
-    vala.yaml
-    valgrind.yaml
-    vibez.yaml
-    vim.yaml
-    vlc.yaml
-    vorbis-tools.yaml
-    vte.yaml
-    vulkan-headers.yaml
-    vulkan-loader.yaml
-    wasi-libc.yaml
-    wasi-sdk.yaml
-    wayland-protocols.yaml
-    wayland.yaml
-    wget.yaml
-    which.yaml
-    wireplumber.yaml
-    wlopm.yaml
-    wlr-randr.yaml
-    wlroots.yaml
-    woff2.yaml
-    wolfi-base.yaml
-    wolfi-baselayout.yaml
-    wolfi-keys.yaml
-    x264.yaml
-    x265.yaml
     xbitmaps.yaml
     xcb-proto.yaml
     xcb-util-cursor.yaml

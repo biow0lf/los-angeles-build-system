@@ -370,6 +370,7 @@ packages=(
     libtool
     libtraceevent
     libtracefs
+    libtree
     libunistring
     liburing
     libusb

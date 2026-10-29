@@ -35,6 +35,8 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       python-3.15
 #       python-as-wrapper
 #       procps
+#       qt6-qtbase
+#       ripgrep
 
 # Our packages:
 #   aquamarine
@@ -110,6 +112,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   pavucontrol
 #   po4a
 #   procps-ng
+#   quickshell
 
 packages=(
     7zip
@@ -765,6 +768,17 @@ packages=(
     python-3.12
     python-3.13
     python-3.14
+    quota-tools
+    rav1e
+    rdfind
+    re2
+    readline
+    rhash
+    rsync
+    ruby-3.4
+    ruby-4.0
+    ruff
+    rust-1.99
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

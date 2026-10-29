@@ -1,0 +1,72 @@
+package:
+  name: libtree
+  version: "3.1.1"
+  epoch: 4
+  description: "ldd as a tree"
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - bash
+      - binutils
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - coreutils
+      - scanelf
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/haampie/libtree
+      tag: v${{package.version}}
+      expected-commit: 1521dfe063284551b955958fd7deb3426fd75d84
+
+  - uses: autoconf/make
+    with:
+      # Use -static rather than -static-pie: glibc's static-pie startup code
+      # (TLS/relocation init) crashes in QEMU microVM environments due to
+      # address-space layout conflicts. Plain -static has no relocation wrapper
+      # and works correctly in both Docker and QEMU runners.
+      opts: |
+        LDFLAGS='-static'
+
+  # - uses: autoconf/make-install
+  # TODO: make-install pipeline does not take opts
+  - runs: |
+      make install \
+          DESTDIR="${{targets.destdir}}" \
+          PREFIX="/usr"
+
+  - uses: strip
+
+subpackages:
+  - name: libtree-doc
+    pipeline:
+      - uses: split/manpages
+    description: libtree man pages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  environment:
+    contents:
+      packages:
+        - libcap-utils
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        libtree -vvv /usr/sbin/setcap
+        libtree --version
+        libtree --help
+
+update:
+  enabled: true
+  github:
+    identifier: haampie/libtree
+    strip-prefix: v
+    use-tag: true

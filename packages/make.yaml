@@ -34,23 +34,11 @@ pipeline:
     with:
       # make pins GNULIB_REVISION=stable-202301, which the packaged gnulib snapshot lacks
       gnulib-git-repo-url: https://github.com/coreutils/gnulib.git
-      # ./bootstrap otherwise wgets translation .po files from
-      # translationproject.org -- same slow/unreliable hang observed
-      # self-hosting coreutils (see packages/coreutils.yaml), which uses
-      # this identical pipeline against the same upstream gnulib.
-      bootstrap-args: --skip-po
 
   - uses: autoconf/configure
     with:
-      # --disable-nls: --skip-po above means the po/*.po translation
-      # files were never fetched, but po/Makefile still tries to build
-      # po/*.gmo from them unless NLS is disabled outright -- coreutils
-      # sidesteps this the same way (see packages/coreutils.yaml), just
-      # via its own custom ./configure invocation instead of this
-      # built-in pipeline's opts.
       opts: |
-        --without-guile \
-        --disable-nls
+        --without-guile
 
   - uses: autoconf/make
     with:

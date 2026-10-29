@@ -98,6 +98,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   networkmanager
 #   noctalia-greeter
 #   noctalia
+#   sound-theme-freedesktop
 
 packages=(
     7zip

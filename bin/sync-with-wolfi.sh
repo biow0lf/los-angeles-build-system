@@ -631,35 +631,35 @@ packages=(
     perl-task-weaken
     perl-term-encoding
     perl-term-readkey
-    perl-term-ui.yaml
-    perl-test-deep.yaml
-    perl-test-exception.yaml
-    perl-test-failwarnings.yaml
-    perl-test-fatal.yaml
-    perl-test-file-sharedir.yaml
-    perl-test-needs.yaml
-    perl-test-nowarnings.yaml
-    perl-test-object.yaml
-    perl-test-pod.yaml
-    perl-test-requires.yaml
-    perl-test-simple.yaml
-    perl-test-subcalls.yaml
-    perl-test-warnings.yaml
-    perl-test-without-module.yaml
-    perl-test2-plugin-nowarnings.yaml
-    perl-text-glob.yaml
-    perl-text-template.yaml
-    perl-throwable.yaml
-    perl-tie-ixhash.yaml
-    perl-try-tiny.yaml
-    perl-type-tiny.yaml
-    perl-uri.yaml
-    perl-www-robotrules.yaml
-    perl-xml-parser.yaml
-    perl-yaml-pp.yaml
-    perl-yaml-syck.yaml
-    perl-yaml-tiny.yaml
-    perl.yaml
+    perl-term-ui
+    perl-test-deep
+    perl-test-exception
+    perl-test-failwarnings
+    perl-test-fatal
+    perl-test-file-sharedir
+    perl-test-needs
+    perl-test-nowarnings
+    perl-test-object
+    perl-test-pod
+    perl-test-requires
+    perl-test-simple
+    perl-test-subcalls
+    perl-test-warnings
+    perl-test-without-module
+    perl-test2-plugin-nowarnings
+    perl-text-glob
+    perl-text-template
+    perl-throwable
+    perl-tie-ixhash
+    perl-try-tiny
+    perl-type-tiny
+    perl-uri
+    perl-www-robotrules
+    perl-xml-parser
+    perl-yaml-pp
+    perl-yaml-syck
+    perl-yaml-tiny
+    perl
     pipewire.yaml
     pixman.yaml
     pkgconf.yaml

@@ -37,6 +37,8 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       procps
 #       qt6-qtbase
 #       ripgrep
+#       s3fs-fuse
+#       smartmontools
 
 # Our packages:
 #   aquamarine
@@ -113,6 +115,14 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   po4a
 #   procps-ng
 #   quickshell
+#   slk
+#   scenefx
+#   sdbus-cpp
+#   seatd
+#   simdutf
+#   sound-theme-freedesktop
+#   stb_image_resize
+#   stb
 
 packages=(
     7zip
@@ -779,6 +789,37 @@ packages=(
     ruby-4.0
     ruff
     rust-1.99
+    s-lang
+    s3cmd
+    s3fs-fuse
+    s6
+    samba
+    samurai
+    sassc
+    sbc
+    scdoc
+    screen
+    sed
+    shaderc
+    shadow
+    shared-mime-info
+    skalibs
+    smartypants
+    snappy
+    soxr
+    speex
+    speexdsp
+    spirv-headers
+    spirv-tools
+    sqlite
+    starship
+    startup-notification
+    strace
+    subunit
+    sudo
+    svt-av1
+    swig
+    systemd
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

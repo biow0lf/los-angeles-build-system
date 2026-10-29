@@ -850,7 +850,6 @@ packages=(
     texinfo
     tiff
     tk
-    tomlplusplus
     tpm2-tss
     tree-sitter
     tree

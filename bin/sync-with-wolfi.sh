@@ -123,6 +123,11 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   sound-theme-freedesktop
 #   stb_image_resize
 #   stb
+#   the_silver_searcher
+#   tomlplusplus
+#   umbriel
+#   unfriendly-devtools
+#   unfriendly-keys
 
 packages=(
     7zip
@@ -820,6 +825,97 @@ packages=(
     svt-av1
     swig
     systemd
+    talloc
+    tcl
+    tdb
+    terraform-mcp-server
+    tevent
+    texinfo
+    tiff
+    tk
+    tomlplusplus
+    tpm2-tss
+    tree-sitter
+    tree
+    ttf-dejavu
+    tzdata
+    undock
+    unibilium
+
+    unix2dos.yaml
+    unixodbc.yaml
+    unrtf.yaml
+    unzip.yaml
+    userspace-rcu.yaml
+    utf8proc.yaml
+    util-linux.yaml
+    util-macros.yaml
+    utmps.yaml
+    uv.yaml
+    vala-bootstrap.yaml
+    vala.yaml
+    valgrind.yaml
+    vibez.yaml
+    vim.yaml
+    vlc.yaml
+    vorbis-tools.yaml
+    vte.yaml
+    vulkan-headers.yaml
+    vulkan-loader.yaml
+    wasi-libc.yaml
+    wasi-sdk.yaml
+    wayland-protocols.yaml
+    wayland.yaml
+    wget.yaml
+    which.yaml
+    wireplumber.yaml
+    wlopm.yaml
+    wlr-randr.yaml
+    wlroots.yaml
+    woff2.yaml
+    wolfi-base.yaml
+    wolfi-baselayout.yaml
+    wolfi-keys.yaml
+    x264.yaml
+    x265.yaml
+    xbitmaps.yaml
+    xcb-proto.yaml
+    xcb-util-cursor.yaml
+    xcb-util-errors.yaml
+    xcb-util-image.yaml
+    xcb-util-renderutil.yaml
+    xcb-util-wm.yaml
+    xcb-util.yaml
+    xdg-desktop-portal-umbriel.yaml
+    xfce-base-meta.yaml
+    xfce4-terminal.yaml
+    xfconf.yaml
+    xfsprogs.yaml
+    xh.yaml
+    xkbcomp.yaml
+    xkeyboard-config.yaml
+    xmlto.yaml
+    xorg-server.yaml
+    xorgproto.yaml
+    xterm.yaml
+    xtrans.yaml
+    xwayland.yaml
+    xxhash.yaml
+    xz.yaml
+    yam.yaml
+    yaml-language-server.yaml
+    yaml.yaml
+    yasm.yaml
+    yazi.yaml
+    yq.yaml
+    yt-dlp.yaml
+    zed.yaml
+    zeromq.yaml
+    zip.yaml
+    zizmor.yaml
+    zlib.yaml
+    zsh.yaml
+    zstd.yaml
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

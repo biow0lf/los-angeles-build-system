@@ -29,6 +29,8 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       netcat-openbsd
 #       nss-mdns
 #       nushell
+#       ollama
+#       opam
 
 # Our packages:
 #   aquamarine
@@ -465,6 +467,28 @@ packages=(
     nlohmann-json
     npth
     nss
+    ocaml-findlib
+    ocaml-num
+    ocaml
+    ocamlbuild
+    omnibump
+    oniguruma
+    openbox
+    opencore-amr
+    openh264
+    openjpeg
+    openjph
+    openldap-2.7
+    openssf-compiler-options
+    openssh
+    openssl-3.6
+    openssl-4.0
+    openssl-hardened-3.6
+    openssl-hardened-4.0
+    openssl-provider-legacy-allowed
+    openssl
+    opus
+    orc
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: libcanberra
+  version: 0.30
+  epoch: 0
+  description: "Portable Sound Event Library"
+  url: https://0pointer.de/lennart/projects/libcanberra/
+  copyright:
+    - license: "LGPL-2.1-or-later"
+
+# TODO: enable gstreamer?
+# TODO: enable gtk?
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - libvorbis-dev
+      - alsa-lib-dev
+      - pulseaudio-dev
+      - systemd-dev
+      - gtk-doc
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://0pointer.de/lennart/projects/libcanberra/libcanberra-0.30.tar.xz
+      expected-sha256: c2b671e67e0c288a69fc33dc1b6f1b534d07882c2aceed37004bf48c601afa72
+
+  - uses: patch
+    with:
+      patches: |
+        0001-canberra-boot-use-plughw-ALSA-device.patch
+        0001-gtk-Don-t-assume-all-GdkDisplays-are-GdkX11Displays-.patch
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --disable-silent-rules \
+        --disable-static \
+        --enable-shared \
+        --enable-pulse \
+        --enable-alsa \
+        --enable-null \
+        --disable-oss
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libcanberra-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libcanberra=${{package.full-version}}
+    description: libcanberra dev

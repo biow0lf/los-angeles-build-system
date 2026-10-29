@@ -1,0 +1,33 @@
+From da04010b995b54c4e7de68adaf2e61e6f7d06465 Mon Sep 17 00:00:00 2001
+From: Zephyr Lykos <git@mochaa.ws>
+Date: Fri, 22 Mar 2024 03:49:10 +0800
+Subject: [PATCH] canberra-boot: use plughw ALSA device
+
+On modern systems ALSA is provided by PipeWire or PulseAudio,
+and front:0 no longer works in that case.
+---
+ src/canberra-boot.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/canberra-boot.c b/src/canberra-boot.c
+index b699346..e7a5eca 100644
+--- a/src/canberra-boot.c
++++ b/src/canberra-boot.c
+@@ -124,11 +124,11 @@ static char *find_device(void) {
+         }
+ 
+         if (internal_device >= 0)
+-                asprintf(&s, "front:%i", internal_device);
++                asprintf(&s, "plughw:%i,0", internal_device);
+         else if (pci_device >= 0)
+-                asprintf(&s, "front:%i", pci_device);
++                asprintf(&s, "plughw:%i,0", pci_device);
+         else if (other_device >= 0)
+-                asprintf(&s, "front:%i", other_device);
++                asprintf(&s, "plughw:%i,0", other_device);
+ 
+ finish:
+         if (udev_enum)
+-- 
+2.44.0
+

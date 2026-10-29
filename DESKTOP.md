@@ -114,6 +114,7 @@
 * dua
 * atop
 * fd
+* starship
 
 ## X11
 

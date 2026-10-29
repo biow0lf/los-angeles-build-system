@@ -113,6 +113,7 @@
 * dust
 * dua
 * atop
+* fd
 
 ## X11
 

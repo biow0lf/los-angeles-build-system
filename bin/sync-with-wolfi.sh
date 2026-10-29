@@ -138,6 +138,13 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   wlopm
 #   wlr-randr
 #   wlroots
+#   xcb-util-errors
+#   xdg-desktop-portal-umbriel
+#   xfce-base-meta
+#   xfce4-terminal
+#   xfconf
+#   xwayland
+#   yt-dlp
 
 packages=(
     7zip
@@ -877,45 +884,37 @@ packages=(
     wolfi-keys
     x264
     x265
-
-    xbitmaps.yaml
-    xcb-proto.yaml
-    xcb-util-cursor.yaml
-    xcb-util-errors.yaml
-    xcb-util-image.yaml
-    xcb-util-renderutil.yaml
-    xcb-util-wm.yaml
-    xcb-util.yaml
-    xdg-desktop-portal-umbriel.yaml
-    xfce-base-meta.yaml
-    xfce4-terminal.yaml
-    xfconf.yaml
-    xfsprogs.yaml
-    xh.yaml
-    xkbcomp.yaml
-    xkeyboard-config.yaml
-    xmlto.yaml
-    xorg-server.yaml
-    xorgproto.yaml
-    xterm.yaml
-    xtrans.yaml
-    xwayland.yaml
-    xxhash.yaml
-    xz.yaml
-    yam.yaml
-    yaml-language-server.yaml
-    yaml.yaml
-    yasm.yaml
-    yazi.yaml
-    yq.yaml
-    yt-dlp.yaml
-    zed.yaml
-    zeromq.yaml
-    zip.yaml
-    zizmor.yaml
-    zlib.yaml
-    zsh.yaml
-    zstd.yaml
+    xbitmaps
+    xcb-proto
+    xcb-util-cursor
+    xcb-util-image
+    xcb-util-renderutil
+    xcb-util-wm
+    xcb-util
+    xfsprogs
+    xh
+    xkbcomp
+    xkeyboard-config
+    xmlto
+    xorg-server
+    xorgproto
+    xterm
+    xtrans
+    xxhash
+    xz
+    yam
+    yaml-language-server
+    yaml
+    yasm
+    yazi
+    yq
+    zed
+    zeromq
+    zip
+    zizmor
+    zlib
+    zsh
+    zstd
 )
 
 echo "Sync packages with https://github.com/wolfi-dev/os ..."

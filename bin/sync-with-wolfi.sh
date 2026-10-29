@@ -675,32 +675,32 @@ packages=(
     pugixml.yaml
     pulseaudio.yaml
     pwgen.yaml
-    py3-alabaster.yaml
-    py3-babel.yaml
-    py3-build.yaml
-    py3-cairo.yaml
-    py3-calver.yaml
-    py3-colorama.yaml
-    py3-cython.yaml
-    py3-docutils.yaml
-    py3-flit-core.yaml
-    py3-gobject3.yaml
-    py3-gpep517.yaml
-    py3-gyp-next.yaml
-    py3-hatchling.yaml
-    py3-imagesize.yaml
-    py3-importlib-metadata.yaml
-    py3-installer.yaml
-    py3-jinja2.yaml
-    py3-lxml.yaml
-    py3-markdown.yaml
-    py3-markupsafe.yaml
-    py3-meson-python.yaml
-    py3-packaging.yaml
-    py3-pathspec.yaml
-    py3-pefile.yaml
-    py3-pip.yaml
-    py3-pluggy.yaml
+    py3-alabaster
+    py3-babel
+    py3-build
+    py3-cairo
+    py3-calver
+    py3-colorama
+    py3-cython
+    py3-docutils
+    py3-flit-core
+    py3-gobject3
+    py3-gpep517
+    py3-gyp-next
+    py3-hatchling
+    py3-imagesize
+    py3-importlib-metadata
+    py3-installer
+    py3-jinja2
+    py3-lxml
+    py3-markdown
+    py3-markupsafe
+    py3-meson-python
+    py3-packaging
+    py3-pathspec
+    py3-pefile
+    py3-pip
+    py3-pluggy
     py3-poetry-core.yaml
     py3-pyelftools.yaml
     py3-pygments.yaml

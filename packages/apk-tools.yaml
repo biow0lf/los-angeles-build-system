@@ -1,7 +1,7 @@
 package:
   name: apk-tools
-  version: "2.14.10"
-  epoch: 17
+  version: "2.14.12"
+  epoch: 0
   description: "apk-tools (Wolfi package manager)"
   copyright:
     - license: GPL-2.0-only
@@ -36,16 +36,14 @@ pipeline:
       # @biow0lf: use mirror
       repository: https://github.com/alpinelinux/apk-tools.git
       tag: v${{package.version}}
-      expected-commit: 9d074efdc12bc41b5d24190595a5269a770e852a
+      expected-commit: 7bf85c7cc18a0b6056f376421fb5d4c2a806daad
 
   - uses: patch
     with:
       patches: |
-        292.patch
         357.patch
         0001-Work-without-fips-sha1.patch
         usrmerge-lib.patch
-        387.patch
         11074.patch
         auth-repos-non-fatal.patch
 

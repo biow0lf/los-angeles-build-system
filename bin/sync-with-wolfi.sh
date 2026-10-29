@@ -34,6 +34,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       py3-beautifulsoup4
 #       python-3.15
 #       python-as-wrapper
+#       procps
 
 # Our packages:
 #   aquamarine
@@ -108,6 +109,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   paprefs
 #   pavucontrol
 #   po4a
+#   procps-ng
 
 packages=(
     7zip
@@ -660,21 +662,20 @@ packages=(
     perl-yaml-syck
     perl-yaml-tiny
     perl
-    pipewire.yaml
-    pixman.yaml
-    pkgconf.yaml
-    polkit.yaml
-    popt.yaml
-    posix-cc-wrappers.yaml
-    potrace.yaml
-    powertop.yaml
-    procps-ng.yaml
-    protobuf-29.5.yaml
-    protobuf-c.yaml
-    psmisc.yaml
-    pugixml.yaml
-    pulseaudio.yaml
-    pwgen.yaml
+    pipewire
+    pixman
+    pkgconf
+    polkit
+    popt
+    posix-cc-wrappers
+    potrace
+    powertop
+    protobuf-29.5
+    protobuf-c
+    psmisc
+    pugixml
+    pulseaudio
+    pwgen
     py3-alabaster
     py3-babel
     py3-build

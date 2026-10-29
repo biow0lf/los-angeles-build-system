@@ -175,3 +175,5 @@
 * difi
 * libtree
 * yaml-language-server TODO
+* abi-dumper
+* abi-compliance-checker

@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: sound-theme-freedesktop
+  version: 0.8
+  epoch: 0
+  description: "freedesktop.org sound theme"
+  url: https://www.freedesktop.org/wiki/Specifications/sound-theme-spec/
+  copyright:
+    - license: "GPL-2.0-only AND GPL-2.0-or-later AND LGPL-2.0-or-later AND CC-BY-SA-3.0 AND CC-BY-3.0 AND CC-BY-4.0"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - intltool
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://people.freedesktop.org/~mccann/dist/sound-theme-freedesktop-0.8.tar.bz2
+      expected-sha256: cb518b20eef05ec2e82dda1fa89a292c1760dc023aba91b8aa69bafac85e8a14
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install

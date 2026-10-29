@@ -115,6 +115,7 @@
 * atop
 * fd
 * starship
+* pwgen
 
 ## X11
 

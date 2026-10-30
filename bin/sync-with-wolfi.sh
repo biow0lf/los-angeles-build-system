@@ -630,6 +630,7 @@ packages=(
     perl-moosex-setonce
     perl-moosex-types-perl
     perl-moosex-types
+    perl-mozilla-ca
     perl-mro-compat
     perl-namespace-autoclean
     perl-namespace-clean

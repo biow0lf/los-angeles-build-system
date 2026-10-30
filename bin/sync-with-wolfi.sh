@@ -692,6 +692,7 @@ packages=(
     perl-text-template
     perl-throwable
     perl-tie-ixhash
+    perl-timedate
     perl-try-tiny
     perl-type-tiny
     perl-uri

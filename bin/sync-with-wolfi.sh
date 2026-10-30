@@ -144,6 +144,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   xfconf
 #   xwayland
 #   yt-dlp
+#   squashfs-tools
 
 packages=(
     7zip
@@ -766,6 +767,7 @@ packages=(
     py3-wheel
     py3-zipp
     py3.14-babel
+    py3.14-beautifulsoup4
     py3.14-build
     py3.14-calver
     py3.14-colorama

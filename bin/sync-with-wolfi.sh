@@ -719,6 +719,7 @@ packages=(
     pwgen
     py3-alabaster
     py3-babel
+    py3-beautifulsoup4
     py3-build
     py3-cairo
     py3-calver

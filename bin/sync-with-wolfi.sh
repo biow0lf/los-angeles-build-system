@@ -756,6 +756,7 @@ packages=(
     py3-setuptools-wheel
     py3-setuptools
     py3-snowballstemmer
+    py3-soupsieve
     py3-sphinx
     py3-sphinxcontrib-applehelp
     py3-sphinxcontrib-devhelp
@@ -796,6 +797,7 @@ packages=(
     py3.14-requests
     py3.14-roman-numerals-py
     py3.14-setuptools-scm
+    py3.14-soupsieve
     py3.14-sphinxcontrib-devhelp
     py3.14-tomli
     py3.14-tomlkit

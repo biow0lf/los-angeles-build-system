@@ -596,6 +596,7 @@ packages=(
     perl-http-negotiate
     perl-inc-latest
     perl-io-html
+    perl-io-socket-ssl
     perl-io-string
     perl-io-tiecombine
     perl-ipc-run3

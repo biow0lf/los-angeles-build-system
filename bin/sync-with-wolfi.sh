@@ -635,6 +635,7 @@ packages=(
     perl-namespace-autoclean
     perl-namespace-clean
     perl-net-http
+    perl-net-ssleay
     perl-number-compare
     perl-package-deprecationmanager
     perl-package-stash-xs

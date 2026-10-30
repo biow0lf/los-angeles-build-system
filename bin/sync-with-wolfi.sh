@@ -280,6 +280,7 @@ packages=(
     gobject-introspection
     gperf
     gpgme
+    gptfdisk
     graphene
     graphite2
     graphviz

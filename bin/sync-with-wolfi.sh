@@ -879,6 +879,7 @@ packages=(
     vala
     valgrind
     vim
+    vtable-dumper
     vulkan-headers
     vulkan-loader
     wasi-libc

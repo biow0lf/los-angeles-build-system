@@ -6,7 +6,16 @@ Goal: system that can build itself and build more packages.
 
 Status: DONE.
 
-## Stage 2: add kernel, linux-firmware
+## Stage 2: fully self hosted system
+
+At this stage we want fully self hosted system.
+We can rebuild all packages in repo without any 3rd party repo(s).
+
+Goal: fully self hosted system
+
+Status: in progress.
+
+## Stage 3: add kernel, linux-firmware
 
 At this stage we are adding packages:
 
@@ -18,7 +27,7 @@ Goal: bootable linux system
 
 Status: in progress.
 
-## Stage 3: Wayland / X11 graphical system
+## Stage 4: Wayland / X11 graphical system
 
 At this stage we are adding wayland, labwc and small utils.
 So, we can boot in labwc and start working in it.
@@ -31,15 +40,6 @@ Packages:
 * terminal
 
 Goal: bootable linux system with UI
-
-Status: planned
-
-## Stage 4: fully self hosted system
-
-At this stage we want fully self hosted system.
-We can rebuild all packages in repo without any 3rd party repo(s).
-
-Goal: fully self hosted system
 
 Status: planned
 

@@ -865,6 +865,7 @@ packages=(
     tzdata
     undock
     unibilium
+    universal-ctags
     unixodbc
     unrtf
     unzip

@@ -1,7 +1,7 @@
 package:
   name: perl-log-dispatch
   version: "2.71"
-  epoch: 3 # upstream-tests/perl-make-test
+  epoch: 3 # rebuild
   description: Dispatches messages to one or more outputs
   copyright:
     - license: Artistic-2.0

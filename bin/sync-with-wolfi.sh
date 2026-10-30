@@ -25,7 +25,6 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       libass
 #       libXxf86misc
 #       lshw
-#       mtools
 #       netcat-openbsd
 #       nss-mdns
 #       nushell
@@ -496,6 +495,7 @@ packages=(
     mpfr
     msgpack-c
     mtdev
+    mtools
     nano
     nasm
     ncurses

@@ -1,7 +1,7 @@
 package:
   name: perl-http-negotiate
   version: "6.01"
-  epoch: 10 # upstream-tests/perl-make-test
+  epoch: 10 # rebuild
   description: HTTP::Negotiate perl module
   copyright:
     - license: GPL-1.0-or-later OR Artistic-1.0-Perl

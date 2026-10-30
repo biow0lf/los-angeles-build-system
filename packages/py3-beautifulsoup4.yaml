@@ -1,0 +1,90 @@
+package:
+  name: py3-beautifulsoup4
+  version: "4.15.0"
+  epoch: 0 # go/wolfi-rsc/py3-beautifulsoup4
+  description: Screen-scraping library
+  copyright:
+    - license: MIT
+  dependencies:
+    provider-priority: 0
+  resources:
+    cpu: "1"
+    memory: 5Gi
+
+vars:
+  pypi-package: beautifulsoup4
+  import: bs4
+
+data:
+  - name: py-versions
+    items:
+      3.10: '310'
+      3.11: '311'
+      3.12: '312'
+      3.13: '313'
+
+environment:
+  contents:
+    packages:
+      - py3-supported-build-base
+      - py3-supported-hatchling
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.launchpad.net/beautifulsoup
+      tag: ${{package.version}}
+      expected-commit: 57443d602fb091bb89b638875b2f410f439094df
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: python${{range.key}} version of ${{vars.pypi-package}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}
+      runtime:
+        - py${{range.key}}-soupsieve
+        - py${{range.key}}-typing-extensions
+    pipeline:
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            imports: |
+              import ${{vars.import}}
+              from bs4 import BeautifulSoup
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/metapackage
+
+test:
+  pipeline:
+    - uses: python/import
+      with:
+        imports: |
+          import ${{vars.import}}
+          from bs4 import BeautifulSoup
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - b\d+
+  release-monitor:
+    identifier: 3779

@@ -4,7 +4,7 @@
 
 Goal: system that can build itself and build more packages.
 
-Status: in progress.
+Status: DONE.
 
 ## Stage 2: add kernel, linux-firmware
 
@@ -92,4 +92,3 @@ Status: planned
 * btop
 
 ## Stage 9: polishing and updating everything
-

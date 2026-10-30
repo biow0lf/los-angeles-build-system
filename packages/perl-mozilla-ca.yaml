@@ -1,0 +1,94 @@
+package:
+  name: perl-mozilla-ca
+  version: "20261020"
+  epoch: 2 # upstream-tests/perl-make-test
+  description: Mozilla's CA cert bundle in PEM format
+  copyright:
+    - license: MPL-2.0
+  dependencies:
+    runtime:
+      - ca-certificates-bundle
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - busybox
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libwww-perl/Mozilla-CA
+      tag: v${{package.version}}
+      expected-commit: 1c90a15c55761b34e49e113d7bee265cbdfb436e
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: upstream-tests/perl-make-test
+
+  - name: Use the system CA bundle
+    runs: |
+      # Replace the bundled copy with the system bundle, so that root
+      # removals in ca-certificates apply here too.
+      cacert="${{targets.destdir}}"/usr/share/perl5/vendor_perl/Mozilla/CA/cacert.pem
+      test -f "$cacert"
+      ln -sf /etc/ssl/certs/ca-certificates.crt "$cacert"
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: perl-mozilla-ca-doc
+    pipeline:
+      - uses: split/manpages
+    description: perl-mozilla-ca manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+test:
+  environment:
+    contents:
+      packages:
+        - perl
+  pipeline:
+    - name: Verify CA bundle path is returned and file is readable
+      runs: |
+        perl -e '
+          use strict;
+          use warnings;
+          use Mozilla::CA;
+
+          my $ca_file = Mozilla::CA::SSL_ca_file();
+          die "SSL_ca_file() returned undef\n" unless defined $ca_file;
+          die "CA bundle not found at: $ca_file\n" unless -f $ca_file;
+          die "CA bundle not readable: $ca_file\n" unless -r $ca_file;
+
+          open(my $fh, "<", $ca_file) or die "Cannot open CA bundle: $!\n";
+          my $content = do { local $/; <$fh> };
+          close($fh);
+          die "CA bundle does not contain PEM header\n"
+            unless $content =~ /-----BEGIN CERTIFICATE-----/;
+
+          print "CA bundle OK: $ca_file\n";
+        '
+    - name: Verify Mozilla::CA uses the system CA bundle
+      runs: |
+        ca_file="$(perl -MMozilla::CA -e 'print Mozilla::CA::SSL_ca_file()')"
+        test -L "$ca_file"
+        test "$(readlink -f "$ca_file")" = "$(readlink -f /etc/ssl/certs/ca-certificates.crt)"
+
+update:
+  enabled: true
+  github:
+    identifier: libwww-perl/Mozilla-CA
+    strip-prefix: v
+    tag-filter-prefix: v

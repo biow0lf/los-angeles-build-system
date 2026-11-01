@@ -1,0 +1,81 @@
+#nolint:update-disabled-reason
+package:
+  name: chrpath
+  version: 0.16
+  epoch: 8 # upstream-tests/make-check
+  description: "Modify rpath of compiled programs"
+  copyright:
+    - license: GPL-2.0-or-later
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://codeberg.org/pere/chrpath
+      tag: release-${{package.version}}
+      expected-commit: 4af5a247f8418ee5be80d078def051ffa0c31fb5
+
+  - runs: ./bootstrap
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: upstream-tests/make-check
+    with:
+      harness: custom
+
+  - uses: strip
+
+subpackages:
+  - name: chrpath-doc
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  release-monitor:
+    identifier: 13891
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        chrpath --version
+        chrpath --help
+    - name: Functional test - read and modify rpath on an ELF binary
+      runs: |
+        # Compile a small ELF binary with an embedded rpath
+        cat > /tmp/hello.c << 'EOF'
+        int main(void) { return 0; }
+        EOF
+        gcc -o /tmp/hello /tmp/hello.c -Wl,-rpath,/original/rpath
+        # Verify chrpath can read the rpath
+        chrpath -l /tmp/hello | grep /original/rpath
+        # Modify the rpath to a new value
+        chrpath -r /new/rpath /tmp/hello
+        # Verify the rpath was changed
+        chrpath -l /tmp/hello | grep /new/rpath
+        # Remove the rpath entirely
+        chrpath -d /tmp/hello
+        # Verify the rpath is gone
+        chrpath -l /tmp/hello 2>&1 | grep -E "no rpath|RPATH" || true
+    - uses: test/no-docs

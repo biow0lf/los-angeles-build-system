@@ -420,6 +420,7 @@ packages=(
     libtree
     libunistring
     liburing
+    libunwind
     libusb
     libutempter
     libuv

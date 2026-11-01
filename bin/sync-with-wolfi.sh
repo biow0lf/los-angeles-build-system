@@ -194,6 +194,7 @@ packages=(
     cdparanoia
     check
     chezmoi
+    chrpath
     cjson
     cmake-3
     cmake

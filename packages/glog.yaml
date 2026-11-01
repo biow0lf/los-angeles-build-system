@@ -1,0 +1,96 @@
+package:
+  name: glog
+  version: 0.7.1
+  epoch: 6 # glibc: 2.43->2.44
+  description: "C++ implementation of the Google logging module"
+  copyright:
+    - license: "BSD-3-Clause"
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - cmake
+      - glibc-2.44-dev
+      - libunwind-dev
+      - samurai
+      - wolfi-base
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/google/glog
+      tag: v${{package.version}}
+      expected-commit: 7b134a5c82c0c0b5698bb6bf7a835b230c5638e4
+
+  - uses: cmake/configure
+    with:
+      opts: |
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DBUILD_SHARED_LIBS=ON \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DWITH_GFLAGS=ON \
+        -DWITH_THREADS=ON \
+        -DWITH_TLS=ON \
+        -DPRINT_UNSYMBOLIZED_STACK_TRACES=OFF \
+        -G Ninja
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: "glog-dev"
+    description: "C++ implementation of the Google logging module (development files)"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - glog
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: false
+  exclude-reason: Upstream google/glog was archived on 2025-06-30 (deprecated in favor of Abseil logging); kept frozen as a dependency of apache-arrow. No further releases expected.
+  github:
+    identifier: google/glog
+    tag-filter: v
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - glog-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test glog LOG() macro functionality
+      runs: |
+        tee /tmp/test_glog.cpp << 'EOF'
+        #include <glog/export.h>
+        #include <glog/logging.h>
+        int main(int argc, char* argv[]) {
+          google::InitGoogleLogging(argv[0]);
+          FLAGS_logtostderr = true;
+          LOG(INFO) << "glog functional test: INFO message";
+          LOG(WARNING) << "glog functional test: WARNING message";
+          int x = 42;
+          CHECK_GT(x, 0) << "x must be positive";
+          google::ShutdownGoogleLogging();
+          return 0;
+        }
+        EOF
+        g++ -I/usr/include /tmp/test_glog.cpp -o /tmp/test_glog -lglog
+        /tmp/test_glog

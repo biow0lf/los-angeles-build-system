@@ -4,7 +4,7 @@
 package:
   name: hyprpaper
   version: 0.8.5
-  epoch: 2 # libaquamarine.so.14
+  epoch: 3 # libaquamarine.so.14
   description: "Hyprpaper is a wayland wallpaper utility with IPC controls"
   url: https://github.com/hyprwm/hyprpaper
   copyright:

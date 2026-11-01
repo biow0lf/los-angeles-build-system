@@ -1,7 +1,9 @@
+# @biow0lf: use openssl-4.0-dev
+
 package:
   name: bind
-  version: "9.20.29"
-  epoch: 3 # rebuild
+  version: "9.20.30"
+  epoch: 0
   description: The ISC DNS server
   copyright:
     - license: MPL-2.0
@@ -53,7 +55,7 @@ pipeline:
     with:
       repository: https://gitlab.isc.org/isc-projects/bind9.git
       tag: v${{package.version}}
-      expected-commit: c3d4465e57f2771d780c82f413d4dc4cc779fb64
+      expected-commit: 769c3fb93a0a06b2f1f44b5156c4f7e52f57ef78
 
   - runs: |
       # Adjusting PATHs in manpages

@@ -3,7 +3,7 @@
 
 package:
   name: man-pages
-  version: 6.19
+  version: 6.20
   epoch: 0
   description: "Linux kernel and C library user-space interface documentation"
   url: http://www.kernel.org/doc/man-pages/
@@ -22,7 +22,7 @@ pipeline:
   - uses: fetch
     with:
       uri: https://mirrors.edge.kernel.org/pub/linux/docs/man-pages/man-pages-${{package.version}}.tar.gz
-      expected-sha256: fc0c620f07b4eba8ede128fbc267db5ebb4a67bab1aca3b01e5734956baf5572
+      expected-sha256: 46f325713f2fd75c8d1f4fa42748153526a44846806d37028fab85cd0143de46
 
   - runs: |
       make -R install prefix=/usr DESTDIR=${{targets.destdir}}

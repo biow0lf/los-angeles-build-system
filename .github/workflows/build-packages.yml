@@ -118,6 +118,13 @@ jobs:
       matrix:
         package: ${{ fromJson(needs.discover.outputs.packages) }}
     steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@v10
+        with:
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+
       - uses: actions/checkout@v7
 
       - name: Write signing key

@@ -1,0 +1,147 @@
+package:
+  name: iperf
+  version: 2.2.1
+  epoch: 9 # upstream-tests/make-check
+  description: A tool to measure IP bandwidth using UDP or TCP
+  copyright:
+    - license: NCSA
+  dependencies:
+    runtime:
+      - libgcc
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - linux-headers
+
+pipeline:
+  - uses: fetch
+    with:
+      expected-sha256: 754ab0a7e28033dbea81308ef424bc7df4d6e2fe31b60cc536b61b51fefbd8fb
+      uri: https://sourceforge.net/projects/iperf2/files/iperf-${{package.version}}.tar.gz
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --build=$CBUILD \
+        --host=$CHOST \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --mandir=/usr/share/man \
+        --infodir=/usr/share/info
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: upstream-tests/make-check
+
+  - uses: strip
+
+update:
+  enabled: true
+  release-monitor:
+    identifier: 1388
+
+test:
+  environment:
+    contents:
+      packages:
+        - bash
+        - coreutils
+        - procps
+  pipeline:
+    - name: "Verify basic installation"
+      runs: |
+        iperf --version
+        iperf --help
+    - name: "Test TCP server functionality"
+      uses: test/daemon-check-output
+      with:
+        start: /usr/bin/iperf -s -f m
+        timeout: 10
+        expected_output: |
+          Server listening
+          TCP port
+          TCP window size
+        post: |
+          # Run client test
+          /usr/bin/iperf -c localhost -t 2 -f m
+    - name: "Test UDP server functionality"
+      uses: test/daemon-check-output
+      with:
+        start: /usr/bin/iperf -s -u -f m
+        timeout: 10
+        expected_output: |
+          Server listening
+          UDP port
+          UDP buffer size
+        post: |
+          # Run UDP client test with 1Mbps bandwidth
+          /usr/bin/iperf -c localhost -u -b 1M -t 2 -f m
+    - name: "Test server with parallel streams"
+      uses: test/daemon-check-output
+      with:
+        start: /usr/bin/iperf -s -f m
+        timeout: 10
+        expected_output: |
+          Server listening
+          TCP port
+          TCP window size
+        post: |
+          # Test with 4 parallel streams
+          /usr/bin/iperf -c localhost -P 4 -t 2 -f m
+    - name: "Test server on custom port"
+      uses: test/daemon-check-output
+      with:
+        start: /usr/bin/iperf -s -p 5201 -f m
+        timeout: 10
+        expected_output: |
+          Server listening
+          TCP port
+          TCP window size
+        post: |
+          /usr/bin/iperf -c localhost -p 5201 -t 2 -f m
+    - name: "Test server with interval reporting"
+      uses: test/daemon-check-output
+      with:
+        start: /usr/bin/iperf -s -i 1 -f m
+        timeout: 10
+        expected_output: |
+          Server listening
+          TCP port
+          TCP window size
+        post: |
+          /usr/bin/iperf -c localhost -t 3 -i 1 -f m
+    - name: "Test server with bandwidth limiting"
+      uses: test/daemon-check-output
+      with:
+        start: /usr/bin/iperf -s -f m
+        timeout: 10
+        expected_output: |
+          Server listening
+          TCP port
+          TCP window size
+        post: |
+          # Test with bandwidth limit of 10Mbps
+          /usr/bin/iperf -c localhost -b 10M -t 2 -f m
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs
+
+subpackages:
+  - name: iperf-doc
+    description: iperf documentation
+    pipeline:
+      - uses: split/manpages
+    test:
+      pipeline:
+        - uses: test/docs

@@ -172,6 +172,7 @@ packages=(
     bc
     bdftopcf
     bind
+    benchmark
     binutils
     bison
     bluez

@@ -174,6 +174,7 @@ packages=(
     binutils
     bison
     bluez
+    boost
     bpftool
     brotli
     btop

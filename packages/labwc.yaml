@@ -3,8 +3,8 @@
 
 package:
   name: labwc
-  version: 0.20.2
-  epoch: 5 # enable tests
+  version: 0.20.3
+  epoch: 0
   description: "A Wayland window-stacking compositor"
   url: https://labwc.github.io/
   copyright:
@@ -37,7 +37,7 @@ pipeline:
     with:
       repository: https://github.com/labwc/labwc.git
       tag: ${{package.version}}
-      expected-commit: 97f28877a343e062f3178d201f0248cd9c2610cf
+      expected-commit: e0a3970b0c70e321814e8004ff7c6dbc7aeaf884
 
   - uses: meson/configure
     with:

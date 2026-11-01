@@ -142,6 +142,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   xwayland
 #   yt-dlp
 #   squashfs-tools
+#   wlopm
 
 packages=(
     7zip

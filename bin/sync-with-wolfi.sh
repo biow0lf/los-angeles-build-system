@@ -270,6 +270,7 @@ packages=(
     glib-gir
     glib
     glibc-2.44
+    glog
     glslang
     glycin-2
     gmp

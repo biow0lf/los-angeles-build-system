@@ -259,6 +259,7 @@ packages=(
     gengen
     gengetopt
     gettext
+    gflags
     gh
     ghostscript
     gi-docgen

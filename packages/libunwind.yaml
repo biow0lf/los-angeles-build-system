@@ -1,0 +1,108 @@
+package:
+  name: libunwind
+  version: "1.8.3"
+  epoch: 7 # glibc: 2.43->2.44
+  description: "Portable and efficient C programming interface (API) to determine the call-chain of a program"
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - glibc-2.44-dev
+      - libtool
+      - linux-headers
+      - wolfi-base
+      - xz-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libunwind/libunwind
+      tag: v${{package.version}}
+      expected-commit: 44aa1a5be2ca68825a17acdf534be4d25cff09b3
+      cherry-picks: |
+        master/b67d508a93bf1ba231c18dce3894cfee25c16e0d: Fix bad prototype for malloc() in test
+
+  - runs: autoreconf -i
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: libunwind-static
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: libunwind-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libunwind
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+test:
+  environment:
+    contents:
+      packages:
+        - libunwind-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test libunwind compile and link
+      runs: |
+        tee test.c <<'EOF'
+        #define UNW_LOCAL_ONLY
+        #include <libunwind.h>
+        #include <stdio.h>
+
+        int main() {
+            unw_cursor_t cursor;
+            unw_context_t context;
+
+            /* Get the current CPU context */
+            unw_getcontext(&context);
+
+            /* Initialize cursor for local unwinding */
+            unw_init_local(&cursor, &context);
+
+            /* Step through the call stack */
+            int ret = unw_step(&cursor);
+            if (ret < 0) {
+                fprintf(stderr, "unw_step failed: %d\n", ret);
+                return 1;
+            }
+
+            printf("libunwind stack unwinding works\n");
+            return 0;
+        }
+        EOF
+
+        gcc $(pkg-config --cflags libunwind) test.c -o test $(pkg-config --libs libunwind)
+        ./test
+
+update:
+  enabled: true
+  github:
+    identifier: libunwind/libunwind
+    strip-prefix: v

@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: wlopm
+  version: 1.0.0
+  epoch: 0
+  description: "Wayland output power management"
+  url: https://sr.ht/~leon_plickat/wlopm/
+  copyright:
+    - license: "GPL-3.0-only"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - wayland-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://git.sr.ht/~leon_plickat/wlopm
+      expected-commit: 7735d652309f1db4deebb14363c0e95c36110680
+      tag: v${{package.version}}
+
+  - runs: |
+      make wlopm PREFIX=/usr
+
+  - runs: |
+      mkdir -p "${{targets.destdir}}/usr/share/bash-completion/completions"
+
+      make install PREFIX=/usr DESTDIR=${{targets.destdir}}

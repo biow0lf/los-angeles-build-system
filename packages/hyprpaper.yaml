@@ -3,7 +3,7 @@
 
 package:
   name: hyprpaper
-  version: 0.8.4
+  version: 0.8.5
   epoch: 0
   description: "Hyprpaper is a wayland wallpaper utility with IPC controls"
   url: https://github.com/hyprwm/hyprpaper
@@ -30,7 +30,7 @@ pipeline:
     with:
       repository: https://github.com/hyprwm/hyprpaper
       tag: v${{package.version}}
-      expected-commit: 20fc0fa6c2056c388a4cd69cb394a9f989dd27c0
+      expected-commit: a8e93f4e60eabc432dde43449dfeb9a565c54da2
 
   - uses: cmake/configure
 

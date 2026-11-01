@@ -17,7 +17,6 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       firefox
 #       fish
 #       freerdp-3
-#       fuse3
 #       gperftools
 #       gst-libav
 #       howdy-yall
@@ -30,7 +29,6 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       nushell
 #       ollama
 #       opam
-#       py3-beautifulsoup4
 #       python-3.15
 #       python-as-wrapper
 #       procps

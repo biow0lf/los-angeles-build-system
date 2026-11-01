@@ -1,0 +1,123 @@
+package:
+  name: benchmark
+  version: "1.10.0"
+  epoch: 2 # upstream-tests/ctest
+  description: "microbenchmark support library"
+  copyright:
+    - license: Apache-2.0
+  resources:
+    cpu: "2"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cmake
+      - doxygen
+      - glibc-2.44-dev
+      - glibc-locale-en # upstream-tests/ctest: locale_impermeability_test
+      - gtest-dev
+      - samurai
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: a6b4a9f00b36c19af9997d68a1cf6e0b5b3d032c
+      repository: https://github.com/google/benchmark
+      tag: v${{package.version}}
+
+  - runs: |
+      if [ "$CBUILD" != "$CHOST" ]; then
+      	CMAKE_CROSSOPTS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_HOST_SYSTEM_NAME=Linux"
+      fi
+      cmake -B build \
+      	-G Ninja \
+      	-DCMAKE_INSTALL_PREFIX=/usr \
+      	-DCMAKE_INSTALL_LIBDIR=lib \
+      	-DBUILD_SHARED_LIBS=True \
+      	-DCMAKE_BUILD_TYPE=MinSizeRel \
+      	-DBENCHMARK_ENABLE_ASSEMBLY_TESTS=OFF \
+      	-DBENCHMARK_ENABLE_DOXYGEN=ON \
+      	-DBENCHMARK_ENABLE_LTO=ON \
+      	-DBENCHMARK_ENABLE_WERROR=OFF \
+      	-DBENCHMARK_USE_BUNDLED_GTEST=OFF \
+      	$CMAKE_CROSSOPTS
+      cmake --build build
+
+  - runs: |
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: upstream-tests/ctest
+    with:
+      dir: build
+
+  - uses: strip
+
+  - name: install manpages
+    runs: |
+      mkdir -p "${{targets.destdir}}/usr/share/info/"
+      for f in *; do
+        [ -f "$f" ] && cp "$f" "${{targets.destdir}}/usr/share/info/"
+      done
+
+subpackages:
+  - name: benchmark-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - benchmark
+    description: benchmark dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+        - uses: test/tw/header-check
+          with:
+            files: "benchmark/benchmark.h"
+
+  - name: "benchmark-doc"
+    description: "benchmark docs"
+    pipeline:
+      - uses: split/manpages
+      - uses: split/infodir
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+update:
+  enabled: true
+  github:
+    identifier: google/benchmark
+    strip-prefix: v
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - build-base
+        - benchmark-dev
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test library compilation and linkage
+      runs: |
+        # Create a minimal C++ program that uses libbenchmark
+        tee test_bench.cpp <<'EOF'
+        #include <benchmark/benchmark.h>
+        static void BM_Test(benchmark::State& state) {
+          for (auto _ : state) {}
+        }
+        BENCHMARK(BM_Test);
+        BENCHMARK_MAIN();
+        EOF
+
+        # Compile and link against libbenchmark
+        g++ test_bench.cpp -lbenchmark -lpthread -o test_bench
+
+        # Run the benchmark with a filter to verify it works
+        ./test_bench --benchmark_filter=BM_Test --benchmark_min_time=0.01s

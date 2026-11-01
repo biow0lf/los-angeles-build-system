@@ -4,7 +4,7 @@
 package:
   name: hyprtoolkit
   version: 0.6.0
-  epoch: 2 # libaquamarine.so.14
+  epoch: 3 # libaquamarine.so.14
   description: "A modern C++ Wayland-native GUI toolkit"
   url: https://github.com/hyprwm/hyprtoolkit
   copyright:

@@ -250,6 +250,7 @@ packages=(
     freetype
     fribidi
     fstrm
+    fuse3
     fzf
     gawk
     gc

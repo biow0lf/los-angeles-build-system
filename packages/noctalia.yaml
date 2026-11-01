@@ -3,7 +3,7 @@
 
 package:
   name: noctalia
-  version: 5.4.0
+  version: 5.4.1
   epoch: 0
   description: "A sleek, customizable desktop shell crafted for Wayland"
   url: https://noctalia.dev/
@@ -53,7 +53,7 @@ pipeline:
     with:
       repository: https://github.com/noctalia-dev/noctalia
       tag: v${{package.version}}
-      expected-commit: 125a30d4f13e86200e704a013d17ac0ed88a8044
+      expected-commit: 815aebe1cfd79c9a18197441eea92f0b275035fc
 
   - uses: meson/configure
 

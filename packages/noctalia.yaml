@@ -4,7 +4,7 @@
 package:
   name: noctalia
   version: 5.4.1
-  epoch: 0
+  epoch: 1 # strip --strip-unneeded
   description: "A sleek, customizable desktop shell crafted for Wayland"
   url: https://noctalia.dev/
   copyright:
@@ -62,3 +62,5 @@ pipeline:
   - uses: meson/install
 
   - uses: strip
+    with:
+      opts: --strip-unneeded

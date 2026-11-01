@@ -3,7 +3,7 @@
 
 package:
   name: hyprgraphics
-  version: 0.5.1
+  version: 0.6.0
   epoch: 0
   description: "Hyprland graphics / resource utilities"
   url: https://github.com/hyprwm/hyprgraphics
@@ -33,7 +33,7 @@ pipeline:
     with:
       repository: https://github.com/hyprwm/hyprgraphics
       tag: v${{package.version}}
-      expected-commit: 482d4b7ec36ffdaf3573086aa586b178fd5404be
+      expected-commit: ade4ef0a887d2740efb9c9af2ddb175633365e1b
 
   - uses: cmake/configure
 

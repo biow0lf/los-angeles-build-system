@@ -3,7 +3,7 @@
 
 package:
   name: dust
-  version: 1.2.6
+  version: 1.2.7
   epoch: 0
   description: "A more intuitive version of du in rust"
   url: https://github.com/bootandy/dust
@@ -21,7 +21,7 @@ pipeline:
     with:
       repository: https://github.com/bootandy/dust
       tag: v${{package.version}}
-      expected-commit: 5cc5828d3b6b1c70c8ed6b952fda127639da4d7b
+      expected-commit: 079c55266917387e416e0f871c97c06da52df12d
 
   # TODO: install man and bash/etc completions
   - uses: cargo/build

@@ -1,0 +1,144 @@
+package:
+  name: fuse3
+  version: "3.18.3"
+  epoch: 1 # glibc: 2.43->2.44
+  description: The reference implementation of the Linux FUSE (Filesystem in Userspace) interface
+  copyright:
+    - license: GPL-2.0-only AND LGPL-2.1-only
+  checks:
+    disabled:
+      - setuidgid
+  dependencies:
+    runtime:
+      - merged-usrsbin
+      - wolfi-baselayout
+  resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - gettext-dev
+      - glibc-2.44-dev
+      - meson
+      - systemd-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/libfuse/libfuse.git
+      tag: fuse-${{package.version}}
+      expected-commit: 3dbcfce64ba0dd529cec7b94305662e7901a991b
+
+  - uses: meson/configure
+    with:
+      opts: |
+        --sbindir /usr/bin \
+        -Dinitscriptdir='' \
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+  - runs: |
+      rm -r ${{targets.destdir}}/dev
+
+      # create config
+      install -d ${{targets.destdir}}/etc
+      cat >${{targets.destdir}}/etc/fuse.conf <<- _EOF_
+      # Set the maximum number of FUSE mounts allowed to non-root users.
+      # The default is 1000.
+      #
+      #mount_max = 1000
+
+      # Allow non-root users to specify the 'allow_other' or 'allow_root'
+      # mount options.
+      #
+      #user_allow_other
+      _EOF_
+
+subpackages:
+  - name: fuse-common
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/etc
+          mv ${{targets.destdir}}/etc/fuse.conf ${{targets.subpkgdir}}/etc/
+    description: Common files for fuse
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+    test:
+      pipeline:
+        - uses: test/tw/contains-files
+          with:
+            files: /etc/fuse.conf
+        - name: Verify fuse.conf contains expected directives
+          runs: |
+            set -euo pipefail
+            grep -F "mount_max" /etc/fuse.conf
+            grep -F "user_allow_other" /etc/fuse.conf
+
+  - name: fuse3-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - fuse-common
+        - fuse3-libs
+        - merged-usrsbin
+        - wolfi-baselayout
+    description: fuse3 dev
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+  - name: fuse3-doc
+    pipeline:
+      - uses: split/alldocs
+    description: fuse3 manpages
+    test:
+      pipeline:
+        - uses: test/docs
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+  - name: fuse3-libs
+    pipeline:
+      - uses: split/lib
+    description: fuse3 libs
+    test:
+      pipeline:
+        - uses: test/tw/ldd-check
+    dependencies:
+      runtime:
+        - merged-usrsbin
+        - wolfi-baselayout
+
+update:
+  enabled: true
+  github:
+    identifier: libfuse/libfuse
+    strip-prefix: fuse-
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: fusermount3
+    - uses: test/tw/help-check
+      with:
+        bins: fusermount3

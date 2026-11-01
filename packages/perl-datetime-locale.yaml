@@ -2,7 +2,7 @@
 package:
   name: perl-datetime-locale
   version: "1.47"
-  epoch: 0 # toolchain rebuild for  perl-dev-5.44.0
+  epoch: 0 # rebuild
   description: Localization support for DateTime.pm
   copyright:
     - license: GPL-1.0-or-later OR Artistic-1.0-Perl

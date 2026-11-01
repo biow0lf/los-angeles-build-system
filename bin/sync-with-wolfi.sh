@@ -34,7 +34,6 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #       procps
 #       qt6-qtbase
 #       ripgrep
-#       s3fs-fuse
 #       smartmontools
 
 # Our packages:

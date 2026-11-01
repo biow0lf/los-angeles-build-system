@@ -3,7 +3,7 @@
 
 package:
   name: aquamarine
-  version: 0.15.1
+  version: 0.16.0
   epoch: 0
   description: "Aquamarine is a very light linux rendering backend library"
   url: https://github.com/hyprwm/aquamarine
@@ -37,7 +37,7 @@ pipeline:
     with:
       repository: https://github.com/hyprwm/aquamarine
       tag: v${{package.version}}
-      expected-commit: f31c47a1b9d300847d8fc3108ad959448103dfc1
+      expected-commit: b77d67648336223a6c8fb88844ae316e7b72b574
 
   - uses: cmake/configure
 

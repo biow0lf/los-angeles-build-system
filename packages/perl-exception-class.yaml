@@ -2,7 +2,7 @@
 package:
   name: perl-exception-class
   version: "1.46"
-  epoch: 0 # go/wolfi-rsc/perl-exception-class
+  epoch: 2 # upstream-tests/perl-make-test
   description: A module that allows you to declare real exception classes in Perl
   copyright:
     - license: GPL-1.0-or-later OR Artistic-1.0-Perl
@@ -35,6 +35,8 @@ pipeline:
   - uses: autoconf/make
 
   - uses: autoconf/make-install
+
+  - uses: upstream-tests/perl-make-test
 
   - uses: perl/cleanup
 

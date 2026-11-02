@@ -140,14 +140,18 @@
 * mangowm
 * labwc
 
-## Wayland with Noctalia Shell
+## Wayland utils
+
+* wlr-randr
+
+## Noctalia Shell
 
 * noctalia
 * noctalia-greeter TODO
 * umbriel
 * xdg-desktop-portal-umbriel
 
-## Wayland with Hyprland
+## Hyprland
 
 * hyprwayland-scanner
 * hyprutils
@@ -161,11 +165,8 @@
 * hyprland-protocols
 * hyprpicker
 * hyprlauncher
+* hypridle
 * hyprland TODO
-
-## Wayland utils
-
-* wlr-randr
 
 ## Desktop
 

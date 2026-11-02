@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: hyprsunset
+  version: 0.4.0
+  epoch: 0
+  description: "An application to enable a blue-light filter on Hyprland"
+  url: https://github.com/hyprwm/hyprsunset
+  copyright:
+    - license: "BSD-3"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - hyprutils-dev
+      - hyprlang-dev
+      - hyprwayland-scanner
+      - wayland-dev
+      - wayland-protocols-dev
+      - hyprland-protocols
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/hyprwm/hyprsunset
+      tag: v${{package.version}}
+      expected-commit: 25f704346ec22e7623b0873ef8c4573b57ca1512
+
+  - uses: cmake/configure
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip

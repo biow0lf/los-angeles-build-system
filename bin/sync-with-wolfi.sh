@@ -630,6 +630,7 @@ packages=(
     perl-lwp-mediatypes
     perl-lwp-protocol-https
     perl-mailtools
+    perl-mime-base32
     perl-mixin-linewise
     perl-module-build-tiny
     perl-module-build

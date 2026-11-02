@@ -1,3 +1,5 @@
+# @biow0lf: remove openssf-compiler-options from build deps
+
 #nolint:valid-pipeline-git-checkout-tag
 package:
   name: glibc-2.44
@@ -52,8 +54,7 @@ environment:
       - glibc-2.44
       - glibc-abi-report<${{package.full-version}}
       - grep
-      - openssf-compiler-options
-      - py3-supported-beautifulsoup4 # parsing the ABI compatibility report
+      - py3.11-beautifulsoup4 # parsing the ABI compatibility report
       - python3
       - rdfind
       - texinfo

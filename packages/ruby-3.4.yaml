@@ -1,7 +1,9 @@
+# @biow0lf: drop gcc-14-default from build requires
+
 package:
   name: ruby-3.4
-  version: "3.4.11"
-  epoch: 3 # rust: 1.98->1.99
+  version: "3.4.12"
+  epoch: 2 # upstream-tests/make-check after install
   description: "the Ruby programming language"
   copyright:
     - license: Ruby
@@ -37,7 +39,6 @@ environment:
       - ca-certificates-bundle
       - coreutils
       - expat-dev
-      - gcc-14-default
       - gdbm-dev
       - glibc-2.44-dev
       - gmp-dev
@@ -48,7 +49,6 @@ environment:
       - linux-headers
       - mpdecimal-dev
       - ncurses-dev
-      - oniguruma-dev
       - openssl-${{vars.openssl-version}}-dev
       - pkgconf
       - readline-dev
@@ -74,7 +74,7 @@ pipeline:
     with:
       repository: https://github.com/ruby/ruby
       tag: v${{vars.underscore-package-version}}
-      expected-commit: 592f1ffdb36153e8be83603ade3c2e9ab6138a77
+      expected-commit: 366f5fdc00cbd2e7997e03b6654d10163ff19bad
 
   - uses: git-checkout
     with:
@@ -88,6 +88,17 @@ pipeline:
       patches: |
         remove-already-provided-gems-from-gems_bundled_gems.patch
         0001-tools-do-not-escape-build-location.patch
+
+  # Memory-safety fixes on master only, not in any release (no CVE assigned):
+  #   strftime-zone-width-overflow.patch: https://github.com/ruby/ruby/pull/19457
+  #   cp50220-encoder-max-output.patch: https://github.com/ruby/ruby/pull/18661
+  #   sprintf-width-overflow.patch: https://github.com/ruby/ruby/pull/17221
+  - uses: patch
+    with:
+      patches: |
+        strftime-zone-width-overflow.patch
+        cp50220-encoder-max-output.patch
+        sprintf-width-overflow.patch
 
   - uses: patch
     working-directory: upstream/ruby/openssl
@@ -127,6 +138,12 @@ pipeline:
       opts: rdoc capi
 
   - uses: autoconf/make-install
+
+  # This suite reports only through make check's exit status (no automake/TAP/autotest summary).
+  - uses: upstream-tests/make-check
+    with:
+      target: test
+      harness: custom
 
   - runs: |
       # Ignore the patch version of ruby since ruby will install under the
@@ -217,4 +234,147 @@ test:
         if echo "$OUTPUT" | grep -Fi "failed"; then
           exit 1
         fi
+    - name: Regexp compiler rejects overflowing repeat/null-check IDs (CVE-2026-110264)
+      runs: |
+        cat >/tmp/regexp-cve.rb <<'EOF'
+        { "(?:foobar){0,100}" => /too many range repeat/,
+          "(?:(?:foo)?|(?:bar)?)*" => /too many null check/ }.each do |pat, want|
+          begin
+            Regexp.new(pat * 100000)
+            abort "not rejected: #{pat} * 100000"
+          rescue RegexpError => e
+            abort "wrong error for #{pat}: #{e.message[0, 80]}" unless e.message =~ want
+            puts "ok: #{pat} * 100000 -> #{e.message[0, 40]}"
+          end
+        end
+        EOF
+        ruby /tmp/regexp-cve.rb
+    - name: Regexp compiler does not unroll an overflowing quantifier expansion (CVE-2026-97229)
+      runs: |
+        cat >/tmp/regexp-cve-2026-97229.rb <<'EOF'
+        $stdout.sync = true
+        # ruby/ruby#19020: the expansion check computed (tlen + SIZE_OP_PUSH) * upper
+        # in int. A ~40 KB body with upper 60000 wraps it negative, so the
+        # compiler unrolled all 60000 copies (~2.4 GB) with jump offsets taken
+        # from the wrapped length: the compile ran out of memory, or matching
+        # then jumped outside the program.
+        body = "a" * 40_000
+        begin
+          re = Regexp.new("(?:#{body}){0,60000}")
+        rescue RegexpError => e
+          abort "bounded repeat: unexpected RegexpError: #{e.message[0, 120]}"
+        end
+        m = re.match("#{body}#{body}b")
+        abort "bounded repeat: expected two bodies, got #{m && m[0].length}" unless m && m[0] == body * 2
+        puts "ok: bounded quantifier expansion"
+        # The unbounded form (tlen * lower) used to hang unrolling.
+        ["(?:.{90000,}){90000}", "(?:.{46341,}){46341}"].each do |src|
+          abort "unexpected match: #{src}" unless Regexp.new(src).match("x" * 10).nil?
+          puts "ok: #{src} compiled"
+        end
+        EOF
+        # A regressed compile can hang while growing memory. Ruby defers SIGTERM
+        # to an interrupt check that regexp compilation never reaches, so a
+        # plain timeout cannot stop it: use SIGKILL.
+        timeout -s KILL 60 ruby /tmp/regexp-cve-2026-97229.rb
+    - name: Regexp parser does not double free on invalid repeat ranges (ruby/ruby#13332)
+      runs: |
+        cat >/tmp/regexp-double-free.rb <<'EOF'
+        $stdout.sync = true
+        # A tokenizer error after "|" freed the first branch twice. One double
+        # free is silent under jemalloc (which ruby links), so repeat it until a
+        # duplicated free-list entry corrupts the heap; glibc aborts at once.
+        # The second Regexp.new reuses the freed nodes' size classes and is
+        # where the corruption surfaces: keep it.
+        10_000.times do |i|
+          begin
+            Regexp.new("|{2,1}")
+            abort "not rejected: |{2,1}"
+          rescue RegexpError => e
+            abort "wrong error for |{2,1}: #{e.message}" unless e.message.include?("upper is smaller than lower")
+          end
+          Regexp.new("(?:x#{i % 97}|y)+z")
+        end
+        puts "ok: |{2,1} rejected 10000 times without heap corruption"
+        EOF
+        timeout -s KILL 60 ruby /tmp/regexp-double-free.rb
+    - name: "Regexp parser does not leak on a compile error in a later alternation branch (ruby Bug #22384)"
+      runs: |
+        cat >/tmp/regexp-alternation-leak.rb <<'EOF'
+        $stdout.sync = true
+        # parse_subexp freed the alternation list but not the failed branch, so
+        # each such compile error, and every /(?:a|b)c(d)/.to_s, left parse
+        # nodes that were never freed (a resource leak, not an information
+        # leak): 300000 iterations grew RSS by ~77 MB.
+        def rss_kb = File.read("/proc/self/status")[/VmRSS:\s+(\d+)/, 1].to_i
+        code = proc do
+          Regexp.new("a|b(c") rescue nil
+          /(?:a|b)c(d)/.to_s
+        end
+        1_000.times(&code)
+        GC.start
+        before = rss_kb
+        300_000.times(&code)
+        GC.start
+        growth = rss_kb - before
+        abort "RSS grew #{growth} kB over 300000 failed compiles" if growth > 20_000
+        puts "ok: RSS grew #{growth} kB over 300000 failed compiles"
+        EOF
+        timeout -s KILL 120 ruby /tmp/regexp-alternation-leak.rb
+    - name: Time strftime zone width overflow (ruby/ruby#19457)
+      runs: |
+        cat >/tmp/strftime-zone.rb <<'EOF'
+        require 'rbconfig/sizeof'
+        # An INT_MAX width on the %z family overflowed the buffer size check and
+        # wrote the padding out of bounds; upstream now fails with ERANGE.
+        t = Time.at(0, in: 0)
+        max = RbConfig::LIMITS["INT_MAX"]
+        ["%#{max}z", "%#{max}:z", "%#{max}::z", "%#{max}:::z"].each do |fmt|
+          begin
+            t.strftime(fmt)
+            abort "not rejected: #{fmt}"
+          rescue Errno::ERANGE
+            puts "ok: #{fmt} -> ERANGE"
+          end
+        end
+        EOF
+        ruby /tmp/strftime-zone.rb
+    - name: CP50220 encoder output buffer overflow (ruby/ruby#18661)
+      runs: |
+        cat >/tmp/cp50220.rb <<'EOF'
+        # The encoder declared max_output 5 but a held-back katakana flushed by
+        # the next character writes 9 bytes; this used to abort the process with
+        # "[BUG] probable buffer overflow" or corrupt the heap.
+        ec = Encoding::Converter.new("CP51932", "CP50220")
+        src = "\x8E\xB6\x8E\xE0".b
+        dst = "\0" * 64
+        r = ec.primitive_convert(src, dst, 0, 8)
+        abort "first step: #{r.inspect}, #{dst.bytesize} bytes" unless r == :destination_buffer_full && dst.bytesize == 8
+        r = ec.primitive_convert(src, dst, 8, 8)
+        abort "second step: #{r.inspect}" unless r == :finished
+        want = "\e$B\x25\x2B\e(I\x60\e(B".b
+        abort "wrong output: #{dst.b.inspect}" unless dst.b == want
+        puts "ok: split CP50220 output #{dst.b.inspect}"
+        out = ("x" + "\uFF76a" * 158).encode("CP50220")
+        puts "ok: String#encode produced #{out.bytesize} bytes"
+        EOF
+        ruby /tmp/cp50220.rb
+    - name: sprintf %c width overflow (ruby/ruby#17221)
+      runs: |
+        cat >/tmp/sprintf-width.rb <<'EOF'
+        require 'rbconfig/sizeof'
+        # width + character length overflowed int and the result buffer was
+        # filled past its end; upstream now rejects the width.
+        max = RbConfig::LIMITS["INT_MAX"]
+        [["%*c", [max, 0x80]], ["%#{max}c", [233]], ["%-#{max}c", [233]]].each do |fmt, args|
+          begin
+            format(fmt, *args)
+            abort "not rejected: #{fmt}"
+          rescue ArgumentError => e
+            abort "wrong error for #{fmt}: #{e.message}" unless e.message =~ /width too big/
+            puts "ok: #{fmt} -> #{e.message}"
+          end
+        end
+        EOF
+        ruby /tmp/sprintf-width.rb
     - uses: test/tw/ldd-check

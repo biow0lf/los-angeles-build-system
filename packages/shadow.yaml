@@ -2,7 +2,7 @@
 package:
   name: shadow
   version: "4.20.3"
-  epoch: 0 # glibc: 2.43->2.44
+  epoch: 3 # upstream-tests/make-check
   description: PAM login and passwd utilities
   copyright:
     - license: BSD-3-Clause
@@ -117,6 +117,8 @@ pipeline:
 
       mv ${{targets.destdir}}/usr/sbin/* ${{targets.destdir}}/usr/bin
       rmdir ${{targets.destdir}}/usr/sbin
+
+  - uses: upstream-tests/make-check
 
 vars:
   login-utils: faillog lastlog login newgrp nologin sg su

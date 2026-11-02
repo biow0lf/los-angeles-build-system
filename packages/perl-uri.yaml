@@ -1,10 +1,16 @@
 package:
   name: perl-uri
-  version: "5.37"
-  epoch: 0
+  version: "5.40"
+  epoch: 2 # runtime dep on perl-mime-base32 (URI::otpauth uses it)
   description: Uniform Resource Identifiers (absolute and relative)
   copyright:
     - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+      # URI::otpauth does `use MIME::Base32`; it is a runtime requirement in
+      # the dist's Makefile.PL, not an optional one.
+      - perl-mime-base32
 
 environment:
   contents:
@@ -15,13 +21,17 @@ environment:
       - perl
       - perl-dev
       - perl-dist-zilla
+      - perl-mime-base32
+      # cpanfile test requirements, for upstream-tests/perl-make-test
+      - perl-test-needs
+      - perl-test-warnings
 
 pipeline:
   - uses: git-checkout
     with:
       repository: https://github.com/libwww-perl/URI.git
       tag: v${{package.version}}
-      expected-commit: 6d2f3303c308ac199641f262600067513edb082d
+      expected-commit: 53b059575dd3590e3bec09cefb0773531d3aee85
 
   - uses: perl/dzil
 
@@ -30,6 +40,8 @@ pipeline:
   - uses: autoconf/make
 
   - uses: autoconf/make-install
+
+  - uses: upstream-tests/perl-make-test
 
   - uses: perl/cleanup
 
@@ -83,4 +95,12 @@ test:
         die "Name is incorrect" unless $query{name} eq "John";
         die "Age is incorrect" unless $query{age} == 30;
         print "Query parameter parsing passed.\n";'
+    - name: Test URI::otpauth
+      runs: |
+        perl -MURI -e '
+        my $uri = URI->new("otpauth://totp/Example:alice\@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example");
+        die "Not a URI::otpauth: " . ref($uri) . "\n" unless $uri->isa("URI::otpauth");
+        die "Secret is incorrect\n" unless $uri->secret eq "Hello!\xde\xad\xbe\xef";
+        die "Issuer is incorrect\n" unless $uri->issuer eq "Example";
+        print "URI::otpauth parsing passed.\n";'
     - uses: test/no-docs

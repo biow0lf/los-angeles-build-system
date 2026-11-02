@@ -2,7 +2,7 @@
 package:
   name: perl-module-build
   version: "0.4234"
-  epoch: 10 # add tests
+  epoch: 12 # upstream-tests/perl-make-test
   description: Build and install Perl modules
   copyright:
     - license: GPL-1.0-or-later OR Artistic-1.0-Perl
@@ -39,6 +39,8 @@ pipeline:
   - uses: autoconf/make
 
   - uses: autoconf/make-install
+
+  - uses: upstream-tests/perl-make-test
 
   - uses: perl/cleanup
 

@@ -144,6 +144,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   squashfs-tools
 #   wlopm
 #   hyprpicker
+#   hyprlauncher
 
 packages=(
     7zip

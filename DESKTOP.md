@@ -160,6 +160,7 @@
 * hyprpaper
 * hyprland-protocols
 * hyprpicker
+* hyprlauncher
 * hyprland TODO
 
 ## Wayland utils

@@ -1,7 +1,9 @@
+# @biow0lf: remove gcc-14-default from build requires
+
 package:
   name: perl-yaml-syck
   version: "1.47"
-  epoch: 2 # glibc: 2.43->2.44
+  epoch: 4 # upstream-tests/perl-make-test
   description: Fast, lightweight YAML loader and dumper
   copyright:
     - license: MIT
@@ -17,11 +19,6 @@ environment:
       - build-base
       - busybox
       - ca-certificates-bundle
-      # Deviation from Wolfi's own recipe: same stale-major-version pin
-      # pattern as packages/libmnl.yaml's glibc fix -- we only maintain
-      # a single gcc stream (currently 16), which provides
-      # gcc-16-default (see packages/gcc.yaml), not gcc-14-default.
-      - gcc-16-default
       - glibc-2.44-dev
       - perl
       - perl-dev
@@ -42,6 +39,8 @@ pipeline:
       make
 
   - uses: autoconf/make-install
+
+  - uses: upstream-tests/perl-make-test
 
   - runs: find ${{targets.destdir}} \( -name perllocal.pod -o -name .packlist \) -delete
 

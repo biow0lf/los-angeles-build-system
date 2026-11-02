@@ -124,7 +124,6 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   umbriel
 #   unfriendly-devtools
 #   unfriendly-keys
-#   unix2dos
 #   vibez
 #   vlc
 #   vorbis-tools

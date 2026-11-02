@@ -147,6 +147,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   hyprlauncher
 #   hypridle
 #   hyprlock
+#   xdg-desktop-portal-hyprland
 
 packages=(
     7zip

@@ -167,6 +167,7 @@
 * hyprlauncher
 * hypridle
 * hyprlock
+* xdg-desktop-portal-hyprland
 * hyprland TODO
 
 ## Desktop

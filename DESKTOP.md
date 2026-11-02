@@ -166,6 +166,7 @@
 * hyprpicker
 * hyprlauncher
 * hypridle
+* hyprlock
 * hyprland TODO
 
 ## Desktop

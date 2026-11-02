@@ -145,6 +145,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   wlopm
 #   hyprpicker
 #   hyprlauncher
+#   hypridle
 
 packages=(
     7zip

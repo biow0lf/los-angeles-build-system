@@ -2,7 +2,7 @@
 package:
   name: perl-sub-exporter-progressive
   version: "0.001013"
-  epoch: 7 # go/wolfi-rsc/perl-sub-exporter-progressive
+  epoch: 9 # upstream-tests/perl-make-test
   description: Only use Sub::Exporter if you need it
   copyright:
     - license: GPL-1.0-or-later OR Artistic-1.0-Perl
@@ -40,6 +40,8 @@ pipeline:
   - uses: autoconf/make
 
   - uses: autoconf/make-install
+
+  - uses: upstream-tests/perl-make-test
 
   - uses: perl/cleanup
 

@@ -1,0 +1,68 @@
+package:
+  name: perl-devel-findperl
+  version: "0.016"
+  epoch: 6 # upstream-tests/perl-make-test
+  description: "Find the path to your perl"
+  copyright:
+    - license: GPL-1.0-or-later OR Artistic-1.0-Perl
+  dependencies:
+    runtime:
+      - perl
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - perl
+      - perl-dist-zilla
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/Leont/devel-findperl
+      tag: v${{package.version}}
+      expected-commit: c5d114aefd6bdc30dc2204c84af21bbe6977538d
+
+  - uses: perl/dzil
+
+  - uses: perl/make
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: upstream-tests/perl-make-test
+
+  - uses: perl/cleanup
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    pipeline:
+      - uses: split/alldocs
+    description: Documentation for ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+test:
+  pipeline:
+    - uses: test/no-docs
+    - name: Smoke test
+      runs: |
+        expected_perl="$(command -v perl)"
+        cat >test.pl <<TESTEOF
+        use Devel::FindPerl qw(find_perl_interpreter);
+        use Test::More tests => 1;
+        ok(find_perl_interpreter() eq "$expected_perl", 'Smoke test passed');
+        TESTEOF
+        perl test.pl
+
+update:
+  enabled: true
+  github:
+    identifier: Leont/devel-findperl
+    strip-prefix: v
+    tag-filter-prefix: v
+    use-tag: true

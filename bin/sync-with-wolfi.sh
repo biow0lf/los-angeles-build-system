@@ -580,9 +580,10 @@ packages=(
     perl-data-optlist
     perl-data-section
     perl-date-format
+    perl-datetime
     perl-datetime-locale
     perl-datetime-timezone
-    perl-datetime
+    perl-devel-findperl
     perl-devel-globaldestruction
     perl-devel-overloadinfo
     perl-devel-ppport

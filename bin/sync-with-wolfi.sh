@@ -143,6 +143,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   yt-dlp
 #   squashfs-tools
 #   wlopm
+#   hyprpicker
 
 packages=(
     7zip

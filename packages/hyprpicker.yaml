@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: hyprpicker
+  version: 0.4.8
+  epoch: 0
+  description: "A wlroots-compatible Wayland color picker"
+  url: https://github.com/hyprwm/hyprpicker
+  copyright:
+    - license: "BSD-3"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - wayland-dev
+      - wayland-protocols-dev
+      - cairo-dev
+      - pango-dev
+      - hyprutils-dev
+      - hyprwayland-scanner
+      - libjpeg-turbo-dev
+      - libxkbcommon-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/hyprwm/hyprpicker
+      tag: v${{package.version}}
+      expected-commit: 838147963f8c2a22b60a455b2ccc02b5aa4a7b98
+
+  - uses: cmake/configure
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip

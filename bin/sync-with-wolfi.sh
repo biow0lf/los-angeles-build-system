@@ -148,6 +148,13 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   hypridle
 #   hyprlock
 #   xdg-desktop-portal-hyprland
+#   hyprsysteminfo
+#   hyprsunset
+#   hyprpolkitagent
+#   hyprland-qt-support
+#   hyprqt6engine
+#   hyprpwcenter
+#   hyprshutdown
 
 packages=(
     7zip

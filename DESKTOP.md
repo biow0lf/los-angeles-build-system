@@ -168,6 +168,13 @@
 * hypridle
 * hyprlock
 * xdg-desktop-portal-hyprland
+* hyprsysteminfo TODO
+* hyprsunset
+* hyprpolkitagent TODO
+* hyprland-qt-support TODO
+* hyprqt6engine TODO
+* hyprpwcenter TODO
+* hyprshutdown
 * hyprland TODO
 
 ## Desktop

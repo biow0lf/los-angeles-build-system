@@ -116,6 +116,7 @@
 * fd
 * starship
 * pwgen
+* moor TODO
 
 ## X11
 
@@ -136,11 +137,15 @@
 * wayland
 * wayland-protocols
 * wlroots 0.20.2
+* mangowm
+* labwc
+
+## Wayland with Noctalia Shell
+
 * noctalia
 * noctalia-greeter TODO
 * umbriel
-* mangowm
-* labwc
+* xdg-desktop-portal-umbriel
 
 ## Wayland with Hyprland
 
@@ -154,6 +159,7 @@
 * hyprtoolkit
 * hyprpaper
 * hyprland-protocols
+* hyprpicker
 * hyprland TODO
 
 ## Wayland utils
@@ -178,3 +184,4 @@
 * abi-dumper
 * abi-compliance-checker
 * vtable-dumper
+* onefetch TODO

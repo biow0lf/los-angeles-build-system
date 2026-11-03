@@ -1,0 +1,35 @@
+diff -urN harfbuzz-15.0.0/src/hb.hh harfbuzz/src/hb.hh
+--- harfbuzz-15.0.0/src/hb.hh	2026-11-03 17:13:50.495681919 +0100
++++ harfbuzz/src/hb.hh	2026-11-03 17:21:34.199533311 +0100
+@@ -29,6 +29,12 @@
+ #ifndef HB_HH
+ #define HB_HH
+ 
++/* Avoid a libstdc++ runtime dependency in unoptimized builds. */
++#undef _GLIBCXX_ASSERTIONS
++#ifndef _GLIBCXX_NO_ASSERTIONS
++#define _GLIBCXX_NO_ASSERTIONS
++#endif
++
+ #ifndef HB_NO_PRAGMA_GCC_DIAGNOSTIC
+ #ifdef _MSC_VER
+ #pragma warning( disable: 4068 ) /* Unknown pragma */
+diff -urN harfbuzz-15.0.0/src/test-vector.cc harfbuzz/src/test-vector.cc
+--- harfbuzz-15.0.0/src/test-vector.cc	2026-11-03 17:13:50.498951921 +0100
++++ harfbuzz/src/test-vector.cc	2026-11-03 17:21:58.889878042 +0100
+@@ -23,11 +23,14 @@
+  *
+  */
+ 
++/* Include before hb.hh so libstdc++'s inline string implementations remain
++ * available for MemorySanitizer instrumentation. */
++#include <string>
++
+ #include "hb.hh"
+ #include "hb-vector.hh"
+ #include "hb-set.hh"
+ #include "hb-map.hh"
+-#include <string>
+ 
+ 
+ int

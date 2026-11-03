@@ -1,7 +1,9 @@
+# @biow0lf: fix build
+
 package:
   name: harfbuzz
   version: "15.0.0"
-  epoch: 2 # upstream-tests/meson-test
+  epoch: 3 # so:libicuuc.so.78
   description: Text shaping library
   copyright:
     - license: MIT
@@ -40,6 +42,11 @@ pipeline:
       repository: https://github.com/harfbuzz/harfbuzz
       expected-commit: 35f656a1a2bab548ea7f54a6dd3fba2b09680d14
       tag: ${{package.version}}
+
+  # https://github.com/harfbuzz/harfbuzz/pull/6534/changes
+  - uses: patch
+    with:
+      patches: 6534.patch
 
   # oldglibc has redundant declarations, which is harmless
   - runs: |

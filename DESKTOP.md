@@ -65,7 +65,7 @@
 * diffutils
 * findutils
 * groff
-* grub TODO
+* grub
 * gzip
 * iproute2
 * kbd

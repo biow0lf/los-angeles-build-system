@@ -173,7 +173,7 @@
 * hyprpolkitagent TODO
 * hyprland-qt-support TODO
 * hyprqt6engine TODO
-* hyprpwcenter TODO
+* hyprpwcenter
 * hyprshutdown
 * hyprland TODO
 

@@ -1,6 +1,6 @@
 package:
   name: dysk
-  version: 3.8.1
+  version: 3.8.2
   epoch: 0
   description: "A linux utility to get information on filesystems"
   url: https://dystroy.org/dysk/
@@ -18,7 +18,7 @@ pipeline:
     with:
       repository: https://github.com/Canop/dysk
       tag: v${{package.version}}
-      expected-commit: c002b844cfc33d56aaa7a4c46b80b033b07e0dee
+      expected-commit: 990df3edc2a1312d2f943064f605025a45691c55
 
   - uses: cargo/build
     with:

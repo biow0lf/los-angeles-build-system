@@ -154,6 +154,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   hyprqt6engine
 #   hyprpwcenter
 #   hyprshutdown
+#   elementary-wallpapers
 
 packages=(
     7zip

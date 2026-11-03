@@ -4,7 +4,7 @@
 package:
   name: hyprlauncher
   version: 0.1.7
-  epoch: 0
+  epoch: 1 # so:libicuuc.so.78
   description: "A multipurpose and versatile launcher / picker for Hyprland"
   url: https://github.com/hyprwm/hyprlauncher
   copyright:

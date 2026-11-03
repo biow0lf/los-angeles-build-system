@@ -2,7 +2,7 @@
 package:
   name: libical
   version: "4.0.7"
-  epoch: 0 # rebuild
+  epoch: 1 # so:libicuuc.so.78
   description: Reference implementation of the iCalendar format
   copyright:
     - license: LGPL-2.1-only OR MPL-2.0

@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: grub
+  version: 2.14
+  epoch: 0
+  description: "The GRUB package contains the GRand Unified Bootloader."
+  url: https://www.gnu.org/software/grub/
+  copyright:
+    - license: GPL-3.0-or-later
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - bison
+      - flex
+      - python-3.13
+      - gettext-dev
+      - gawk
+      - help2man
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://ftpmirror.gnu.org/grub/grub-2.14.tar.xz
+      expected-sha256: bc8d3c73535b8838d8c8e2654d73edc4e6ae8c8acdb45d5df5dc9a1547446d43
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --prefix=/usr \
+        --sbindir=/usr/bin \
+        --sysconfdir=/etc \
+        --target=x86_64 \
+        --with-platform=efi \
+        --disable-efiemu \
+        --disable-werror
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip

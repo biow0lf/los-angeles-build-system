@@ -155,6 +155,9 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   hyprpwcenter
 #   hyprshutdown
 #   elementary-wallpapers
+#   moor
+#   neohtop
+#   onefetch
 
 packages=(
     7zip
@@ -165,6 +168,7 @@ packages=(
     actionlint
     alsa-lib
     aom
+    apache-arrow
     apk-tools
     apko
     argon2
@@ -204,6 +208,7 @@ packages=(
     cargo-auditable
     cargo-c
     cdparanoia
+    ceph-20
     check
     chezmoi
     chrpath
@@ -221,6 +226,7 @@ packages=(
     curl
     cyrus-sasl-heimdal
     cython-0
+    dart
     dash
     dav1d
     db
@@ -232,6 +238,7 @@ packages=(
     dns-root-hints
     dnssec-root
     docbook-xml
+    docker-29
     dosfstools
     doxygen
     dua
@@ -251,6 +258,8 @@ packages=(
     fig2dev
     file
     findutils
+    firefox
+    fish
     flac
     flex
     fluxbox
@@ -260,6 +269,7 @@ packages=(
     font-xorg-dirs
     fontconfig
     fontforge
+    freerdp-3
     freetype
     fribidi
     fstrm
@@ -296,6 +306,7 @@ packages=(
     go-1.27
     gobject-introspection
     gperf
+    gperftools
     gpgme
     gptfdisk
     graphene
@@ -303,6 +314,7 @@ packages=(
     graphviz
     grep
     groff
+    grpc-1.85
     gsl
     gst-plugins-bad
     gst-plugins-base
@@ -320,6 +332,7 @@ packages=(
     help2man
     hicolor-icon-theme
     highway
+    howdy-yall
     htop
     hunspell
     hwdata
@@ -519,6 +532,7 @@ packages=(
     nasm
     ncurses
     neovim
+    netcat-openbsd
     nettle
     nfs-utils
     nftables
@@ -529,12 +543,16 @@ packages=(
     nlohmann-json
     npth
     nss
+    nss-mdns
+    nushell
     ocaml-findlib
     ocaml-num
     ocaml
     ocamlbuild
+    ollama
     omnibump
     oniguruma
+    opam
     openbox
     opencore-amr
     openh264
@@ -829,12 +847,16 @@ packages=(
     python-3.12
     python-3.13
     python-3.14
+    python-3.15
+    qemu
+    qt6-qtbase
     quota-tools
     rav1e
     rdfind
     re2
     readline
     rhash
+    ripgrep
     rsync
     ruby-3.4
     ruby-4.0

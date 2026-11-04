@@ -1,11 +1,12 @@
 # @biow0lf: add bash-completion to build requires
 # @biow0lf: build with -Dnls=true
 # @biow0lf: add gettext-dev to build requires
+# @biow0lf: TODO: install powertop.service
 
 package:
   name: powertop
   version: "2.16.1"
-  epoch: 1
+  epoch: 2
   description: "Power consumption monitor"
   copyright:
     - license: GPL-2.0-only

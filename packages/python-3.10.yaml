@@ -1,8 +1,10 @@
+# @biow0lf: use openssl-4.0-dev
+
 #nolint:depends-on-unversioned-py-provides
 package:
   name: python-3.10
   version: "3.10.22"
-  epoch: 3
+  epoch: 6 # run upstream regrtest subset via shared pipeline
   description: "the Python programming language"
   copyright:
     - license: PSF-2.0
@@ -81,6 +83,8 @@ pipeline:
         0008-Fix-typo-in-PROTOCOL_TO_TLS_VERSION-in-test_ssl-GH-9.patch
         0009-Allow-HelloRetryRequest-in-test_ssl-servername-callb.patch
         0010-Always-provide-PROTOCOL_TLSv1-and-fix-HAS_TLSv1_2-wi.patch
+        0011-gh-136929-ensure-that-hashlib.-name-does-not-raise-A.patch
+        0012-gh-110357-hashlib-no-longer-logs-at-import-when-a-gu.patch
 
   - uses: autoconf/configure
     with:
@@ -105,6 +109,17 @@ pipeline:
   - uses: autoconf/make
 
   - uses: autoconf/make-install
+
+  # Named exceptions:
+  # - test_hashlib.test_builtins_in_openssl_fips_mode comes from our
+  #   gh-127301 backport and assumes all builtin hash modules are compiled
+  #   in, but we build with --with-builtin-hashlib-hashes=blake2.
+  # - test_ssl.test_dh_params calls set_ciphers("kEDH"), which our OpenSSL
+  #   rejects ("No cipher can be selected"); does not fail on 3.12+.
+  # TODO(upstream-tests): fix/backport both tests and drop the ignores.
+  - uses: upstream-tests/python-regrtest
+    with:
+      ignore: '*.test_builtins_in_openssl_fips_mode *.test_dh_params'
 
   - runs: |
       find ${{targets.destdir}}/usr/lib -type f -name 'libpython*.a' -exec rm -rf '{}' +

@@ -3,8 +3,8 @@
 
 package:
   name: linux-zen
-  version: 7.2.14
-  epoch: 0 # rebuild 2
+  version: 7.2.15
+  epoch: 0
   description: Linux ZEN
   url: https://github.com/zen-kernel/zen-kernel
   copyright:
@@ -43,14 +43,14 @@ environment:
 pipeline:
   - uses: fetch
     with:
-      uri: https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.14.tar.xz
-      expected-sha256: bb1b871ef95a8de10b3f7b7baf0e0d754abbf620f804b6caf860f226aa97647d
+      uri: https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.15.tar.xz
+      expected-sha256: d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab
       extract: false
 
   - uses: fetch
     with:
-      uri: https://github.com/zen-kernel/zen-kernel/releases/download/v7.2.14-zen1/linux-v7.2.14-zen1.patch.zst
-      expected-sha256: a94435f2286711c14e2bdf14e9d95f7c4824b7eddb7d31a8250578d1943c1a6e
+      uri: https://github.com/zen-kernel/zen-kernel/releases/download/v7.2.15-zen1/linux-v7.2.15-zen1.patch.zst
+      expected-sha256: 71b372e3256d546ebaa5d39f564be397f3a75a6e0d4c997d676b9a285700c9fe
       extract: false
 
   - runs: |
@@ -80,8 +80,6 @@ pipeline:
 
       tar xf linux-7.2.14.tar.xz
 
-      pwd
-
       pushd linux-7.2.14
         zstdcat ../linux-v7.2.14-zen1.patch.zst | patch -p1
 
@@ -97,11 +95,7 @@ pipeline:
 
         echo "Prepared linux-zen version $(<version)"
 
-        # make all V=1
-
         make all -j$(nproc)
-
-        # make install V=1 DESTDIR=${{targets.destdir}}
 
         mkdir -p "${{targets.destdir}}/usr/lib/modules"
         mkdir -p "${{targets.destdir}}/boot"
@@ -110,11 +104,11 @@ pipeline:
 
         make modules_install INSTALL_MOD_PATH="${{targets.destdir}}" INSTALL_MOD_STRIP=1
 
-        cp arch/x86/boot/bzImage "${{targets.destdir}}/boot/vmlinuz-7.2.14-zen1"
-        cp System.map "${{targets.destdir}}/boot/System.map-7.2.14-zen1"
-        cp .config "${{targets.destdir}}/boot/config-7.2.14-zen1"
+        cp arch/x86/boot/bzImage "${{targets.destdir}}/boot/vmlinuz-7.2.15-zen1"
+        cp System.map "${{targets.destdir}}/boot/System.map-7.2.15-zen1"
+        cp .config "${{targets.destdir}}/boot/config-7.2.15-zen1"
 
-        rm -f "${{targets.destdir}}/lib/modules/7.2.14-zen1/build"
+        rm -f "${{targets.destdir}}/lib/modules/7.2.15-zen1/build"
 
         rm -f "${{targets.destdir}}/lib"
       popd

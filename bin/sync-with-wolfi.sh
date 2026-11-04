@@ -883,6 +883,7 @@ packages=(
     tree-sitter
     tree
     ttf-dejavu
+    tw
     tzdata
     undock
     unibilium

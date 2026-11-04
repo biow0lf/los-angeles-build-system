@@ -1,0 +1,396 @@
+package:
+  name: tw
+  version: "0.0.56"
+  epoch: 0
+  description: Testing tools
+  options:
+    no-provides: true
+  copyright:
+    - license: Apache-2.0
+
+environment:
+  environment:
+    GOMODCACHE: /var/cache/melange
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - go-1.27
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/chainguard-dev/tw
+      tag: v${{package.version}}
+      expected-commit: 718c30643664c0e839abd575cc22b5b9d32830c1
+
+  # Make the tw binary in the main package so we don't end up with `tw-tw`
+  - runs: |
+      make -C tw MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+
+  - uses: strip
+
+subpackages:
+  - name: twt
+    options:
+      no-provides: true
+    pipeline:
+      - runs: |
+          install -Dm755 tw/bin/twt ${{targets.contextdir}}/usr/bin/twt
+      - uses: strip
+    test:
+      pipeline:
+        - runs: stat /usr/bin/twt
+
+  - name: ldd-check
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - apk-tools
+        - busybox
+        - posix-libc-utils
+    pipeline:
+      - runs: |
+          make -C ldd-check MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/ldd-check ]
+            [ -x /usr/bin/ldd-check ]
+
+  - name: tw-pip-check
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - busybox
+        - pip-zipapp
+    pipeline:
+      - runs: |
+          make -C tw-pip-check MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/tw-pip-check ]
+            [ -x /usr/bin/tw-pip-check ]
+
+  # The runner behind stereo's upstream-tests/pytest pipelines. pytest is
+  # not a dependency: callers add pyX.Y-pytest (and pyX.Y-pytest-timeout
+  # for a per-test timeout) for the python they test.
+  - name: tw-upstream-pytest
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - busybox
+    pipeline:
+      - runs: |
+          make -C tw-upstream-pytest MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      environment:
+        contents:
+          packages:
+            # every supported python3.X, each with its pytest and
+            # pytest-timeout (the default --timeout needs it)
+            - py3-supported-pytest
+            - py3-supported-pytest-timeout
+            - py3-supported-python
+      pipeline:
+        - name: files and interface version
+          runs: |
+            [ -x /usr/bin/tw-upstream-pytest ]
+            for f in upstream_tests_pytest.py run_pytest.py run_unittest.py ini.py report.py snapshot.py ut_netns.py; do
+              [ -f /usr/libexec/tw/upstream-pytest/$f ]
+            done
+            tw-upstream-pytest --help
+            tw-upstream-pytest --version | grep -q '^tw-upstream-pytest contract [0-9]'
+        - name: a passing and a failing suite, per python version
+          runs: |
+            n=0
+            for py in /usr/bin/python3.[0-9] /usr/bin/python3.[0-9][0-9]; do
+              # py3-supported-pytest covers the supported versions only
+              [ -x "$py" ] && "$py" -c 'import pytest, pytest_timeout' 2>/dev/null || continue
+              n=$((n + 1))
+              for want in pass fail; do
+                ws=$(mktemp -d)
+                mkdir -p "$ws/tests" "$ws/demo"
+                echo 'def add(a, b): return a + b' > "$ws/demo/__init__.py"
+                printf 'import demo\ndef test_add():\n    assert demo.add(1, 2) == 3\n' > "$ws/tests/test_demo.py"
+                [ $want = fail ] && printf 'def test_fail():\n    assert False\n' >> "$ws/tests/test_demo.py"
+                sp=$($py -c 'import site; print(site.getsitepackages()[0])')
+                dest="$ws/melange-out/demo"
+                mkdir -p "$dest$sp"
+                cp -R "$ws/demo" "$dest$sp/"
+                rc=0
+                (cd "$ws" && tw-upstream-pytest --name demo --stage build --destdir "$dest" --python $py) > "$ws/log" 2>&1 || rc=$?
+                cat "$ws/log"
+                if [ $want = pass ]; then
+                  [ $rc -eq 0 ]
+                  grep -q '^UPSTREAM-TESTS demo: pass=1 fail=0 skip=0$' "$ws/log"
+                else
+                  [ $rc -eq 1 ]
+                  grep -q '^UPSTREAM-TESTS-FAIL demo: tests/test_demo.py::test_fail$' "$ws/log"
+                  grep -q '^UPSTREAM-TESTS demo: FAILED: ' "$ws/log"
+                fi
+                rm -rf "$ws"
+              done
+            done
+            echo "tested with $n python versions"
+            [ $n -ge 2 ]
+
+  - name: gem-check
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - apk-tools
+        - busybox
+    pipeline:
+      - runs: |
+          make -C gem-check MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/gem-check ]
+            [ -x /usr/bin/gem-check ]
+
+  - name: header-check
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - apk-tools
+        - autoconf
+        - build-base
+        - busybox
+    pipeline:
+      - runs: |
+          make -C header-check MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/header-check ]
+            [ -x /usr/bin/header-check ]
+
+  - name: syspeek
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - binutils
+        - linux-headers
+        - posix-libc-utils
+    pipeline:
+      - runs: |
+          make -C syspeek-tool MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/syspeek ]
+            [ -x /usr/bin/syspeek ]
+
+  - name: ver-check
+    dependencies:
+      runtime:
+        - busybox
+    pipeline:
+      - runs: |
+          make -C ver-check MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/ver-check ]
+            [ -x /usr/bin/ver-check ]
+
+  - name: help-check
+    dependencies:
+      runtime:
+        - busybox
+    pipeline:
+      - runs: |
+          make -C help-check MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/help-check ]
+            [ -x /usr/bin/help-check ]
+
+  - name: package-type-check
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - busybox
+        - man-db
+        - texinfo
+    pipeline:
+      - runs: |
+          make -C package-type-check MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/package-type-check ]
+            [ -x /usr/bin/package-type-check ]
+
+  - name: usrmerge-tool
+    options:
+      no-provides: true
+    pipeline:
+      - runs: |
+          make -C usrmerge-tool MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: usrmerge-tool
+
+  - name: gosh
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - go-test2json
+    pipeline:
+      - runs: |
+          make -C gosh MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/gosh ]
+            [ -x /usr/bin/gosh ]
+            [ -x /usr/bin/goshr ]
+            [ -f /usr/bin/goshr ]
+            [ -f /usr/bin/gt ]
+            [ -x /usr/bin/gt ]
+        - runs: |
+            cat > /tmp/pass.sh <<EOF
+            #!/usr/bin/env gosh
+            gt_success() {
+                echo "this is going to pass"
+            }
+            EOF
+
+            chmod +x /tmp/pass.sh
+            /tmp/pass.sh
+
+            cat > /tmp/fail.sh <<EOF
+            #!/usr/bin/env gosh
+            gt_fail() {
+                echo "this test is going to fail"
+                cat foo
+            }
+            EOF
+
+            chmod +x /tmp/fail.sh
+            ! /tmp/fail.sh
+
+  - name: verify-service
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - apk-tools
+        - grep
+        - systemd
+    pipeline:
+      - runs: |
+          make -C verify-service MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/verify-service ]
+            [ -x /usr/bin/verify-service ]
+
+  - name: symlink-check
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - busybox
+    pipeline:
+      - runs: |
+          make -C symlink-check MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/symlink-check ]
+            [ -x /usr/bin/symlink-check ]
+
+  - name: soversion-check
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - busybox
+    pipeline:
+      - runs: |
+          make -C soversion-check MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/soversion-check ]
+            [ -x /usr/bin/soversion-check ]
+
+  - name: no-docs-check
+    options:
+      no-provides: true
+    dependencies:
+      runtime:
+        - busybox
+    pipeline:
+      - runs: |
+          make -C no-docs-check MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+    test:
+      pipeline:
+        - runs: |
+            [ -f /usr/bin/no-docs-check ]
+            [ -x /usr/bin/no-docs-check ]
+
+  - name: chelm
+    options:
+      no-provides: true
+    pipeline:
+      - runs: |
+          make -C chelm MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/help-check
+          with:
+            bins: chelm
+
+# TODO: I'd like to do this, but until we can dynamically generate the dependencies, we need to manually set them
+# data:
+#   - name: bins
+#     items:
+#       ldd-check:
+#       usrmerge-tool:
+#
+# subpackages:
+#   - range: bins
+#     name: ${{package.name}}-${{range.key}}
+#     options:
+#       no-provides: true
+#     pipeline:
+#       - runs: |
+#           make -C ${{range.key}} MELANGE_CONTEXTDIR=${{targets.contextdir}} melange-install
+update:
+  enabled: true
+  github:
+    identifier: chainguard-dev/tw
+    strip-prefix: v
+
+test:
+  pipeline:
+    - runs: stat /usr/bin/tw
+    - runs: |
+        readlink -v /usr/bin/kgrep
+        readlink -v /usr/bin/kimages
+        readlink -v /usr/bin/ptrace
+        readlink -v /usr/bin/sfuzz
+        readlink -v /usr/bin/shu
+        readlink -v /usr/bin/wassert

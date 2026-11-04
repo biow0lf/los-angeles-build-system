@@ -866,6 +866,7 @@ packages=(
     starship
     startup-notification
     strace
+    stunnel
     subunit
     sudo
     svt-av1

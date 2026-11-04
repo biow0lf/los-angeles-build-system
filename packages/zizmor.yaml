@@ -1,0 +1,104 @@
+package:
+  name: zizmor
+  version: "1.31.1"
+  epoch: 3 # GHSA-c8m5-c952-6cm4
+  description: "A static analysis tool for GitHub Actions"
+  copyright:
+    - license: MIT
+  resources:
+    cpu: "7"
+    memory: 13Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  rust-version: "1.99"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - cargo-auditable
+      - glibc-2.44
+      - glibc-2.44-dev
+      - rust-${{vars.rust-version}}
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/woodruffw/zizmor
+      expected-commit: effdb35fa7868863f11655db256d9008922fa427
+      tag: v${{package.version}}
+
+  # bump for Rust used to proactively bump more dependencies than strictly
+  # required but doesn't any longer: this stanza ensures we maintain the
+  # baseline from the last package built with that old behaviour
+  - name: Bumps to maintain pre-existing baseline
+    uses: bump
+    with:
+      language: rust
+      deps: |-
+        bitflags@2.13.1
+        bytes@1.12.1
+        deranged@0.5.8
+        h2@0.4.15
+        http-body-util@0.1.4
+        http-body@1.1.0
+        hyper-rustls@0.27.9
+        hyper-util@0.1.20
+        hyper@1.10.1
+        num-conv@0.2.2
+        rustls@0.23.34=0.23.45
+        rustls-platform-verifier@0.7.0
+        time-core@0.1.9
+        time@0.3.53
+        tokio-util@0.7.18
+        tower-http@0.6.11
+        tower@0.5.3
+        rustls@0.23.46
+
+  - uses: cargo/build
+    with:
+      output: ${{package.name}}
+
+  - uses: upstream-tests/cargo-test
+
+  - uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: woodruffw/zizmor
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: zizmor
+    - uses: test/tw/help-check
+      with:
+        bins: zizmor
+    - name: functional test - analyze a workflow file
+      runs: |
+        mkdir -p /tmp/test-repo/.github/workflows
+        # Create a workflow with a known issue: unpinned action reference
+        cat > /tmp/test-repo/.github/workflows/unpinned.yml <<'EOF'
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@main
+              - name: Run tests
+                run: echo "hello"
+        EOF
+        # zizmor should detect the unpinned action and exit non-zero
+        zizmor --no-progress /tmp/test-repo/.github/workflows/unpinned.yml > /tmp/zizmor-output.txt 2>&1 && rc=0 || rc=$?
+        cat /tmp/zizmor-output.txt
+        # Verify zizmor exited non-zero (findings detected, not a crash or missing binary)
+        [ "$rc" -ne 0 ] || { echo "Expected zizmor to report findings but it exited 0"; exit 1; }
+        grep -F "unpinned-uses" /tmp/zizmor-output.txt

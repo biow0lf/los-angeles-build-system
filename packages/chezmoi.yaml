@@ -1,9 +1,8 @@
 package:
   name: chezmoi
-  version: "2.73.2"
-  epoch: 0 # CVE-2026-78659
+  version: "2.73.3"
+  epoch: 1 # upstream-tests/go-test
   description: Manage your dotfiles across multiple diverse machines, securely.
-  url: https://chezmoi.io/
   copyright:
     - license: MIT
   resources:
@@ -27,7 +26,7 @@ pipeline:
     with:
       repository: https://github.com/twpayne/chezmoi
       tag: v${{package.version}}
-      expected-commit: 54c760f1c2e9f6612d8615bef2e50abaf8fa5ef7
+      expected-commit: 63093ac0e26e803817ced0e2184cb57c4f273388
 
   - uses: bump
     with:
@@ -47,6 +46,8 @@ pipeline:
         -X main.buildSource=wolfiRelease
       output: chezmoi
       go-package: go-1.27
+
+  - uses: upstream-tests/go-test
 
 update:
   enabled: true

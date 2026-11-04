@@ -118,8 +118,8 @@ jobs:
       matrix:
         package: ${{ fromJson(needs.discover.outputs.packages) }}
     steps:
-      # - name: Maximize build space
-      #   uses: ublue-os/remove-unwanted-software@v9
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@v9
 
       - uses: actions/checkout@v7
 

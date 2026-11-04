@@ -1,7 +1,11 @@
+# @biow0lf: add bash-completion to build requires
+# @biow0lf: build with -Dnls=true
+# @biow0lf: add gettext-dev to build requires
+
 package:
   name: powertop
   version: "2.16.1"
-  epoch: 0 # glibc: 2.43->2.44
+  epoch: 1
   description: "Power consumption monitor"
   copyright:
     - license: GPL-2.0-only
@@ -13,14 +17,15 @@ package:
     cpu: "1"
     memory: 5Gi
 
-# TODO: bash-completion
 environment:
   contents:
     packages:
       - build-base
+      - bash-completion
       - busybox
       - ca-certificates-bundle
       - glibc-2.44-dev
+      - gettext-dev
       - libnl3-dev
       - libtracefs-dev
       - linux-headers
@@ -49,7 +54,8 @@ pipeline:
   - uses: meson/configure
     with:
       opts: |
-        -Dnls=false
+        -Db_lto=true \
+        -Dnls=true
 
   - uses: meson/compile
 

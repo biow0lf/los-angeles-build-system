@@ -1,7 +1,13 @@
+# @biow0lf: use openssl-4.0-dev
+# @biow0lf: --enable-nls
+# @biow0lf: use git mirror
+# @biow0lf: build without --enable-single-binary=symlinks
+# @biow0lf: disable "upstream-tests/make-check"
+
 package:
   name: coreutils
   version: "9.12"
-  epoch: 5
+  epoch: 7 # set provider priority
   description: "GNU core utilities"
   copyright:
     - license: GPL-3.0-or-later
@@ -10,6 +16,7 @@ package:
       #!/usr/bin/busybox sh
       /usr/bin/busybox --install -s
   dependencies:
+    provider-priority: 100
     runtime:
       - merged-bin
       - merged-usrsbin
@@ -67,6 +74,7 @@ pipeline:
          --sysconfdir=/etc \
          --mandir=/usr/share/man \
          --infodir=/usr/share/info \
+         --enable-nls \
          --enable-no-install-program=hostname,su,kill,uptime,groups \
          --with-openssl=auto-gpl-compat \
          --with-selinux
@@ -96,6 +104,7 @@ subpackages:
       pipeline:
         - uses: test/tw/docs
     dependencies:
+      provider-priority: 100
       runtime:
         - merged-bin
         - merged-usrsbin
@@ -109,6 +118,7 @@ subpackages:
           mv "${{targets.destdir}}"/usr/bin/md5sum "${{targets.subpkgdir}}"/usr/bin
           mv "${{targets.destdir}}"/usr/bin/sha1sum "${{targets.subpkgdir}}"/usr/bin
     dependencies:
+      provider-priority: 100
       runtime:
         - merged-bin
         - merged-usrsbin

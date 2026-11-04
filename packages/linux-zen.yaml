@@ -78,10 +78,10 @@ pipeline:
       openssl --version
       kmod --version
 
-      tar xf linux-7.2.14.tar.xz
+      tar xf linux-${{package.version}}.tar.xz
 
-      pushd linux-7.2.14
-        zstdcat ../linux-v7.2.14-zen1.patch.zst | patch -p1
+      pushd linux-${{package.version}}
+        zstdcat ../linux-v${{package.version}}-zen1.patch.zst | patch -p1
 
         echo "Setting config..."
 
@@ -104,11 +104,11 @@ pipeline:
 
         make modules_install INSTALL_MOD_PATH="${{targets.destdir}}" INSTALL_MOD_STRIP=1
 
-        cp arch/x86/boot/bzImage "${{targets.destdir}}/boot/vmlinuz-7.2.15-zen1"
-        cp System.map "${{targets.destdir}}/boot/System.map-7.2.15-zen1"
-        cp .config "${{targets.destdir}}/boot/config-7.2.15-zen1"
+        cp arch/x86/boot/bzImage "${{targets.destdir}}/boot/vmlinuz-${{package.version}}-zen1"
+        cp System.map "${{targets.destdir}}/boot/System.map-${{package.version}}-zen1"
+        cp .config "${{targets.destdir}}/boot/config-${{package.version}}-zen1"
 
-        rm -f "${{targets.destdir}}/lib/modules/7.2.15-zen1/build"
+        rm -f "${{targets.destdir}}/lib/modules/${{package.version}}-zen1/build"
 
         rm -f "${{targets.destdir}}/lib"
       popd

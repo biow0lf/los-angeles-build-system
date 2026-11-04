@@ -2,7 +2,7 @@
 package:
   name: libxml2
   version: "2.15.4"
-  epoch: 0 # glibc: 2.43->2.44
+  epoch: 1 # glibc: 2.43->2.44
   description: XML parsing library, version 2
   copyright:
     - license: MIT
@@ -37,14 +37,7 @@ environment:
       - doxygen
       - glibc-2.44-dev
       - libtool
-      # Deviation from Wolfi's own recipe: dropped "libxslt" here and
-      # changed --with-docs to --without-docs below. libxslt itself
-      # needs libxml2-dev to build, which would make this a genuine
-      # circular dependency with no existing apk to break it (unlike
-      # Wolfi, who already has a historical libxml2 build to bootstrap
-      # from). Disabling --with-docs drops the xsltproc-based doc
-      # generation that pulled libxslt in, which is enough to break the
-      # cycle. Revisit once libxslt is self-hosted.
+      - libxslt
       - pkgconf-dev
       - python3-dev
       - xz-dev
@@ -70,7 +63,7 @@ pipeline:
         --with-lzma \
         --with-zlib \
         --with-python \
-        --without-docs
+        --with-docs
 
   - uses: autoconf/make
 
@@ -129,12 +122,7 @@ subpackages:
       - runs: |
           mkdir -p ${{targets.subpkgdir}}/usr/share/
           mkdir -p ${{targets.subpkgdir}}/usr/share/doc
-          # Deviation from Wolfi's own recipe: with --without-docs (see
-          # above), this HTML doc tree is never generated, so skip the
-          # move rather than fail.
-          if [ -d ${{targets.destdir}}/usr/share/doc/libxml2 ]; then
-            mv ${{targets.destdir}}/usr/share/doc/libxml2 ${{targets.subpkgdir}}/usr/share/doc/libxml2
-          fi
+          mv ${{targets.destdir}}/usr/share/doc/libxml2 ${{targets.subpkgdir}}/usr/share/doc/libxml2
     description: ${{package.name}} manpages
     test:
       pipeline:

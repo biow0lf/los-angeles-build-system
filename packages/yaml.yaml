@@ -2,7 +2,7 @@
 package:
   name: yaml
   version: 0.2.5
-  epoch: 10 # glibc: 2.43->2.44
+  epoch: 12 # upstream-tests/make-check
   description: YAML 1.1 parser and emitter written in C
   copyright:
     - license: MIT
@@ -36,6 +36,8 @@ pipeline:
   - uses: autoconf/make
 
   - uses: autoconf/make-install
+
+  - uses: upstream-tests/make-check
 
   - uses: strip
 

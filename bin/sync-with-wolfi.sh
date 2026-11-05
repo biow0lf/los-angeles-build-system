@@ -160,6 +160,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   onefetch
 #   fast_float
 #   gtk-layer-shell
+#   gstreamer
 
 packages=(
     7zip
@@ -321,7 +322,6 @@ packages=(
     gst-plugins-bad
     gst-plugins-base
     gst-plugins-good
-    gstreamer
     gtest
     gtk-2.0
     gtk-3

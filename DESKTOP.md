@@ -132,6 +132,10 @@
 * exo
 * garcon
 
+## XFCE Applications
+
+* xfce4-terminal
+
 ## Wayland
 
 * wayland

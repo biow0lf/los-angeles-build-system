@@ -159,6 +159,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   neohtop
 #   onefetch
 #   fast_float
+#   gtk-layer-shell
 
 packages=(
     7zip

@@ -158,6 +158,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   moor
 #   neohtop
 #   onefetch
+#   fast_float
 
 packages=(
     7zip

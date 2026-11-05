@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Usage: bin/how-depends-on.rb libfoo.so.1
+# Usage: bin/who-depends-on.rb libfoo.so.1
 #
 # Prints every binary package in the APKINDEX that depends on the given
 # shared library, as "origin package: subpackage name".

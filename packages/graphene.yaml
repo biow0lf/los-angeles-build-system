@@ -2,7 +2,7 @@
 package:
   name: graphene
   version: 1.10.8
-  epoch: 9 # glibc: 2.43->2.44
+  epoch: 12 # upstream-tests/meson-test
   description: A thin layer of graphic data types
   copyright:
     - license: MIT
@@ -38,7 +38,11 @@ pipeline:
         -Dinstalled_tests=false \
         . output
       meson compile ${JOBS:+-j ${JOBS}} -C output
+
+  - runs: |
       DESTDIR="${{targets.destdir}}" meson install --no-rebuild -C output
+
+  - uses: upstream-tests/meson-test
 
   - uses: strip
 

@@ -187,7 +187,6 @@
 
 * lazygit
 * lazydocker
-* zizmor
 * undock
 * difi
 * libtree
@@ -200,6 +199,7 @@
 ## Linters
 
 * actionlint
+* zizmor
 
 ## LSP servers
 

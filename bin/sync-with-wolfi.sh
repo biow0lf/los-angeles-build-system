@@ -161,6 +161,9 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   fast_float
 #   gtk-layer-shell
 #   gstreamer
+#   gst-plugins-bad
+#   gst-plugins-base
+#   gst-plugins-good
 
 packages=(
     7zip
@@ -319,9 +322,6 @@ packages=(
     groff
     grpc-1.85
     gsl
-    gst-plugins-bad
-    gst-plugins-base
-    gst-plugins-good
     gtest
     gtk-2.0
     gtk-3

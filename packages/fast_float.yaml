@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: fast_float
+  version: 8.3.3
+  epoch: 0
+  description: "Fast and exact implementation of the C++ from_chars functions for number types"
+  url: https://github.com/fastfloat/fast_float
+  copyright:
+    - license: Apache-2.0 OR MIT OR BSL-1.0
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/fastfloat/fast_float
+      tag: v${{package.version}}
+      expected-commit: dbeabeeb3e6791cb96994c2a7a084c36e62ccfb2
+
+  - uses: cmake/configure
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip

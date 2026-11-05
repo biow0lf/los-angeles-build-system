@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: gtk-layer-shell
+  version: 0.10.1
+  epoch: 0
+  description: "A library to create panels and other desktop components for Wayland using the Layer Shell protocol"
+  url: https://github.com/wmww/gtk-layer-shell
+  copyright:
+    - license: "LGPL-3.0-or-later and MIT"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - gtk-3-dev
+      - wayland-dev
+      - wayland-protocols-dev
+      - gobject-introspection-dev
+      - vala
+      - glib-gir
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/wmww/gtk-layer-shell
+      tag: v${{package.version}}
+      expected-commit: fd88ba666c18ff65ea786bf7b2e270d840030817
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: gtk-layer-shell-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - gtk-layer-shell=${{package.full-version}}
+    description: gtk-layer-shell dev

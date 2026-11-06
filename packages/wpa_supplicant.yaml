@@ -1,0 +1,101 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: wpa_supplicant
+  version: 2.12
+  epoch: 0
+  description: "WPA/WPA2/IEEE 802.1X Supplicant"
+  url: https://w1.fi
+  copyright:
+    - license: "BSD-3-Clause"
+
+vars:
+  openssl-version: "4.0"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - bash
+      - bash-binsh
+      - libnl3-dev
+      - openssl-${{vars.openssl-version}}-dev
+      - dbus-dev
+      - readline-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://w1.fi/releases/wpa_supplicant-2.12.tar.gz
+      expected-sha256: 08e23937e16d0155e55cab2b51f51fbe10d80a1aa91c4e15442645059b737ef6
+
+  - name: "configure ${{package.name}}..."
+    runs: |
+      cat > wpa_supplicant/.config << "EOF"
+      CONFIG_BACKEND=file
+      CONFIG_CTRL_IFACE=y
+      CONFIG_DEBUG_FILE=y
+      CONFIG_DEBUG_SYSLOG=y
+      CONFIG_DEBUG_SYSLOG_FACILITY=LOG_DAEMON
+      CONFIG_DRIVER_NL80211=y
+      CONFIG_DRIVER_WEXT=y
+      CONFIG_DRIVER_WIRED=y
+      CONFIG_EAP_GTC=y
+      CONFIG_EAP_LEAP=y
+      CONFIG_EAP_MD5=y
+      CONFIG_EAP_MSCHAPV2=y
+      CONFIG_EAP_OTP=y
+      CONFIG_EAP_PEAP=y
+      CONFIG_EAP_TLS=y
+      CONFIG_EAP_TTLS=y
+      CONFIG_IEEE8021X_EAPOL=y
+      CONFIG_IPV6=y
+      CONFIG_LIBNL32=y
+      CONFIG_PEERKEY=y
+      CONFIG_PKCS12=y
+      CONFIG_READLINE=y
+      CONFIG_SMARTCARD=y
+      CONFIG_WPS=y
+      CFLAGS += -I/usr/include/libnl3
+      CONFIG_CTRL_IFACE_DBUS=y
+      CONFIG_CTRL_IFACE_DBUS_NEW=y
+      CONFIG_CTRL_IFACE_DBUS_INTRO=y
+      EOF
+
+  - name: "build ${{package.name}}..."
+    runs: |
+      pushd wpa_supplicant
+        make BINDIR=/usr/bin LIBDIR=/usr/lib
+      popd
+
+  - name: "installing ${{package.name}}..."
+    runs: |
+      mkdir -p "${{targets.destdir}}/usr/bin/"
+
+      mkdir -p "${{targets.destdir}}/usr/share/man/man5/"
+
+      mkdir -p "${{targets.destdir}}/usr/share/man/man8/"
+
+      mkdir -p "${{targets.destdir}}/usr/lib/systemd/system/"
+
+      mkdir -p "${{targets.destdir}}/usr/share/dbus-1/system-services/"
+
+      mkdir -p "${{targets.destdir}}/etc/dbus-1/system.d"
+
+      pushd wpa_supplicant
+        install -v -m755 wpa_{cli,passphrase,supplicant} ${{targets.destdir}}/usr/bin/
+
+        install -v -m644 doc/docbook/wpa_supplicant.conf.5 ${{targets.destdir}}/usr/share/man/man5/
+
+        install -v -m644 doc/docbook/wpa_{cli,passphrase,supplicant}.8 ${{targets.destdir}}/usr/share/man/man8/
+
+        install -v -m644 systemd/*.service ${{targets.destdir}}/usr/lib/systemd/system/
+
+        install -v -m644 dbus/fi.w1.wpa_supplicant1.service ${{targets.destdir}}/usr/share/dbus-1/system-services/
+
+        install -v -m644 dbus/dbus-wpa_supplicant.conf ${{targets.destdir}}/etc/dbus-1/system.d/wpa_supplicant.conf
+      popd
+
+  - uses: strip

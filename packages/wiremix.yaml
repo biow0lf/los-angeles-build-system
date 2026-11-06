@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: wiremix
+  version: 0.11.0
+  epoch: 0
+  description: "Simple TUI audio mixer for PipeWire"
+  url: https://github.com/tsowell/wiremix
+  copyright:
+    - license: Apache-2.0, MIT
+
+vars:
+  rust-version: "1.99"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - pipewire-dev
+      - rust-${{vars.rust-version}}
+      - clang-22
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/tsowell/wiremix
+      tag: v${{package.version}}
+      expected-commit: 9f113c13df54895f330b17ac62a7b8a75e987c65
+
+  - uses: cargo/build
+    with:
+      output: wiremix
+
+  - uses: strip

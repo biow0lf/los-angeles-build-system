@@ -186,6 +186,7 @@
 * pulseaudio
 * pipewire
 * wireplumber
+* wiremix
 
 ## Development tools
 

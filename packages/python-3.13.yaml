@@ -1,11 +1,13 @@
+# @biow0lf: use openssl-4.0-dev
+
 #nolint:depends-on-unversioned-py-provides
 vars:
   openssl-version: "4.0"
 
 package:
   name: python-3.13
-  version: "3.13.16_git20261009"
-  epoch: 0
+  version: "3.13.18_git20261030"
+  epoch: 0 # run upstream regrtest subset via shared pipeline
   description: "the Python programming language"
   copyright:
     - license: PSF-2.0
@@ -62,7 +64,7 @@ pipeline:
   - uses: git-checkout
     with:
       branch: ${{vars.pyversion}}
-      expected-commit: c35ca4cb6e296d1770fe45f9414b58eb06242e02
+      expected-commit: 42155a0feaca9ba6991942c323cbe9fb7278be3c
       repository: https://github.com/python/cpython
 
   - name: Drop the branch development marker from the version string
@@ -120,6 +122,8 @@ pipeline:
   - uses: autoconf/make
 
   - uses: autoconf/make-install
+
+  - uses: upstream-tests/python-regrtest
 
   - runs: |
       find ${{targets.destdir}}/usr/lib -type f -name 'libpython*.a' -exec rm -rf '{}' +
@@ -364,6 +368,9 @@ test:
         $d/bin/pip list
         $d/bin/pip check
         rm -Rf "$d"
+    - name: Verify ssl was built with TLS-PSK support
+      runs: |
+        ${{vars.python}} -c 'import ssl; assert ssl.HAS_PSK, "built without TLS-PSK"'
 
 update:
   enabled: true

@@ -164,6 +164,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   gst-plugins-bad
 #   gst-plugins-base
 #   gst-plugins-good
+#   wpa_supplicant
 
 packages=(
     7zip

@@ -1,7 +1,7 @@
 package:
   name: lzo
   version: "2.10"
-  epoch: 10 # go/wolfi-rsc/lzo
+  epoch: 12 # upstream-tests/ctest
   description: LZO -- a real-time data compression library
   copyright:
     - license: GPL-2.0-or-later
@@ -34,6 +34,8 @@ pipeline:
   - uses: cmake/build
 
   - uses: cmake/install
+
+  - uses: upstream-tests/ctest
 
   - runs: |
       rm -r "${{targets.destdir}}"/usr/libexec/

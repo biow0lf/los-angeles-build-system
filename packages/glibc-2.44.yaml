@@ -5,7 +5,7 @@
 package:
   name: glibc-2.44
   version: "2.44"
-  epoch: 11 # melange 0.63.1 hardlink fix
+  epoch: 14 # melange 0.63.1 hardlink fix
   description: "the GNU C library"
   copyright:
     - license: LGPL-2.1-or-later
@@ -81,11 +81,7 @@ var-transforms:
 pipeline:
   - uses: git-checkout
     with:
-      ########################### STOP!!! #############################
-      # Before updating the expected-commit, please ping @sergiodj or #
-      # someone from the OS team!                                     #
-      ########################### STOP!!! #############################
-      expected-commit: 534e36bbf70c6209e4fbd1bb7df778d1ce8237fa
+      expected-commit: c5c6fc6f449dbc95e3a68cacd61852dc0a48e57c
       # sourceware.org often has clone issues, switch to mirror
       # recommended at https://sourceware.org/glibc/wiki/GlibcGit
       repository: https://gitlab.com/gnutools/glibc.git

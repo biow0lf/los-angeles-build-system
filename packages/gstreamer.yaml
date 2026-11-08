@@ -3,7 +3,7 @@
 
 package:
   name: gstreamer
-  version: 1.28.8
+  version: 1.28.9
   epoch: 0
   description: "Media framework"
   copyright:
@@ -25,8 +25,8 @@ environment:
 pipeline:
   - uses: fetch
     with:
-      uri: https://gstreamer.freedesktop.org/src/gstreamer/gstreamer-1.28.8.tar.xz
-      expected-sha256: baa8e86985ad6417cc0ad6e7b79ff2884c6779c8b1c7a6240e7121822c86e524
+      uri: https://gstreamer.freedesktop.org/src/gstreamer/gstreamer-1.28.9.tar.xz
+      expected-sha256: 6dbf744f583131a34845cc641e803843766a9ba80ce00378a9043fd6d8d5fb38
 
   - uses: meson/configure
     with:

@@ -501,6 +501,7 @@ packages=(
     lmdb
     lsb-release-minimal
     lsof
+    lua-5.5
     lua-lpeg
     lua-luv
     lua-mpack

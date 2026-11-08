@@ -1,14 +1,20 @@
 # SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
 # SPDX-License-Identifier: MIT
 
+# TODO: looks like man pages is broken
+
 package:
   name: networkmanager
   version: 1.58.1
-  epoch: 0 # build
+  epoch: 1 # add libnspr and libnss to runtime deps
   description: Network Management daemon
   url: https://networkmanager.dev/
   copyright:
     - license: GPL-2.0-or-later
+  dependencies:
+    runtime:
+      - libnspr
+      - libnss
 
 environment:
   contents:

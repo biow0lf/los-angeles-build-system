@@ -1,8 +1,11 @@
 # Generated from https://git.alpinelinux.org/aports/plain/main/libxkbcommon/APKBUILD
+
+# @biow0lf: add bash-completion to build requires
+
 package:
   name: libxkbcommon
   version: "1.13.2"
-  epoch: 4 # glibc: 2.43->2.44
+  epoch: 5 # add bash-completion to build reqs
   description: keyboard handling library
   copyright:
     - license: MIT
@@ -16,7 +19,6 @@ package:
     cpu: "1"
     memory: 6Gi
 
-# TODO: bash-completion
 environment:
   contents:
     packages:
@@ -24,6 +26,7 @@ environment:
       - automake
       - bison
       - build-base
+      - bash-completion
       - busybox
       - ca-certificates-bundle
       - glibc-2.44-dev

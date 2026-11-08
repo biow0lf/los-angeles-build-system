@@ -1,7 +1,7 @@
 package:
   name: libheif
   version: "1.23.7"
-  epoch: 2 # libopenjph.so.0.32 -> libopenjph.so.0.33
+  epoch: 3 # enable: gdk-pixbuf-dev
   description: libheif is an HEIF and AVIF file format decoder and encoder.
   copyright:
     - license: LGPL-3.0-or-later AND MIT
@@ -23,7 +23,7 @@ environment:
       - dav1d-dev
       - doxygen
       - ffmpeg-7-dev
-      # - gdk-pixbuf-dev
+      - gdk-pixbuf-dev
       - glibc-2.44-dev
       - libde265-dev
       - libsdl2-dev

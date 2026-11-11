@@ -32,7 +32,7 @@ pipeline:
 
       mkdir -p ${{targets.destdir}}/usr/include/
 
-      cp -rv usr/include ${{targets.destdir}}/usr/include/
+      cp -rv usr/include ${{targets.destdir}}/usr/
 
 test:
   environment:

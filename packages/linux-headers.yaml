@@ -1,16 +1,11 @@
 package:
   name: linux-headers
-  version: "7.3.3"
-  epoch: 0 # remove redundant set -euo pipefail from test
-  description: "the Linux kernel headers (cross compilation)"
+  version: 7.3.4
+  epoch: 0
+  description: "The Linux kernel headers"
+  url: https://kernel.org
   copyright:
     - license: GPL-2.0-only WITH Linux-syscall-note
-  resources:
-    cpu: "2"
-    memory: 7Gi
-  test-resources:
-    cpu: "1"
-    memory: 1Gi
 
 environment:
   contents:
@@ -22,32 +17,22 @@ environment:
       - wolfi-baselayout
 
 pipeline:
-  - uses: git-checkout
+  - uses: fetch
     with:
-      repository: https://github.com/gregkh/linux
-      tag: v${{package.version}}
-      expected-commit: d50d994bffa3c7c6db2d8bc4c5f0c55e3f46b0cd
+      uri: https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-${{package.version}}.tar.xz
+      expected-sha256: b11b6df8295e8e991ff040b71aaa4994a8b55caa23b6b092907f195b5840fd1f
 
   - runs: |
       make mrproper
 
   - runs: |
       make headers
-      find usr/include -name '.*' -delete
-      rm usr/include/Makefile
 
-      # Copy to cross-sysroot
-      mkdir -p ${{targets.destdir}}/usr/include
-      cp -rv usr/include/* ${{targets.destdir}}/usr/include/
+      find usr/include -type f ! -name '*.h' -delete
 
-update:
-  enabled: true
-  ignore-regex-patterns:
-    - "rc"
-  github:
-    identifier: gregkh/linux
-    strip-prefix: v
-    use-tag: true
+      mkdir -p ${{targets.destdir}}/usr/include/
+
+      cp -rv usr/include ${{targets.destdir}}/usr/include/
 
 test:
   environment:

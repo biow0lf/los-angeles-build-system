@@ -494,7 +494,6 @@ packages=(
     libxxf86vm
     libzip
     linenoise
-    linux-headers
     linux-pam
     llvm-22
     llvm-23

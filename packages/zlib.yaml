@@ -1,22 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+# TODO: cmake + ctest
 package:
   name: zlib
-  # Version in develop branch is set to 1.3.2.1 but not released yet
-  # _git suffix is more than the version and would be wrong using _rc
-  # suffix which is less than, such that future 1.3.2.1-r0 release
-  # would be higher than this version
-  version: "1.3.2.1_rc20260921"
-  epoch: 2 # upstream-tests/make-check
+  version: 1.4
+  epoch: 0
   description: "a library implementing the zlib compression algorithms"
+  url: https://www.zlib.net/
   copyright:
     - license: MPL-2.0 AND MIT
   dependencies:
-    provider-priority: 100
     runtime:
       - merged-lib
       - wolfi-baselayout
-  resources:
-    cpu: "1"
-    memory: 6Gi
   cpe:
     vendor: zlib
     product: zlib
@@ -24,48 +21,30 @@ package:
 environment:
   contents:
     packages:
-      - autoconf
-      - automake
       - build-base
       - busybox
-      - ca-certificates-bundle
-      - glibc-2.44-dev
-      - libtool
-      - wolfi-baselayout
-  environment:
-    # Using openssf-compiler-options instead
-    CFLAGS: ""
-    CPPFLAGS: ""
-    CXXFLAGS: ""
-    LDFLAGS: ""
 
 pipeline:
-  - uses: git-checkout
+  - uses: fetch
     with:
-      expected-commit: 767c4c947852e143f582c85f14cf573411df1b35
-      repository: https://github.com/madler/zlib
-      branch: develop
+      uri: https://github.com/madler/zlib/releases/download/v1.4/zlib-1.4.tar.xz
+      expected-sha256: 4f11c512053d7bab8d9e9b89bde3575add3e4c50a383b42ef6cb837035fc5a7c
 
-  - runs: |
-      ./configure \
-        --prefix=/usr \
-        --libdir=/usr/lib \
-        --shared
-
-  - uses: autoconf/make
-
-  - runs: |
-      make install pkgconfigdir="/usr/lib/pkgconfig" DESTDIR="${{targets.destdir}}"
-
-  # zlib's upstream tests, after install so nothing they build can be
-  # shipped. `check` runs example/minigzip against the static, shared and
-  # 64-bit-offset builds; `cover` builds and runs test/infcover, which drives
-  # inflate through its error and edge paths. Neither prints an automake
-  # summary, but both fail make on a failing test, hence harness: custom.
-  - uses: upstream-tests/make-check
+  - uses: cmake/configure
     with:
-      target: check cover
-      harness: custom
+      opts: |
+        -DZLIB_BUILD_SHARED=ON \
+        -DZLIB_BUILD_STATIC=ON \
+        -DZLIB_BUILD_TESTING=ON \
+        -DZLIB_BUILD_MINIZIP=ON \
+        -DMINIZIP_BUILD_SHARED=ON \
+        -DMINIZIP_BUILD_STATIC=OFF \
+        -DMINIZIP_BUILD_TESTING=ON \
+        -DMINIZIP_INSTALL=ON
+
+  - uses: cmake/build
+
+  - uses: cmake/install
 
   - uses: strip
 
@@ -74,149 +53,44 @@ subpackages:
     description: "zlib static library"
     pipeline:
       - uses: split/static
-    test:
-      pipeline:
-        - uses: test/tw/staticpackage
     dependencies:
-      provider-priority: 100
       runtime:
         - merged-lib
         - wolfi-baselayout
-
-  - name: "zlib-dev"
-    description: "zlib development headers"
-    pipeline:
-      - uses: split/dev
-    dependencies:
-      provider-priority: 100
-      runtime:
-        - zlib=${{package.full-version}}
-        - merged-lib
-        - wolfi-baselayout
-    test:
-      environment:
-        contents:
-          packages:
-            - gcc
-            - glibc-dev
-            - zlib-dev
-      pipeline:
-        - uses: test/tw/devpackage
-        - name: Compile and Test zlib
-          runs: |
-            # Create a test program that exercises zlib compress/uncompress
-            tee test_zlib.c <<'EOF'
-            #include <stdio.h>
-            #include <string.h>
-            #include <zlib.h>
-
-            int main() {
-                const char *original = "Hello, zlib! This is a compression test.";
-                uLong orig_len = (uLong)strlen(original) + 1;
-
-                /* Allocate buffer for compressed data */
-                uLong comp_len = compressBound(orig_len);
-                Bytef compressed[1024];
-                Bytef decompressed[1024];
-
-                /* Compress */
-                int ret = compress(compressed, &comp_len, (const Bytef *)original, orig_len);
-                if (ret != Z_OK) {
-                    fprintf(stderr, "FAIL: compress() returned %d\n", ret);
-                    return 1;
-                }
-                printf("Compressed %lu bytes to %lu bytes\n", orig_len, comp_len);
-
-                /* Decompress */
-                uLong decomp_len = sizeof(decompressed);
-                ret = uncompress(decompressed, &decomp_len, compressed, comp_len);
-                if (ret != Z_OK) {
-                    fprintf(stderr, "FAIL: uncompress() returned %d\n", ret);
-                    return 1;
-                }
-                printf("Decompressed %lu bytes to %lu bytes\n", comp_len, decomp_len);
-
-                /* Verify decompressed data matches original */
-                if (strcmp((const char *)decompressed, original) != 0) {
-                    fprintf(stderr, "FAIL: decompressed data does not match original\n");
-                    fprintf(stderr, "  Original:     '%s'\n", original);
-                    fprintf(stderr, "  Decompressed: '%s'\n", (const char *)decompressed);
-                    return 1;
-                }
-
-                /* Verify zlib version is available */
-                printf("zlib version: %s\n", zlibVersion());
-                printf("SUCCESS: compression and decompression verified\n");
-                return 0;
-            }
-            EOF
-
-            # Compile using pkg-config flags
-            gcc test_zlib.c -I/usr/include -L/usr/lib -lz -o test_zlib
-
-            # Run the test and verify output
-            output=$(./test_zlib)
-            echo "$output"
-            echo "$output" | grep -F "SUCCESS: compression and decompression verified"
-        - uses: test/pkgconf
-        - uses: test/tw/ldd-check
 
   - name: "minizip"
     description: "a library for manipulation with files from .zip archives"
     pipeline:
       - runs: |
-          cd contrib/minizip
-          autoreconf -fiv
-          ./configure --prefix=/usr \
-            --enable-static=no
-          make
-          make install DESTDIR="${{targets.contextdir}}"
+          mkdir -p "${{targets.contextdir}}/usr/bin"
 
-          # Some newer header files are only installed by the `cmake` build
-          # process: until we're building with CMake, ensure they're all
-          # installed ourselves
-          for header in crypt.h ints.h ioapi.h mztools.h skipset.h unzip.h zip.h; do
-            cp $header "${{targets.contextdir}}"/usr/include/minizip
-          done
-      - name: remove libtool .la files
-        runs: find "${{targets.contextdir}}" -name '*.la' -delete
-    test:
-      pipeline:
-        - uses: test/tw/ldd-check
-        - uses: test/pkgconf
+          mv "${{targets.destdir}}/usr/bin/minizip" "${{targets.contextdir}}/usr/bin"
+          mv "${{targets.destdir}}/usr/bin/miniunzip" "${{targets.contextdir}}/usr/bin"
+
+          mkdir -p "${{targets.contextdir}}/usr/include/minizip"
+
+          mv "${{targets.destdir}}/usr/include/minizip" "${{targets.contextdir}}/usr/include/"
+
+          mkdir -p "${{targets.contextdir}}/usr/lib/cmake/minizip"
+
+          mv "${{targets.destdir}}/usr/lib/cmake/minizip" "${{targets.contextdir}}/usr/lib/cmake/"
+
+          mkdir -p "${{targets.contextdir}}/usr/lib"
+
+          mv "${{targets.destdir}}/usr/lib/libminizip.so" "${{targets.contextdir}}/usr/lib"
+          mv "${{targets.destdir}}/usr/lib/libminizip.so.1" "${{targets.contextdir}}/usr/lib"
+          mv "${{targets.destdir}}/usr/lib/libminizip.so.1.4" "${{targets.contextdir}}/usr/lib"
+
+          mkdir -p "${{targets.contextdir}}/usr/lib/pkgconfig"
+
+          mv "${{targets.destdir}}/usr/lib/pkgconfig/minizip.pc" "${{targets.contextdir}}/usr/lib/pkgconfig"
     dependencies:
-      provider-priority: 100
       runtime:
         - merged-lib
         - wolfi-baselayout
-
-  - name: zlib-doc
-    description: zlib docs
-    pipeline:
-      - uses: split/manpages
-    test:
-      pipeline:
-        - uses: test/tw/docs
-    dependencies:
-      provider-priority: 100
-      runtime:
-        - merged-lib
-        - wolfi-baselayout
-
-test:
-  environment:
-    contents:
-      packages:
-        - minizip
-  pipeline:
-    - uses: test/hardening-check
-      with:
-        package-match: "zlib\\|minizip"
-    - uses: test/tw/ldd-check
 
 update:
   enabled: true
-  git: {}
-  schedule:
-    period: weekly
-    reason: CVE fixes are applied to the develop branch without tags
+  github:
+    identifier: madler/zlib
+    strip-prefix: v

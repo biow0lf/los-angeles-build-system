@@ -3,8 +3,8 @@
 
 package:
   name: linux-zen
-  version: 7.2.15
-  epoch: 0 # rebuild
+  version: 7.3.4
+  epoch: 0 # zen2
   description: Linux ZEN
   url: https://github.com/zen-kernel/zen-kernel
   copyright:
@@ -43,14 +43,14 @@ environment:
 pipeline:
   - uses: fetch
     with:
-      uri: https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.15.tar.xz
-      expected-sha256: d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab
+      uri: https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.3.4.tar.xz
+      expected-sha256: b11b6df8295e8e991ff040b71aaa4994a8b55caa23b6b092907f195b5840fd1f
       extract: false
 
   - uses: fetch
     with:
-      uri: https://github.com/zen-kernel/zen-kernel/releases/download/v7.2.15-zen1/linux-v7.2.15-zen1.patch.zst
-      expected-sha256: 71b372e3256d546ebaa5d39f564be397f3a75a6e0d4c997d676b9a285700c9fe
+      uri: https://github.com/zen-kernel/zen-kernel/releases/download/v7.3.4-zen2/linux-v7.3.4-zen2.patch.zst
+      expected-sha256: 3296823f5ad0bc93308630b7574614cd687889c42f72fda27d0e534ee843626d
       extract: false
 
   - runs: |
@@ -81,7 +81,7 @@ pipeline:
       tar xf linux-${{package.version}}.tar.xz
 
       pushd linux-${{package.version}}
-        zstdcat ../linux-v${{package.version}}-zen1.patch.zst | patch -p1
+        zstdcat ../linux-v${{package.version}}-zen2.patch.zst | patch -p1
 
         echo "Setting config..."
 
@@ -104,11 +104,11 @@ pipeline:
 
         make modules_install INSTALL_MOD_PATH="${{targets.destdir}}" INSTALL_MOD_STRIP=1
 
-        cp arch/x86/boot/bzImage "${{targets.destdir}}/boot/vmlinuz-${{package.version}}-zen1"
-        cp System.map "${{targets.destdir}}/boot/System.map-${{package.version}}-zen1"
-        cp .config "${{targets.destdir}}/boot/config-${{package.version}}-zen1"
+        cp arch/x86/boot/bzImage "${{targets.destdir}}/boot/vmlinuz-${{package.version}}-zen2"
+        cp System.map "${{targets.destdir}}/boot/System.map-${{package.version}}-zen2"
+        cp .config "${{targets.destdir}}/boot/config-${{package.version}}-zen2"
 
-        rm -f "${{targets.destdir}}/lib/modules/${{package.version}}-zen1/build"
+        rm -f "${{targets.destdir}}/lib/modules/${{package.version}}-zen2/build"
 
         rm -f "${{targets.destdir}}/lib"
       popd

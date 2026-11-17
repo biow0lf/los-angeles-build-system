@@ -250,6 +250,7 @@ packages=(
     dnssec-root
     docbook-xml
     docker-29
+    docker-cli
     dosfstools
     doxygen
     dua

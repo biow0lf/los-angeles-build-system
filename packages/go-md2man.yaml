@@ -1,0 +1,77 @@
+package:
+  name: go-md2man
+  version: "2.0.7"
+  epoch: 25 # toolchain rebuild for  go-1.27-1.27.4
+  description: Utility to convert markdown to man pages
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - go-1.27
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 061b6c7cbecd6752049221aa15b7a05160796698
+      repository: https://github.com/cpuguy83/go-md2man
+      tag: v${{package.version}}
+
+  - uses: go/build
+    with:
+      packages: .
+      output: go-md2man
+      go-package: go-1.27
+
+  - runs: |
+      ${{targets.destdir}}/usr/bin/go-md2man -in go-md2man.1.md -out go-md2man.1
+      install -Dm644 go-md2man.1 "${{targets.destdir}}"/usr/share/man/man1/go-md2man.1
+
+  - uses: upstream-tests/go-test
+
+subpackages:
+  - name: go-md2man-doc
+    pipeline:
+      - uses: split/manpages
+    description: go-md2man manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+update:
+  enabled: true
+  github:
+    identifier: cpuguy83/go-md2man
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - runs: |
+        go-md2man --help
+    - name: Test markdown to man page file conversion
+      runs: |
+        # Create a markdown file with a heading
+        cat > /tmp/test.md <<'EOF'
+        # HEADING
+
+        Some description text.
+
+        ## SUBHEADING
+
+        More text here.
+        EOF
+
+        # Convert markdown to man page
+        go-md2man -in /tmp/test.md -out /tmp/test.1
+
+        # Verify the output contains man page section header directives
+        grep -F '.SH' /tmp/test.1
+    - name: Test stdin/stdout pipeline mode
+      runs: |
+        # Test that go-md2man reads from stdin and writes to stdout
+        echo '**bold text**' | go-md2man | grep '\\fB'

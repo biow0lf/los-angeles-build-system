@@ -165,6 +165,9 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   gst-plugins-base
 #   gst-plugins-good
 #   wpa_supplicant
+#   linux-headers
+#   zlib
+#   lib32-zlib
 
 packages=(
     7zip
@@ -224,6 +227,7 @@ packages=(
     cmake
     cmocka
     command-not-found
+    containerd-2
     coreutils
     cpio
     cppunit
@@ -311,6 +315,7 @@ packages=(
     gnutar
     gnutls
     go-1.27
+    go-md2man
     gobject-introspection
     gperf
     gperftools
@@ -421,6 +426,7 @@ packages=(
     libnvme
     libogg
     libpaper
+    libpathrs
     libpciaccess
     libpipeline
     libpng
@@ -864,6 +870,7 @@ packages=(
     ruby-3.4
     ruby-4.0
     ruff
+    runc
     rust-1.99
     s-lang
     s3cmd
@@ -969,7 +976,6 @@ packages=(
     zeromq
     zip
     zizmor
-    zlib
     zsh
     zstd
 )

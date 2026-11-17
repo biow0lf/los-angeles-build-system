@@ -2,11 +2,8 @@
 
 Blocked on Phase 1/2 (needs a self-hosted toolchain to build these against).
 
-- [ ] `grub`, `grub-bios`, `grub-efi`
-- [*] `xorriso`
 - [ ] `squashfs-tools`
 - [ ] `qemu-system-x86_64`, `qemu-img`
-- [*] `mtools`, `sgdisk`, `sfdisk`
 
 ## melange and apko themselves (lowest priority)
 

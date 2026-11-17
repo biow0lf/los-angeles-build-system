@@ -1,7 +1,7 @@
 # https://gitlab.alpinelinux.org/alpine/aports/-/blob/master/main/linux-firmware/APKBUILD
 package:
   name: linux-firmware
-  version: 20260916
+  version: 20261019
   epoch: 0
   description: "Firmware files for linux"
   url: "https://gitlab.com/kernel-firmware/linux-firmware"
@@ -25,8 +25,8 @@ environment:
 pipeline:
   - uses: fetch
     with:
-      uri: https://gitlab.com/kernel-firmware/${{package.name}}/-/archive/20260916/${{package.name}}-${{package.version}}.tar.bz2
-      expected-sha256: 9304cc78813c643d2a9310ba202037e9aabde9c46f84ac2bcf929c6247001ac8
+      uri: https://gitlab.com/kernel-firmware/${{package.name}}/-/archive/${{package.version}}/${{package.name}}-${{package.version}}.tar.bz2
+      expected-sha256: d8185424c0b939eb4d7b5579950749086483117806189e4fcdfbda35ffc70009
 
   - runs: |
       make DESTDIR="${{targets.destdir}}/" FIRMWAREDIR=/usr/lib/firmware install-xz

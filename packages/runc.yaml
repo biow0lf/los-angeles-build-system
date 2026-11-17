@@ -1,0 +1,145 @@
+# @biow0lf: built without tests (fails in docker)
+
+package:
+  name: runc
+  version: "1.5.3"
+  epoch: 0 # CVE-2026-97054
+  description: CLI tool for spawning and running containers according to the OCI specification
+  copyright:
+    - license: Apache-2.0
+  resources:
+    cpu: "1"
+    memory: 4Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - bash
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - glibc-2.44-dev
+      - go-1.27
+      - go-md2man
+      - libpathrs-dev
+      - libpathrs-static
+      - libseccomp-dev
+      - libseccomp-static
+      - libtool
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/opencontainers/runc
+      tag: v${{package.version}}
+      expected-commit: 46365c62967c76a765a5e347f48f0c7b3b571fe9
+
+  - uses: bump
+    with:
+      deps: |-
+        github.com/cilium/ebpf@v0.22.0
+        golang.org/x/net@v0.62.0
+        github.com/moby/sys/user@v0.4.1
+        golang.org/x/sys@v0.49.0
+      language: go
+
+  - runs: |
+      make COMMIT=$(git rev-parse HEAD)
+      make man
+      install -Dsm755 ./runc "${{targets.destdir}}"/usr/bin/runc
+      install -Dm644 ./man/man8/* -t "${{targets.destdir}}"/usr/share/man/man8/
+
+  # libcontainer/integration downloads a busybox rootfs with curl (network) and needs root.
+  # go test's vet (printf) rejects libcontainer/container_linux_test.go:278,294 (Fatalf %q
+  # with an int64 Cgroups.Memory; upstream test code).
+  # TODO(upstream-tests): remove once upstream gates these behind -short and fixes the verb.
+  # - uses: upstream-tests/go-test
+  #   with:
+  #     exclude-packages: ./libcontainer/integration/...
+  #     vet-skip: printf
+
+  - uses: strip
+
+subpackages:
+  - name: runc-doc
+    pipeline:
+      - uses: split/manpages
+    description: runc manpages
+    test:
+      pipeline:
+        - uses: test/docs
+
+  # Upstream's static-pie build (`make static`) for runtimes that copy runc out
+  # of the image and run it on an arbitrary host, such as the rke2-runtime
+  # -static image, which RKE2 extracts to /var/lib/rancher/rke2/data. The
+  # default dynamically linked runc needs the image's glibc and libpathrs.so.0,
+  # which hosts such as RHEL 8 and 9 do not have. Installed to /bin to match
+  # rancher/rke2-runtime.
+  - name: runc-static
+    description: runc built as a static-pie binary in /bin, for running outside the image
+    options:
+      no-commands: true
+    checks:
+      disabled:
+        - usrmerge
+    pipeline:
+      - runs: |
+          # Drop the dynamic binary from the main pipeline. Upstream's
+          # `make clean` calls sudo, which the build environment lacks.
+          rm -f runc
+          make COMMIT=$(git rev-parse HEAD) static
+          install -Dm755 ./runc "${{targets.subpkgdir}}"/bin/runc
+      - uses: strip
+    test:
+      environment:
+        contents:
+          packages:
+            - binutils
+      pipeline:
+        - name: runc is static (no ELF interpreter, no shared library dependencies)
+          runs: |
+            readelf -lW /bin/runc > /tmp/phdr
+            readelf -dW /bin/runc > /tmp/dyn
+            if grep -F 'Requesting program interpreter' /tmp/phdr; then exit 1; fi
+            if grep -F '(NEEDED)' /tmp/dyn; then exit 1; fi
+        - uses: test/tw/ver-check
+          with:
+            bins: runc
+        - name: runc keeps seccomp and libpathrs support
+          runs: |
+            /bin/runc --version | grep -F "libseccomp:"
+            /bin/runc --version | grep -F "libpathrs:"
+            /bin/runc features | grep -F "seccomp"
+
+update:
+  enabled: true
+  github:
+    identifier: opencontainers/runc
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/ver-check
+      with:
+        bins: runc
+        version: ${{package.version}}
+    - uses: test/tw/help-check
+      with:
+        bins: runc
+    - name: "Test runc features"
+      runs: |
+        set -euo pipefail
+        runc features | grep -F "seccomp"
+    - name: "Verify runc binary"
+      runs: |
+        [ -x "$(command -v runc)" ]
+    - name: "Check runc state command"
+      runs: |
+        runc state non_existent_container || [ $? -eq 1 ]
+    - name: "Check runc spec command"
+      runs: |
+        runc spec --rootless
+        [ -f config.json ]

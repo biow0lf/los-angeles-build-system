@@ -6,16 +6,7 @@ Goal: system that can build itself and build more packages.
 
 Status: DONE.
 
-## Stage 2: fully self hosted system
-
-At this stage we want fully self hosted system.
-We can rebuild all packages in repo without any 3rd party repo(s).
-
-Goal: fully self hosted system
-
-Status: in progress.
-
-## Stage 3: add kernel, linux-firmware
+## Stage 2: add kernel, linux-firmware
 
 At this stage we are adding packages:
 
@@ -24,6 +15,15 @@ At this stage we are adding packages:
 * grub
 
 Goal: bootable linux system
+
+Status: DONE.
+
+## Stage 3: fully self hosted system
+
+At this stage we want fully self hosted system.
+We can rebuild all packages in repo without any 3rd party repo(s).
+
+Goal: fully self hosted system
 
 Status: in progress.
 

@@ -6,7 +6,7 @@ Goal: system that can build itself and build more packages.
 
 Status: DONE.
 
-## Stage 2: add kernel, linux-firmware
+## Stage 2: add kernel, linux-firmware, grub
 
 At this stage we are adding packages:
 
@@ -14,7 +14,7 @@ At this stage we are adding packages:
 * linux-firmware
 * grub
 
-Goal: bootable linux system
+Goal: bootable linux system.
 
 Status: DONE.
 

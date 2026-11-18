@@ -168,6 +168,9 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   linux-headers
 #   zlib
 #   lib32-zlib
+#   alsa-oss
+#   alsa-firmware
+#   alsa-ucm-conf
 
 packages=(
     7zip

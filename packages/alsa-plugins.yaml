@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: alsa-plugins
+  version: 1.2.12
+  epoch: 0
+  description: "ALSA plugins"
+  url: https://www.alsa-project.org/wiki/Main_Page
+  copyright:
+    - license: LGPL-2.1
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - file
+      - alsa-lib-dev
+      - pulseaudio-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://www.alsa-project.org/files/pub/plugins/alsa-plugins-1.2.12.tar.bz2
+      expected-sha256: 7bd8a83d304e8e2d86a25895d8dcb0ef0245a8df32e271959cdbdc6af39b66f2
+
+  - uses: autoconf/configure
+    with:
+      opts: |
+        --enable-oss \
+        --enable-mix \
+        --enable-pulseaudio
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: alsa-plugins-pulse
+    pipeline:
+      - runs: |
+          mkdir -p ${{targets.subpkgdir}}/usr/lib/alsa-lib/
+
+          mv ${{targets.destdir}}/usr/lib/alsa-lib/libasound_module_conf_pulse.so ${{targets.subpkgdir}}/usr/lib/alsa-lib/
+          mv ${{targets.destdir}}/usr/lib/alsa-lib/libasound_module_ctl_pulse.so ${{targets.subpkgdir}}/usr/lib/alsa-lib/
+          mv ${{targets.destdir}}/usr/lib/alsa-lib/libasound_module_pcm_pulse.so ${{targets.subpkgdir}}/usr/lib/alsa-lib/
+
+          mkdir -p ${{targets.subpkgdir}}/etc/alsa/conf.d/
+
+          mv ${{targets.destdir}}/etc/alsa/conf.d/50-pulseaudio.conf ${{targets.subpkgdir}}/etc/alsa/conf.d/
+          mv ${{targets.destdir}}/etc/alsa/conf.d/99-pulseaudio-default.conf.example ${{targets.subpkgdir}}/etc/alsa/conf.d/
+
+          mkdir -p ${{targets.subpkgdir}}/usr/share/alsa/alsa.conf.d/
+
+          mv ${{targets.destdir}}/usr/share/alsa/alsa.conf.d/50-pulseaudio.conf ${{targets.subpkgdir}}/usr/share/alsa/alsa.conf.d/
+
+    dependencies:
+      runtime:
+        - alsa-plugins=${{package.full-version}}

@@ -2,7 +2,7 @@
 
 ## Description
 
-Simple Desktop Linux.
+~~Simple~~ Desktop Linux.
 
 ## Features
 
@@ -19,9 +19,14 @@ Simple Desktop Linux.
 ## TODO
 
 * Self host (aka self rebuild without external repos)
-* Build logs
-* Reproducable builds
-* PGO
-* LTO
-* zswap
-* zram
+* ~~Build logs~~
+* ~~Reproducable builds~~
+* ~~PGO~~
+* ~~LTO~~
+* ~~zswap~~
+* ~~zram~~
+
+## FAQ
+
+* Is it ready for production?
+* It's not ready for anything!

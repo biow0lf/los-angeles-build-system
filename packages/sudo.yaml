@@ -1,7 +1,7 @@
 package:
   name: sudo
   version: 1.9.17_p2
-  epoch: 12 # upstream-tests/make-check
+  epoch: 13
   description: Give certain users the ability to run some commands as root
   copyright:
     - license: BSD-2-Clause AND BSD-2-Clause-NetBSD AND Zlib AND BSD-3-Clause AND BSD-2-Clause AND ISC
@@ -47,7 +47,7 @@ pipeline:
   - uses: autoconf/configure
     with:
       opts: |
-        --disable-nls \
+        --enable-nls \
         --enable-pie \
         --with-env-editor \
         --with-mdoc \
@@ -77,32 +77,6 @@ pipeline:
   - uses: strip
 
 subpackages:
-  - name: sudo-doc
-    pipeline:
-      - uses: split/manpages
-    description: sudo manpages
-    test:
-      pipeline:
-        - uses: test/tw/docs
-    dependencies:
-      runtime:
-        - merged-usrsbin
-        - wolfi-baselayout
-
-  - name: sudo-doc-extra
-    pipeline:
-      - runs: |
-          mkdir -p ${{targets.contextdir}}/usr/share/doc
-          mv ${{targets.destdir}}/usr/share/doc/sudo ${{targets.contextdir}}/usr/share/doc/sudo
-    description: sudo examples and news
-    dependencies:
-      runtime:
-        - merged-usrsbin
-        - wolfi-baselayout
-    test:
-      pipeline:
-        - uses: test/tw/docs
-
   - name: sudo-dev
     pipeline:
       - uses: split/dev

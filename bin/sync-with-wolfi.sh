@@ -171,6 +171,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   alsa-oss
 #   alsa-firmware
 #   alsa-ucm-conf
+#   ttf-jetbrains-mono
 
 packages=(
     7zip

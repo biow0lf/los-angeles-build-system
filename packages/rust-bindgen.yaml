@@ -1,0 +1,113 @@
+package:
+  name: rust-bindgen
+  version: "0.73.2"
+  epoch: 1 # rust: 1.99->1.100
+  description: Automatically generates Rust FFI bindings to C (and some C++) libraries
+  copyright:
+    - license: BSD-3-Clause
+  resources:
+    cpu: "2"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  llvm-version: 22
+  rust-version: 1.99
+
+environment:
+  contents:
+    packages:
+      - glibc-2.44-dev
+      - rust-${{vars.rust-version}}
+
+pipeline:
+  - name: Checkout bindgen
+    uses: git-checkout
+    with:
+      expected-commit: 73c69d681eec90b84ffba4f993b5fb2f19580781
+      repository: https://github.com/rust-lang/rust-bindgen
+      tag: v${{package.version}}
+
+  - uses: bump
+    with:
+      language: rust
+
+  - name: Build bindgen
+    uses: cargo/build
+    with:
+      output: bindgen
+
+  - name: Strip bindgen
+    uses: strip
+
+update:
+  enabled: true
+  github:
+    identifier: rust-lang/rust-bindgen
+    strip-prefix: v
+
+test:
+  environment:
+    contents:
+      packages:
+        - clang-${{vars.llvm-version}}
+        - build-base
+        - rust-${{vars.rust-version}}
+  pipeline:
+    - uses: test/tw/ldd-check
+    - uses: test/tw/help-check
+      with:
+        bins: bindgen
+    - uses: test/tw/ver-check
+      with:
+        bins: bindgen
+    - name: Test bindgen code generation
+      runs: |
+        # Create a test header with various C constructs
+        cat <<-EOF > test.h
+        #define MAX_ITEMS 100
+
+        typedef struct Point {
+            int x;
+            int y;
+        } Point;
+
+        enum Color {
+            RED,
+            GREEN,
+            BLUE
+        };
+        EOF
+
+        # Generate Rust bindings with various options
+        bindgen test.h \
+          --no-layout-tests \
+          --generate-block \
+          --rust-target 1.51 \
+          -o test.rs
+
+        # Verify the output contains expected elements
+        if ! grep -F "pub const MAX_ITEMS" test.rs; then
+          echo "Constant not found in output"
+          exit 1
+        fi
+
+        if ! grep -F "pub struct Point" test.rs; then
+          echo "Struct not found in output"
+          exit 1
+        fi
+
+        # Check for the actual enum pattern bindgen generates
+        if ! grep -E "pub type Color = .*c_uint" test.rs; then
+          echo "Color type definition not found"
+          exit 1
+        fi
+
+        if ! grep -F "pub const Color_RED: Color = 0" test.rs; then
+          echo "Color enum variants not found"
+          exit 1
+        fi
+
+        echo "Bindgen code generation test passed!"

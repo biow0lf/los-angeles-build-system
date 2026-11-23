@@ -780,6 +780,7 @@ packages=(
     py3-cython
     py3-docutils
     py3-flit-core
+    py3-flit-scm
     py3-gobject3
     py3-gpep517
     py3-gyp-next

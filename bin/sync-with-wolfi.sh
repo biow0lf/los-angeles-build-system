@@ -779,6 +779,7 @@ packages=(
     py3-colorama
     py3-cython
     py3-docutils
+    py3-exceptiongroup
     py3-flit-core
     py3-flit-scm
     py3-gobject3

@@ -172,6 +172,9 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   alsa-firmware
 #   alsa-ucm-conf
 #   ttf-jetbrains-mono
+#   mesa
+#   venus-protocol
+#   directx-headers
 
 packages=(
     7zip
@@ -530,7 +533,6 @@ packages=(
     man-db
     melange
     mercurial
-    mesa
     meson
     midnight-commander
     mkfontscale
@@ -817,6 +819,7 @@ packages=(
     py3-trove-classifiers
     py3-typing-extensions
     py3-typogrify
+    py3-vcs-versioning
     py3-wheel
     py3-zipp
     py3.14-babel
@@ -877,6 +880,7 @@ packages=(
     ruff
     runc
     rust-1.99
+    rust-bindgen
     s-lang
     s3cmd
     s3fs-fuse

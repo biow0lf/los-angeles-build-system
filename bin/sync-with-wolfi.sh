@@ -175,6 +175,7 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   mesa
 #   venus-protocol
 #   directx-headers
+#   libdrm
 
 packages=(
     7zip
@@ -397,7 +398,6 @@ packages=(
     libcap
     libdaemon
     libde265
-    libdrm
     libeconf
     libedit
     libepoxy
@@ -803,6 +803,8 @@ packages=(
     py3-pyparsing
     py3-pyproject-hooks
     py3-pyproject-metadata
+    py3-pytest
+    py3-pytest-timeout
     py3-requests
     py3-roman-numerals-py
     py3-setuptools-scm

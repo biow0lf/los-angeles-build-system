@@ -52,7 +52,6 @@ packages:
   - hyprwayland-scanner
   - hyprwire
   - iana-etc
-  - iana-etc
   - kanshi
   - labwc
   - lib32-zlib
@@ -105,7 +104,6 @@ packages:
   - seatd
   - simdutf
   - slk
-  - sound-theme-freedesktop
   - sound-theme-freedesktop
   - squashfs-tools
   - stb

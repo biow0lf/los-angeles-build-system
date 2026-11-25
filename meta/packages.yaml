@@ -1,39 +1,65 @@
 packages:
+  - alsa-firmware
+  - alsa-oss
+  - alsa-ucm-conf
   - aquamarine
+  - calamares
   - cliamp
   - concord
   - dbus-broker
-  - dracut
-  - dysk
   - dejagnu
+  - difi
+  - directx-headers
   - dos2unix
+  - dracut
   - dust
+  - dysk
   - edgepad
   - efibootmgr
   - efivar
+  - elementary-wallpapers
   - exo
   - expect
-  - calamares
-  - iana-etc
+  - fast_float
   - fwupd
   - garcon
-  - grub
   - greetd
+  - grub
+  - gst-plugins-bad
+  - gst-plugins-base
+  - gst-plugins-good
+  - gstreamer
+  - gtk-layer-shell
   - hyprcursor
   - hyprgraphics
-  - hyprland-protocols
+  - hypridle
   - hyprland
+  - hyprland-protocols
+  - hyprland-qt-support
   - hyprlang
+  - hyprlauncher
+  - hyprlock
   - hyprpaper
+  - hyprpicker
+  - hyprpolkitagent
+  - hyprpwcenter
+  - hyprqt6engine
+  - hyprshutdown
+  - hyprsunset
+  - hyprsysteminfo
   - hyprtoolkit
   - hyprutils
   - hyprwayland-scanner
   - hyprwire
-  - difi
+  - iana-etc
   - iana-etc
   - kanshi
   - labwc
+  - lib32-zlib
+  - libao
+  - libcanberra
   - libdisplay-info
+  - libdrm
   - libei
   - libgudev
   - libliftoff
@@ -47,44 +73,50 @@ packages:
   - libxfce4ui
   - libxfce4util
   - linux-firmware
+  - linux-headers
   - linux-zen
   - los-angeles-linux-base
   - los-angeles-linux-release
   - lowdown
-  - mpv
   - man-pages
   - mangowm
   - mcfly
   - md4c
+  - mesa
   - mobile-broadband-provider-info
   - modemmanager
+  - moor
   - mpg123
+  - mpv
   - muparser
-  - libao
+  - neohtop
   - nettle-3
   - networkmanager
-  - noctalia-greeter
   - noctalia
-  - sound-theme-freedesktop
-  - libcanberra
+  - noctalia-greeter
+  - onefetch
   - paprefs
   - pavucontrol
   - po4a
   - procps-ng
   - quickshell
-  - slk
   - scenefx
   - sdbus-cpp
   - seatd
   - simdutf
+  - slk
   - sound-theme-freedesktop
-  - stb_image_resize
+  - sound-theme-freedesktop
+  - squashfs-tools
   - stb
+  - stb_image_resize
   - the_silver_searcher
   - tomlplusplus
+  - ttf-jetbrains-mono
   - umbriel
   - unfriendly-devtools
   - unfriendly-keys
+  - venus-protocol
   - vibez
   - vlc
   - vorbis-tools
@@ -92,48 +124,16 @@ packages:
   - which
   - wireplumber
   - wlopm
+  - wlopm
   - wlr-randr
   - wlroots
+  - wpa_supplicant
   - xcb-util-errors
+  - xdg-desktop-portal-hyprland
   - xdg-desktop-portal-umbriel
   - xfce-base-meta
   - xfce4-terminal
   - xfconf
   - xwayland
   - yt-dlp
-  - squashfs-tools
-  - wlopm
-  - hyprpicker
-  - hyprlauncher
-  - hypridle
-  - hyprlock
-  - xdg-desktop-portal-hyprland
-  - hyprsysteminfo
-  - hyprsunset
-  - hyprpolkitagent
-  - hyprland-qt-support
-  - hyprqt6engine
-  - hyprpwcenter
-  - hyprshutdown
-  - elementary-wallpapers
-  - moor
-  - neohtop
-  - onefetch
-  - fast_float
-  - gtk-layer-shell
-  - gstreamer
-  - gst-plugins-bad
-  - gst-plugins-base
-  - gst-plugins-good
-  - wpa_supplicant
-  - linux-headers
   - zlib
-  - lib32-zlib
-  - alsa-oss
-  - alsa-firmware
-  - alsa-ucm-conf
-  - ttf-jetbrains-mono
-  - mesa
-  - venus-protocol
-  - directx-headers
-  - libdrm

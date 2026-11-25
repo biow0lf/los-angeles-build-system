@@ -52,7 +52,6 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   exo
 #   expect
 #   calamares
-#   iana-etc
 #   fwupd
 #   garcon
 #   grub
@@ -116,7 +115,6 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   sdbus-cpp
 #   seatd
 #   simdutf
-#   sound-theme-freedesktop
 #   stb_image_resize
 #   stb
 #   the_silver_searcher

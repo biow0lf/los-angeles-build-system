@@ -1,4 +1,4 @@
-# Unfriendly Linux
+# Unfriendly OS
 
 ## Description
 
@@ -14,6 +14,7 @@
 * built by AI
 * fixed by humans
 * vanilla packages with minimal patches
+* Linux ZEN kernel from Arch Linux
 * Noctalia Shell v5 (with umbriel, mangowm or labwc wayland compositor)
 
 ## TODO
@@ -28,5 +29,5 @@
 
 ## FAQ
 
-* Is it ready for production?
-* It's not ready for anything!
+Q: Is it ready for production?
+A: It's not ready for everything!

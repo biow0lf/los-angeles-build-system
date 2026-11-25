@@ -3,7 +3,7 @@
 
 package:
   name: linux-zen
-  version: 7.3.5
+  version: 7.3.6
   epoch: 0 # zen1
   description: Linux ZEN
   url: https://github.com/zen-kernel/zen-kernel
@@ -43,14 +43,14 @@ environment:
 pipeline:
   - uses: fetch
     with:
-      uri: https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.3.5.tar.xz
-      expected-sha256: 8f293f83d54f0b7b9be56863ebc5e4ea79d73e530b4ae55c572be97ef39f0990
+      uri: https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-${{package.version}}.tar.xz
+      expected-sha256: 8183d475a76a0faffa92d6cd500af421f589dfd0300a0f1060bb875e11d45723
       extract: false
 
   - uses: fetch
     with:
-      uri: https://github.com/zen-kernel/zen-kernel/releases/download/v7.3.5-zen1/linux-v7.3.5-zen1.patch.zst
-      expected-sha256: ea9da7c9d1193a3de19e7b8c4e65944a0eb8c4931698d3345ed2de7b40b091b6
+      uri: https://github.com/zen-kernel/zen-kernel/releases/download/v${{package.version}}-zen1/linux-v${{package.version}}-zen1.patch.zst
+      expected-sha256: 17989877827e81666a89269d2441ebd24ed9ac4cc08faf676b5b4f788e676c7f
       extract: false
 
   - runs: |

@@ -1,17 +1,12 @@
 # https://gitlab.alpinelinux.org/alpine/aports/-/blob/master/main/linux-firmware/APKBUILD
 package:
   name: linux-firmware
-  version: 20261019
+  version: 20261124
   epoch: 0
   description: "Firmware files for linux"
   url: "https://gitlab.com/kernel-firmware/linux-firmware"
   copyright:
     - license: "Custom"
-  dependencies:
-    # runtime:
-    #   - amd-ucode=${{package.version}}
-    #   - linux-firmware-amd=${{package.version}}
-    #   - linux-firmware-amdgpu=${{package.version}}
 
 environment:
   contents:
@@ -26,7 +21,7 @@ pipeline:
   - uses: fetch
     with:
       uri: https://gitlab.com/kernel-firmware/${{package.name}}/-/archive/${{package.version}}/${{package.name}}-${{package.version}}.tar.bz2
-      expected-sha256: d8185424c0b939eb4d7b5579950749086483117806189e4fcdfbda35ffc70009
+      expected-sha256: 27e7c722133c7efdcd485b2eb50649e436dd89c4c85af479c916c544342bb8d4
 
   - runs: |
       make DESTDIR="${{targets.destdir}}/" FIRMWAREDIR=/usr/lib/firmware install-xz

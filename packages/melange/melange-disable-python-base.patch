@@ -1,0 +1,11 @@
+diff -urN melange.orig/pkg/sca/sca.go melange/pkg/sca/sca.go
+--- melange.orig/pkg/sca/sca.go	2026-11-17 01:59:12.247260842 +0000
++++ melange/pkg/sca/sca.go	2026-11-25 23:59:22.376962464 +0000
+@@ -1301,7 +1301,6 @@
+ 		generateDocDeps,
+ 		generatePkgConfigDeps,
+ 		generatePerlDeps,
+-		generatePythonDeps,
+ 		generateRubyDeps,
+ 		generateShbangDeps,
+ 		generateKernelDeps,

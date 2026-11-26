@@ -122,7 +122,6 @@ packages:
   - which
   - wireplumber
   - wlopm
-  - wlopm
   - wlr-randr
   - wlroots
   - wpa_supplicant

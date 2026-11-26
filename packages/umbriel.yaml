@@ -4,7 +4,7 @@
 package:
   name: umbriel
   version: 0.1.0
-  epoch: 5 # new snapshot
+  epoch: 6 # new snapshot
   description: "A Wayland compositor built on wlroots"
   url: https://noctalia.dev/
   copyright:
@@ -32,7 +32,7 @@ pipeline:
     with:
       repository: https://github.com/noctalia-dev/umbriel
       depth: -1
-      expected-commit: e59dbe333b6e91a650161e7d7586f291b38dbfb7
+      expected-commit: ac682123129817d5ed91495efc15f48503a42cc0
 
   - uses: meson/configure
 

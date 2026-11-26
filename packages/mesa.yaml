@@ -1,7 +1,7 @@
 package:
   name: mesa
   version: "26.3.1"
-  epoch: 0
+  epoch: 1
   description: Mesa DRI OpenGL library
   copyright:
     - license: MIT AND SGI-B-2.0 AND BSL-1.0
@@ -126,6 +126,7 @@ pipeline:
   - name: Remove wayland-protocols spec files (owned by wayland-protocols pkg)
     runs: |
       rm -rf "${{targets.destdir}}/usr/share/wayland-protocols"
+      rm -rf "${{targets.destdir}}/usr/include/wayland-protocols"
       rm -f "${{targets.destdir}}/usr/share/pkgconfig/wayland-protocols.pc"
 
   - uses: strip

@@ -1,0 +1,115 @@
+package:
+  name: py3-pyyaml
+  version: "6.0.4"
+  epoch: 0 # rebuild to publish py3-pyyaml-source
+  description: Python3 bindings for YAML
+  copyright:
+    - license: MIT
+  dependencies:
+    provider-priority: 0
+    provides:
+      - py3-yaml
+  resources:
+    cpu: "2"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 3Gi
+
+vars:
+  pypi-package: pyyaml
+  import: yaml
+
+data:
+  - name: py-versions
+    items:
+      3.10: "310"
+      3.11: "311"
+      3.12: "312"
+      3.13: "313"
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - glibc-2.44-dev
+      - py3-supported-cython
+      - py3-supported-pip
+#      - py3-supported-pytest # upstream-tests: test runner
+#      - py3-supported-pytest-timeout # upstream-tests: per-test timeout
+      - py3-supported-python-dev
+      - py3-supported-wheel
+      - yaml-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/yaml/pyyaml
+      tag: ${{package.version}}
+      expected-commit: 575f0e87bcc3b95f4df8da4aaddb0bef4e4553fc
+
+subpackages:
+  - range: py-versions
+    name: py${{range.key}}-${{vars.pypi-package}}
+    description: ${{vars.pypi-package}} installed for python${{range.key}}
+    dependencies:
+      provider-priority: ${{range.value}}
+      provides:
+        - py3-${{vars.pypi-package}}
+    pipeline:
+      - runs: python${{range.key}} setup.py clean --all
+      - uses: py/pip-build-install
+        with:
+          python: python${{range.key}}
+      # The libyaml binding (yaml._yaml) must be built; without yaml-dev it
+      # silently falls back to pure Python.
+#      - uses: upstream-tests/pytest
+#        with:
+#          python: python${{range.key}}
+#          extensions: required
+      - uses: strip
+    test:
+      pipeline:
+        - uses: test/tw/pip-check
+        - uses: python/import
+          with:
+            python: python${{range.key}}
+            import: ${{vars.import}}
+        - uses: test/tw/virtualpackage
+          with:
+            virtual-pkg-name: py3-${{vars.pypi-package}}
+
+  - name: py3-wheels-${{vars.pypi-package}}
+    pipeline:
+      - uses: py/collect-wheels
+    test:
+      pipeline:
+        - uses: test/tw/contains-files
+          with:
+            dir: "/usr/share/wheels/"
+            name: "*.whl"
+
+  - name: py3-supported-${{vars.pypi-package}}
+    description: meta package providing ${{vars.pypi-package}} for supported python versions.
+    dependencies:
+      runtime:
+        - py3.10-${{vars.pypi-package}}
+        - py3.11-${{vars.pypi-package}}
+        - py3.12-${{vars.pypi-package}}
+        - py3.13-${{vars.pypi-package}}
+    test:
+      pipeline:
+        - uses: test/metapackage
+
+update:
+  enabled: true
+  ignore-regex-patterns:
+    - dec-*
+  github:
+    identifier: yaml/pyyaml
+    use-tag: true
+
+test:
+  pipeline:
+    - uses: test/tw/byproductpackage

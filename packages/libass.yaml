@@ -1,0 +1,99 @@
+package:
+  name: libass
+  version: "0.17.5"
+  epoch: 5 # rebuild to publish libass-source
+  description: Portable library for rendering ASS/SSA subtitles
+  copyright:
+    - license: ISC
+  resources:
+    cpu: "2"
+    memory: 6Gi
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - cmake
+      - fontconfig-dev
+      - freetype-dev
+      - fribidi-dev
+      - glibc-2.44-dev
+      - harfbuzz-dev
+      - meson
+      - pkgconf
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: 4a05d8127f525943ebf45fdc6497c9e665947f0d
+      repository: https://github.com/libass/libass
+      tag: ${{package.version}}
+
+  # LTO off: meson's b_lto was tried on 2026-10-29/30 for P-OS-1927 (OS-5339): an A/B on an
+  # idle build node (rendering 700 1080p frames of a moving, blurred, rotated ASS
+  # track, pinned core, 10 alternated rounds) was +0.9 % CPU, inside the noise band:
+  # the rasteriser and blur are hand-written x86 assembly that LTO cannot touch, and
+  # the static archive would need the fat-object treatment. It stays off.
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-dev
+    description: Development files for ${{package.name}}
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: libass/libass
+    use-tag: true
+
+test:
+  environment:
+    contents:
+      packages:
+        - libass-dev
+        - build-base
+        - pkgconf
+  pipeline:
+    - uses: test/tw/ldd-check
+    - name: Test libass compilation and basic API
+      runs: |
+        tee test.c <<'EOF'
+        #include <ass/ass.h>
+        #include <stdio.h>
+        int main() {
+            ASS_Library *lib = ass_library_init();
+            if (!lib) {
+                fprintf(stderr, "ass_library_init failed\n");
+                return 1;
+            }
+            ASS_Renderer *renderer = ass_renderer_init(lib);
+            if (!renderer) {
+                fprintf(stderr, "ass_renderer_init failed\n");
+                ass_library_done(lib);
+                return 1;
+            }
+            ass_renderer_done(renderer);
+            ass_library_done(lib);
+            printf("libass initialized and cleaned up successfully\n");
+            return 0;
+        }
+        EOF
+        gcc $(pkg-config --cflags libass) test.c -o test $(pkg-config --libs libass)
+        ./test

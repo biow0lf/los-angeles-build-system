@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: mpv
+  version: 0.42.0
+  epoch: 0
+  description: "Media player"
+  url: https://github.com/mpv-player/mpv
+  copyright:
+    - license: GPL-2.0-or-later AND LGPL-2.1-or-later
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - ffmpeg-9.0-dev
+      - libplacebo-dev
+      - libass-dev
+      - libplacebo-dev
+      - alsa-lib-dev
+      - libdrm-dev
+      - pipewire-dev
+      - libdisplay-info-dev
+      - mesa-gbm
+      - wayland-dev
+      - wayland-protocols-dev
+      - libva-dev
+      - python-3.13
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://github.com/mpv-player/mpv/archive/refs/tags/v${{package.version}}.tar.gz
+      expected-sha256: bcfebbfa2b65a6d88dc97ea18117831072373e38b5785a2afb874ed4df5070dd
+
+  - uses: meson/configure
+
+  - uses: meson/compile
+
+  - uses: meson/install
+
+  - uses: strip

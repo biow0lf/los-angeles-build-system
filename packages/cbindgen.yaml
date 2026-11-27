@@ -1,0 +1,78 @@
+package:
+  name: cbindgen
+  version: "0.29.4"
+  epoch: 10 # rust: 1.99->1.100
+  description: Tool to generate C bindings from Rust code
+  copyright:
+    - license: MPL-2.0
+  resources:
+    cpu: "2"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+vars:
+  rust-version: 1.99
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - cargo-auditable
+      - glibc-2.44-dev
+      - rust-${{vars.rust-version}}
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/mozilla/cbindgen
+      # Historically, upstream are inconsistent with their usage of a v-prefix:
+      # https://github.com/mozilla/cbindgen/releases
+      tag: v${{package.version}}
+      expected-commit: b826cb8911488fe8a209d2b693492c0c673e8cca
+
+  - uses: bump
+    with:
+      language: rust
+
+  - runs: |
+      cargo auditable build --release
+      mkdir -p ${{targets.destdir}}/usr/bin
+      cp target/release/cbindgen ${{targets.destdir}}/usr/bin/
+
+# Required for xcover to load the BPF uprobe. Declarative under QEMU.
+capabilities:
+  add:
+    - CAP_SYS_ADMIN
+    - CAP_SYS_RESOURCE
+
+test:
+  environment:
+    contents:
+      packages:
+        - rustup
+  pipeline:
+    - uses: xcover/profile
+      with:
+        executable-path: /usr/bin/cbindgen
+    - runs: |
+        # We need to install nightly rust because cbindgen uses a nightly
+        # feature (-Zunpretty=expanded).
+        rustup install nightly
+        ARCH=$(uname -m)
+        export PATH="$HOME/.rustup/toolchains/nightly-${ARCH}-unknown-linux-gnu/bin:$PATH"
+        cbindgen --version
+        cbindgen --help
+        cbindgen --config cbindgen.toml --crate bitfield --output my_header.h --lang c
+        cat my_header.h
+    - uses: xcover/stop
+    - uses: xcover/ensure
+      with:
+        min-coverage: 12
+
+update:
+  enabled: true
+  git:
+    strip-prefix: v

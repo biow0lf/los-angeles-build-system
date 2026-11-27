@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: 2026 Igor Zubkov <igor.zubkov@gmail.com>
+# SPDX-License-Identifier: MIT
+
+package:
+  name: llvm-22-spirv
+  version: 22.1.8
+  epoch: 0
+  description: "A tool and a library for bi-directional translation between SPIR-V and LLVM IR (LLVM 22)"
+  url: https://github.com/KhronosGroup/SPIRV-LLVM-Translator
+  copyright:
+    - license: NCSA
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+      - spirv-tools
+      - spirv-tools-dev
+      - llvm-22
+      - llvm-22-dev
+      - clang-22
+      - zlib-dev
+      - zstd-dev
+      - libxml2-dev
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://github.com/KhronosGroup/SPIRV-LLVM-Translator/archive/refs/tags/v${{package.version}}.tar.gz
+      expected-sha256: 895bca0285fd4118800912a54527c0ae0d0c6e62591e807c3c96c6b342c4c5e2
+
+  # SPIRV-LLVM-Translator requires specific SPIRV-Headers commit (from spirv-headers-tag.conf)
+  - uses: git-checkout
+    with:
+      repository: https://github.com/KhronosGroup/SPIRV-Headers
+      depth: -1
+      expected-commit: cb42dec3830d3ac67fa449ecdc0c0f73d5e74498
+      destination: SPIRV-Headers
+
+  - uses: cmake/configure
+    with:
+      opts: |
+        -D BUILD_SHARED_LIBS=ON \
+        -D CMAKE_SKIP_INSTALL_RPATH=ON \
+        -D LLVM_EXTERNAL_SPIRV_HEADERS_SOURCE_DIR=/home/build/SPIRV-Headers \
+        -D CMAKE_C_COMPILER=clang \
+        -D CMAKE_CXX_COMPILER=clang++
+
+  - uses: cmake/build
+
+  - uses: cmake/install
+
+  - uses: strip
+
+subpackages:
+  - name: llvm-22-spirv-dev
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - llvm-22-spirv=${{package.full-version}}
+    description: "A tool and a library for bi-directional translation between SPIR-V and LLVM IR (LLVM 22) (dev files)"

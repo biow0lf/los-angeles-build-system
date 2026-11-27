@@ -3,7 +3,7 @@
 
 package:
   name: mangowm
-  version: 0.19.2
+  version: 0.19.3
   epoch: 0
   description: "A fast, feature-rich Wayland compositor built on dwl"
   url: https://mangowm.github.io/
@@ -34,7 +34,7 @@ pipeline:
     with:
       repository: https://github.com/mangowm/mango/
       tag: ${{package.version}}
-      expected-commit: cc9571fd9fd6b21ef5e605565959a0e88467e15e
+      expected-commit: 9e8938671089a2053680bba968e9995e31dec2ac
 
   - uses: meson/configure
 

@@ -173,6 +173,8 @@ raw_github_url="https://raw.githubusercontent.com/wolfi-dev/os/refs/heads/main"
 #   venus-protocol
 #   directx-headers
 #   libdrm
+#   llvm-22-spirv
+#   llvm-23-spirv
 
 packages=(
     7zip
@@ -222,6 +224,7 @@ packages=(
     cairo
     cargo-auditable
     cargo-c
+    cbindgen
     cdparanoia
     ceph-20
     check
@@ -788,6 +791,7 @@ packages=(
     py3-installer
     py3-jinja2
     py3-lxml
+    py3-mako
     py3-markdown
     py3-markupsafe
     py3-meson-python
@@ -804,6 +808,7 @@ packages=(
     py3-pyproject-metadata
     py3-pytest
     py3-pytest-timeout
+    py3-pyyaml
     py3-requests
     py3-roman-numerals-py
     py3-setuptools-scm

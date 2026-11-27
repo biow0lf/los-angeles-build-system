@@ -1,4 +1,5 @@
 packages:
+  - glad
   - alsa-firmware
   - alsa-oss
   - alsa-ucm-conf
